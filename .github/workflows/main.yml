@@ -1,0 +1,42 @@
+name: build
+
+on: [push, workflow_dispatch]
+
+jobs:
+  compile:
+    
+    runs-on: ["self-hosted"]
+
+    steps:
+      - name: Clone repo
+        uses: actions/checkout@v4
+
+      - name: Install Go
+        uses: actions/setup-go@v5
+        with:
+          go-version-file: './go.mod'
+
+      - name: Install Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: 'npm'
+
+      - name: Install vsce
+        run: npm install @vscode/vsce
+
+      - name: Build DAP binary
+        run: |
+          cd cmd
+          go build -v
+          cd ..
+          mv cmd/cmd distr/runner
+
+      - name: Build an extension
+        run: cd distr && npx @vscode/vsce package --allow-missing-repository
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: extension
+          path: distr/fastedge-*.vsix
