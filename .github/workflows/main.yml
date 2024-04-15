@@ -27,7 +27,9 @@ jobs:
 
       - name: Build DAP binary
         run: |
-          cd cmd && go build -v ./...
+          cd cmd
+          go build -v
+          cd ..
           mv cmd/cmd distr/runner
 
       - name: Build an extension
