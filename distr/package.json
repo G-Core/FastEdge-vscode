@@ -23,12 +23,10 @@
 				"languages": ["javascript", "rust"],
 				"configurationAttributes": {
 					"launch": {
-						"required": [ "binary" ],
 						"properties": {
 							"binary": {
 								"type": "string",
-								"description": "Required parameter - Wasm binary path",
-								"default": "specify binary path here"
+								"description": "Wasm binary path, auto-filled"
 							},
 							"port": {
 								"type": "int",
