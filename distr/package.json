@@ -30,7 +30,7 @@
 								"description": "Wasm binary path, typically populated automatically"
 							},
 							"port": {
-								"type": "int",
+								"type": "number",
 								"description": "Port to listen for incoming requests",
 								"default": 8181
 							},
@@ -48,7 +48,7 @@
 								"description": "Environment variables"
 							},
 							"mem_limit": {
-								"type": "int",
+								"type": "number",
 								"description": "Memory limit in bytes",
 								"default": 10000000
 							}
