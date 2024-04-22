@@ -23,4 +23,3 @@ go.work
 # VSIX package
 fastedge-*.vsix
 runner
-cli

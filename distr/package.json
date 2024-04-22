@@ -4,12 +4,13 @@
 	"version": "0.1.0",
 	"publisher": "Gcore",
 	"description": "Player for FastEdge apps",
+	"repository": "https://github.com/G-Core/FastEdge-vscode",
 	"author": {
 		"name": "qrdl",
 		"email": "ilya@qrdl.com"
 	},
 	"engines": {
-		"vscode": "^1.52.0"
+		"vscode": "^1.61.0"
 	},
 	"categories": [ "Debuggers" ],
 	"activationEvents": [ "onDebug" ],
@@ -20,18 +21,16 @@
 				"type": "fastedge",
 				"label": "FastEdge App Runner",
 				"program": "./runner",
-				"languages": ["javascript", "rust"],
+				"languages": ["rust"],
 				"configurationAttributes": {
 					"launch": {
-						"required": [ "binary" ],
 						"properties": {
 							"binary": {
 								"type": "string",
-								"description": "Required parameter - Wasm binary path",
-								"default": "specify binary path here"
+								"description": "Wasm binary path, typically populated automatically"
 							},
 							"port": {
-								"type": "int",
+								"type": "number",
 								"description": "Port to listen for incoming requests",
 								"default": 8181
 							},
@@ -49,7 +48,7 @@
 								"description": "Environment variables"
 							},
 							"mem_limit": {
-								"type": "int",
+								"type": "number",
 								"description": "Memory limit in bytes",
 								"default": 10000000
 							}
@@ -61,7 +60,6 @@
 						"name": "FastEdge App Runner: Launch",
 						"type": "fastedge",
 						"request": "launch",
-						"binary": "specify Wasm binary",
 						"env": {
 							"var": "value"
 						}
@@ -74,8 +72,7 @@
 						"body": {
 							"name": "FastEdge App",
 							"type": "fastedge",
-							"request": "launch",
-							"binary": "specify Wasm binary"
+							"request": "launch"
 						}
 					}
 				]
