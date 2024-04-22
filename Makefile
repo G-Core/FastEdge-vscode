@@ -9,7 +9,7 @@ distr/runner:
 	mv cmd/cmd distr/runner
 
 $(VSIX): distr/package.json distr/runner
-	cd distr && npx @vscode/vsce package --allow-missing-repository
+	cd distr && npx @vscode/vsce package
 
 install:
 	code --install-extension distr/$(VSIX)

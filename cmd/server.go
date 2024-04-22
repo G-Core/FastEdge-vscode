@@ -355,6 +355,7 @@ func (ds *fakeDebugSession) onLaunchRequest(request *dap.LaunchRequest) {
 	if err != nil {
 		log.Printf("StderrPipe returned %s", err)
 	}
+//	cmd.Env = append(os.Environ(), "RUST_LOG=info")
 
 	err = cmd.Start()
 	if err != nil {
@@ -389,13 +390,6 @@ func (ds *fakeDebugSession) onLaunchRequest(request *dap.LaunchRequest) {
 		},
 	}
 	ds.send(e)
-
-/*	err = cmd.Run()
-	if err != nil {
-		log.Printf("cannot run %s: %v", ex, err)
-		ds.send(newErrorResponse(request.Seq, request.Command, "Invalid request"))
-		return
-	} */
 
 	wg.Wait()
 	log.Printf("waitgroup ended")

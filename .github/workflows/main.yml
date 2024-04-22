@@ -25,18 +25,41 @@ jobs:
       - name: Install vsce
         run: npm install @vscode/vsce
 
-      - name: Build DAP binary
+      - name: Build Linux extension
         run: |
           cd cmd
-          go build -v
+          go build -o ../distr/runner
+          cd ../distr
+          rm -f cli runner cli.exe runner.exe *.vsix
+          cp ../rust-cli/cli-linux-x64 cli
+          npx @vscode/vsce package --target linux-x64
           cd ..
-          mv cmd/cmd distr/runner
 
-      - name: Build an extension
-        run: cd distr && npx @vscode/vsce package --allow-missing-repository
-
-      - name: Upload artifact
+      - name: Upload Linux extension artifact
         uses: actions/upload-artifact@v4
         with:
-          name: extension
-          path: distr/fastedge-*.vsix
+          name: linux-x64
+          path: distr/fastedge-linux-x64*.vsix
+
+      - name: Build Windows extension
+        run: |
+          cd cmd
+          GOOS=windows GOARCH=amd64 go build -o ../distr/runner.exe
+          cd ../distr
+          rm -f cli runner cli.exe runner.exe *.vsix
+          cp ../rust-cli/cli.exe .
+          sed -i "s/\.\/runner/runner.exe/" package.json
+          npx @vscode/vsce package --target windows-x64
+          sed -i "s/runner.exe/\.\/runner/" package.json
+          cd ..
+
+      - name: Upload Windows extension artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: windows-x64
+          path: distr/fastedge-windows-x64*.vsix
+
+      - name: Cleanup
+        run: |
+          cd distr
+          rm -f cli runner cli.exe runner.exe *.vsix
