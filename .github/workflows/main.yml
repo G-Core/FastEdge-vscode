@@ -40,6 +40,21 @@ jobs:
           name: linux-x64
           path: distr/fastedge-linux-x64*.vsix
 
+      - name: Build macOS extension
+        run: |
+          cd distr
+          rm -f cli runner cli.exe runner.exe *.vsix
+          GOOS=darwin GOARCH=amd64 go build -o runner ../cmd
+          cp ../rust-cli/cli-darwin-arm64 cli
+          npx @vscode/vsce package --target darwin-arm64
+          cd ..
+  
+      - name: Upload macOS extension artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: darwin-arm64
+          path: distr/fastedge-darwin-arm64*.vsix
+
       - name: Build Windows extension
         run: |
           cd distr
