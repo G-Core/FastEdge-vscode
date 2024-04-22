@@ -49,7 +49,7 @@ jobs:
           rm -f cli runner cli.exe runner.exe *.vsix
           cp ../rust-cli/cli.exe .
           sed -i "s/\.\/runner/runner.exe/" package.json
-          npx @vscode/vsce package --target windows-x64
+          npx @vscode/vsce package --target win32-x64
           sed -i "s/runner.exe/\.\/runner/" package.json
           cd ..
 
