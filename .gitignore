@@ -23,3 +23,7 @@ go.work
 # VSIX package
 fastedge-*.vsix
 runner
+distr/cli
+
+# Dev tools
+.nx
