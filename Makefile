@@ -12,18 +12,22 @@ else
     endif
 endif
 
-.PHONY: all clean install uninstall reinstall distr/runner copycli
+.PHONY: all clean install uninstall reinstall distr/runner distr/files
 
-all: $(VSIX)
+all: distr/files $(VSIX)
 
 distr/runner:
 	cd cmd && go build
 	mv cmd/cmd distr/runner
 
-copycli:
-	$(COPY)
+distr/files:
+	$(COPY) && \
+    cp package.json distr/ && \
+    cp LICENSE distr/ && \
+    cp README.md distr/ && \
+    npm run build
 
-$(VSIX): distr/package.json distr/runner copycli
+$(VSIX): distr/package.json distr/runner distr/files
 	cd distr && npx @vscode/vsce package
 
 install:
@@ -35,4 +39,4 @@ uninstall:
 reinstall: uninstall clean $(VSIX) install
 
 clean:
-	rm -f $(VSIX)
+	rm -f distr/**
