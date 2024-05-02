@@ -1,66 +1,36 @@
 import * as vscode from "vscode";
-import { spawn } from "child_process";
+import { compileRustAndFindBinary } from "./rust_build";
 
-// TODO: Add JavaScript source support
-function compileAndFindBinaries() {
-  return new Promise<Array<unknown>>((resolve, reject) => {
-    const workspaceFolder = vscode.workspace.workspaceFolders?.[0].uri.fsPath;
-    const cargoBuild = spawn("cargo", ["build", "--message-format=json"], {
-      cwd: workspaceFolder,
-    });
+type ExtLanguage = "javascript" | "rust";
 
-    let stdout = "";
-    let stderr = "";
+function getActiveFileLanguage(): ExtLanguage | null {
+  const languageId = vscode.window.activeTextEditor?.document.languageId ?? "";
+  const javascriptLanguageIds = [
+    "javascript",
+    "typescript",
+    "javascriptreact",
+    "typescriptreact",
+  ];
+  if (javascriptLanguageIds.includes(languageId)) {
+    return "javascript";
+  } else if (languageId === "rust") {
+    return "rust";
+  }
+  return null;
+}
 
-    cargoBuild.stdout.on("data", (data: any) => {
-      console.log("TCL: data", typeof data, data);
-      stdout += data;
-    });
-
-    cargoBuild.stderr.on("data", (data: any) => {
-      stderr += data;
-    });
-
-    cargoBuild.on("close", (code: any) => {
-      if (code !== 0) {
-        reject(new Error(`cargo build exited with code ${code}: ${stderr}`));
-        return;
-      }
-
-      const lines = stdout.split("\n");
-      const binary = [];
-
-      for (const line of lines) {
-        if (!line) {
-          continue;
-        }
-
-        let message;
-        try {
-          message = JSON.parse(line);
-        } catch (err) {
-          reject(
-            new Error(`Failed to parse cargo output: ${(err as Error).message}`)
-          );
-          return;
-        }
-
-        // if (message.filenames.length > 0) {
-        if (
-          message.reason === "compiler-artifact" &&
-          message.filenames &&
-          message.filenames.length === 1
-        ) {
-          if (/.*\.wasm$/.test(message.filenames[0])) {
-            binary.push(message.filenames[0]);
-            break;
-          }
-        }
-      }
-
-      resolve(binary);
-    });
-  });
+async function compileActiveEditorsBinary(): Promise<string> {
+  const activeFile = vscode.window.activeTextEditor?.document.uri.fsPath;
+  const activeFileLanguage = getActiveFileLanguage();
+  if (!activeFile || !activeFileLanguage) {
+    // return an error.. need to have a rust or javascript file selected
+  }
+  const activeFilePath = activeFile?.slice(0, activeFile?.lastIndexOf("/"));
+  if (activeFileLanguage === "javascript") {
+  } else if (activeFileLanguage === "rust") {
+    return compileRustAndFindBinary(activeFilePath as string);
+  }
+  return "";
 }
 
 class MyDebugAdapterDescriptorFactory {
@@ -79,13 +49,11 @@ class BinaryDebugConfigurationProvider {
     _token: vscode.CancellationToken
   ) {
     try {
-      // todo fix type of binary
-      const binary = await compileAndFindBinaries();
-      config.binary = binary[0];
+      config.binary = await compileActiveEditorsBinary();
       return config;
     } catch (err) {
-      console.error(err);
-      return config;
+      vscode.window.showErrorMessage(`Error: ${(err as Error).message}`);
+      return undefined;
     }
   }
 }
@@ -99,8 +67,9 @@ function activate(context: vscode.ExtensionContext) {
   );
 }
 
-exports.activate = activate;
 vscode.debug.registerDebugConfigurationProvider(
   "fastedge",
   new BinaryDebugConfigurationProvider()
 );
+
+export default activate;

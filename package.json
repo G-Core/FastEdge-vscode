@@ -4,6 +4,7 @@
   "version": "0.1.0",
   "publisher": "Gcore",
   "description": "Player for FastEdge apps",
+  "icon": "fastedge.png",
   "repository": "https://github.com/G-Core/FastEdge-vscode",
   "author": {
     "name": "qrdl",
@@ -18,7 +19,7 @@
   "activationEvents": [
     "onDebug"
   ],
-  "main": "./extension.js",
+  "main": "./distr/extension.js",
   "scripts": {
     "build": "tsc -p .",
     "build-w": "tsc -watch -p ./",

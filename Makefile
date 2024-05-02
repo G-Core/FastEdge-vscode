@@ -25,6 +25,7 @@ distr/files:
     cp package.json distr/ && \
     cp LICENSE distr/ && \
     cp README.md distr/ && \
+    cp images/fastedge.png distr/ && \
     npm run build
 
 $(VSIX): distr/package.json distr/runner distr/files
