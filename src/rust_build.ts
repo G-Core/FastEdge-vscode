@@ -45,10 +45,6 @@ export function compileRustAndFindBinary(activeFilePath: string) {
           message.filenames.length === 1
         ) {
           if (/.*\.wasm$/.test(message.filenames[0])) {
-            console.log(
-              "TCL: compileAndFindBinaries -> message.filenames[0]",
-              message.filenames[0]
-            );
             return resolve(message.filenames[0]);
           }
         }

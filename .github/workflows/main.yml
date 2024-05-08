@@ -1,10 +1,13 @@
 name: build
 
-on: [push, workflow_dispatch]
+on:
+  push:
+    branches: ["main"]
+
+  workflow_dispatch: # trigger manually
 
 jobs:
   compile:
-    
     runs-on: ["self-hosted"]
 
     steps:
@@ -14,21 +17,26 @@ jobs:
       - name: Install Go
         uses: actions/setup-go@v5
         with:
-          go-version-file: './go.mod'
+          go-version-file: "./go.mod"
 
       - name: Install Node
         uses: actions/setup-node@v4
         with:
           node-version: 20
-          cache: 'npm'
+          cache: "npm"
 
       - name: Install vsce
         run: npm install @vscode/vsce
 
+      - name: Build JavaScript extension
+        run: |
+          npm run build
+
       - name: Build Linux extension
         run: |
+          rm -f distr/**
+          ./scripts/copy-files.sh
           cd distr
-          rm -f cli runner cli.exe runner.exe *.vsix
           go build -o runner ../cmd
           cp ../rust-cli/cli-linux-x64 cli
           npx @vscode/vsce package --target linux-x64
@@ -42,13 +50,14 @@ jobs:
 
       - name: Build macOS extension
         run: |
+          rm -f distr/**
+          ./scripts/copy-files.sh
           cd distr
-          rm -f cli runner cli.exe runner.exe *.vsix
           GOOS=darwin GOARCH=amd64 go build -o runner ../cmd
           cp ../rust-cli/cli-darwin-arm64 cli
           npx @vscode/vsce package --target darwin-arm64
           cd ..
-  
+
       - name: Upload macOS extension artifact
         uses: actions/upload-artifact@v4
         with:
@@ -57,8 +66,9 @@ jobs:
 
       - name: Build Windows extension
         run: |
+          rm -f distr/**
+          ./scripts/copy-files.sh
           cd distr
-          rm -f cli runner cli.exe runner.exe *.vsix
           GOOS=windows GOARCH=amd64 go build -o runner.exe ../cmd
           cp ../rust-cli/cli.exe .
           sed -i "s/\.\/runner/runner.exe/" package.json
@@ -74,5 +84,5 @@ jobs:
 
       - name: Cleanup
         run: |
-          cd distr
-          rm -f cli runner cli.exe runner.exe *.vsix
+          rm -f js-extension/**
+          rm -f distr/**

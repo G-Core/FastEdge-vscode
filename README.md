@@ -22,9 +22,20 @@ Having completed compilation it then serves the running application at http://lo
 
 This is done using our application runner based from [FastEdge-cli](https://github.com/G-Core/FastEdge/tree/main/cli).
 
+## Prerequisites
+
+In order for this extension to compile and run any code, you will need to have the basic compilation tools installed for your given language.
+
+Examples:
+
+- Rust: `rustup target add wasm32-wasi`
+- Javascript: `npm install --save-dev @gcoredev/fastedge-sdk-js`
+
+More detail can be found in the SDK documentation above. 👆
+
 ## Installing the extension
 
-:construction: This extension will be added to the VS Code marketplace soon... :rocket:
+🚧 This extension will be added to the VS Code marketplace soon... 🚀
 
 In the meantime, it is possible to install from source:
 
@@ -86,3 +97,37 @@ Simply run Command Palette (Ctrl+Shift+P): `Debug: Add Configuration...` and sel
 This will create the `.vscode` directory in your project and add a `launch.json` with the basic required configuration to run.
 
 When running `Start Debug` (F5) from vs code you should see `Serving on http://localhost:8181` in your "Debug Console" window.
+
+## Commands
+
+This extension also provides two commands within the Command Palette (Ctrl+Shift+P)
+
+- Debug: FastEdge App (Current File)
+- Debug: FastEdge App (Workspace)
+
+These behave slightly differently given the specific language and build tools.
+
+#### Rust
+
+- Debug: FastEdge App (Current File)
+
+  This will use the current "Active text editor" location as the cwd when it attempts to `cargo build`
+
+- Debug: FastEdge App (Workspace)
+
+  This will use VS Codes open Workspace as the cwd when it attempts to `cargo build`
+
+Both these commands will use the associated `cargo.toml` to configure the target build location for your binary output.
+
+#### Javascript
+
+- Debug: FastEdge App (Current File)
+
+  This will use the current "Active text editor" as the entrypoint for `componetize-cli <input> <output>`
+
+- Debug: FastEdge App (Workspace)
+
+  This will use VS Codes open Workspace as the cwd, where it will then read the top level `package.json` for the "main" entrypoint.
+
+As the javascript build tool `componetize-cli` requires an output location for you compiled binary.
+This is set by default to your workspace `.vscode/bin/ext.wasm`

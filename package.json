@@ -19,20 +19,31 @@
   "activationEvents": [
     "onDebug"
   ],
-  "main": "./distr/extension.js",
+  "main": "./extension.js",
   "scripts": {
     "build": "tsc -p .",
     "build-w": "tsc -watch -p ./",
     "lint": "eslint src --ext ts"
   },
   "contributes": {
+    "commands": [
+      {
+        "command": "fastegde.run-file",
+        "title": "Debug: FastEdge App (Current File)"
+      },
+      {
+        "command": "fastegde.run-workspace",
+        "title": "Debug: FastEdge App (Workspace)"
+      }
+    ],
     "debuggers": [
       {
         "type": "fastedge",
         "label": "FastEdge App Runner",
         "program": "./runner",
         "languages": [
-          "rust"
+          "rust",
+          "javascript"
         ],
         "configurationAttributes": {
           "launch": {
@@ -96,6 +107,7 @@
     "@types/vscode": "^1.61.0",
     "@typescript-eslint/eslint-plugin": "^7.7.1",
     "@typescript-eslint/parser": "^7.7.1",
+    "@vscode/vsce": "^2.26.1",
     "eslint": "^8.57.0",
     "typescript": "^5.4.5"
   }

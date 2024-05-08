@@ -24,6 +24,7 @@ go.work
 fastedge-*.vsix
 runner
 distr/
+js-extension/
 
 # Dev tools
 .nx

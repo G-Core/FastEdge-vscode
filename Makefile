@@ -22,10 +22,7 @@ distr/runner:
 
 distr/files:
 	$(COPY) && \
-    cp package.json distr/ && \
-    cp LICENSE distr/ && \
-    cp README.md distr/ && \
-    cp images/fastedge.png distr/ && \
+    ./scripts/copy-files.sh && \
     npm run build
 
 $(VSIX): distr/package.json distr/runner distr/files
