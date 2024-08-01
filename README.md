@@ -20,7 +20,7 @@ The specific SDK's can be found here:
 
 Having completed compilation it then serves the running application at http://localhost:8181
 
-This is done using our application runner based from [FastEdge-cli](https://github.com/G-Core/FastEdge/tree/main/cli).
+This is done using our application runner based from [FastEdge-cli](https://github.com/G-Core/FastEdge-lib).
 
 ## Prerequisites
 
@@ -123,11 +123,11 @@ Both these commands will use the associated `cargo.toml` to configure the target
 
 - Debug: FastEdge App (Current File)
 
-  This will use the current "Active text editor" as the entrypoint for `componetize-cli <input> <output>`
+  This will use the current "Active text editor" as the entrypoint for `fastedge-build <input> <output>`
 
 - Debug: FastEdge App (Workspace)
 
   This will use VS Codes open Workspace as the cwd, where it will then read the top level `package.json` for the "main" entrypoint.
 
-As the javascript build tool `componetize-cli` requires an output location for you compiled binary.
+As the javascript build tool `fastedge-build` requires an output location for you compiled binary.
 This is set by default to your workspace `.vscode/bin/ext.wasm`

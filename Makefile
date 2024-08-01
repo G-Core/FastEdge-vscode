@@ -26,7 +26,7 @@ distr/files:
     npm run build
 
 $(VSIX): distr/package.json distr/runner distr/files
-	cd distr && npx @vscode/vsce package
+	cd distr && npm run package
 
 install:
 	code --install-extension distr/$(VSIX)

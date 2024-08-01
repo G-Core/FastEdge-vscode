@@ -64,7 +64,7 @@ export function compileJavascriptBinary(
             );
 
       exec(
-        `npx componentize-cli ${jsEntryPoint} ${binPath}/${BINARY_NAME}`,
+        `npx fastedge-build ${jsEntryPoint} ${binPath}/${BINARY_NAME}`,
         { cwd: workspaceFolder?.uri.fsPath },
         (err) => {
           return err ? reject(err) : resolve(`${binPath}/${BINARY_NAME}`);

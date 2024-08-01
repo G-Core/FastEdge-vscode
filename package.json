@@ -11,7 +11,9 @@
     "email": "ilya@qrdl.com"
   },
   "engines": {
-    "vscode": "^1.61.0"
+    "vscode": "^1.61.0",
+    "node": "20",
+    "npm": "^9 || ^10"
   },
   "categories": [
     "Debuggers"
@@ -23,6 +25,7 @@
   "scripts": {
     "build": "tsc -p .",
     "build-w": "tsc -watch -p ./",
+    "package": "vsce package",
     "lint": "eslint src --ext ts"
   },
   "contributes": {
@@ -107,7 +110,7 @@
     "@types/vscode": "^1.61.0",
     "@typescript-eslint/eslint-plugin": "^7.7.1",
     "@typescript-eslint/parser": "^7.7.1",
-    "@vscode/vsce": "^2.26.1",
+    "@vscode/vsce": "^2.31.1",
     "eslint": "^8.57.0",
     "typescript": "^5.4.5"
   }
