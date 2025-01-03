@@ -1,0 +1,18 @@
+[workspace.package]
+version = "0.1.0"
+edition = "2021"
+
+[workspace.dependencies]
+fastedge = { git ="https://github.com/G-Core/FastEdge-sdk-rust.git", version = "0.1.4"}
+mime = "0.3.17"
+pulldown-cmark = "0.10.3"
+url = "2.5.0"
+anyhow = "1.0.40"
+
+[workspace]
+members = [
+    "one",
+    "two",
+]
+resolver = "2"
+

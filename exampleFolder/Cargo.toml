@@ -1,0 +1,15 @@
+[package]
+name = "workspaceapp"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+fastedge = { git ="https://github.com/G-Core/FastEdge-sdk-rust.git", version = "0.1.4" }
+mime = "0.3.17"
+pulldown-cmark = "0.10.3"
+url = "2.5.0"
+anyhow = "1.0.40"
+
+[lib]
+path = "workspace.rs"
+crate-type = ["cdylib"]

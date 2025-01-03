@@ -1,15 +1,11 @@
 {
   "name": "fastedge",
   "displayName": "FastEdge Runner",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "publisher": "Gcore",
-  "description": "Player for FastEdge apps",
-  "icon": "fastedge.png",
+  "description": "Launcher for FastEdge apps",
+  "icon": "images/fastedge.png",
   "repository": "https://github.com/G-Core/FastEdge-vscode",
-  "author": {
-    "name": "qrdl",
-    "email": "ilya@qrdl.com"
-  },
   "engines": {
     "vscode": "^1.61.0",
     "node": "20",
@@ -21,29 +17,35 @@
   "activationEvents": [
     "onDebug"
   ],
-  "main": "./extension.js",
+  "main": "./dist/extension.js",
   "scripts": {
-    "build": "tsc -p .",
-    "build-w": "tsc -watch -p ./",
+    "check-types": "tsc --noEmit",
+    "build:dev": "node esbuild/build-ext.js --watch",
+    "build": "npm run check-types && node esbuild/build-ext.js --prod",
+    "copy-files": "./scripts/copy-files.sh",
     "package": "vsce package",
     "lint": "eslint src --ext ts"
   },
   "contributes": {
     "commands": [
       {
-        "command": "fastegde.run-file",
+        "command": "fastedge.run-file",
         "title": "Debug: FastEdge App (Current File)"
       },
       {
-        "command": "fastegde.run-workspace",
+        "command": "fastedge.run-workspace",
         "title": "Debug: FastEdge App (Workspace)"
+      },
+      {
+        "command": "fastedge.generate-launch-json",
+        "title": "Debug: FastEdge (Generate launch.json)"
       }
     ],
     "debuggers": [
       {
         "type": "fastedge",
-        "label": "FastEdge App Runner",
-        "program": "./runner",
+        "label": "FastEdge App Launcher",
+        "program": "./dist/extension.js",
         "languages": [
           "rust",
           "javascript"
@@ -51,6 +53,11 @@
         "configurationAttributes": {
           "launch": {
             "properties": {
+              "cliPath": {
+                "type": "string",
+                "description": "Path to the FastEdge CLI, typically populated automatically",
+                "default": ""
+              },
               "binary": {
                 "type": "string",
                 "description": "Wasm binary path, typically populated automatically"
@@ -73,22 +80,31 @@
                 "type": "object",
                 "description": "Environment variables"
               },
-              "mem_limit": {
+              "memoryLimit": {
                 "type": "number",
                 "description": "Memory limit in bytes",
                 "default": 10000000
+              },
+              "traceLogging": {
+                "type": "boolean",
+                "description": "Trace logging",
+                "default": false
+              },
+              "args": {
+                "type": "array",
+                "description": "Arguments to pass to the executable",
+                "items": {
+                  "type": "string"
+                }
               }
             }
           }
         },
         "initialConfigurations": [
           {
-            "name": "FastEdge App Runner: Launch",
             "type": "fastedge",
             "request": "launch",
-            "env": {
-              "var": "value"
-            }
+            "name": "FastEdge App"
           }
         ],
         "configurationSnippets": [
@@ -110,8 +126,13 @@
     "@types/vscode": "^1.61.0",
     "@typescript-eslint/eslint-plugin": "^7.7.1",
     "@typescript-eslint/parser": "^7.7.1",
-    "@vscode/vsce": "^2.31.1",
+    "@vscode/vsce": "^3.2.1",
+    "esbuild": "^0.24.2",
     "eslint": "^8.57.0",
     "typescript": "^5.4.5"
+  },
+  "dependencies": {
+    "vscode-debugadapter": "^1.51.0",
+    "vscode-debugprotocol": "^1.51.0"
   }
 }

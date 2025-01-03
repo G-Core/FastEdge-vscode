@@ -1,0 +1,36 @@
+# Exclude node_modules
+node_modules/**
+
+# Exclude test files
+tests/**
+
+# Exclude build scripts
+scripts/**
+
+# Exclude configuration files
+.vscode/**
+.gitignore
+**/.gitkeep
+.vscodeignore
+tsconfig.json
+package-lock.json
+
+# Exclude build config
+.github
+esbuild/**
+
+# Exclude documentation
+docs/**
+
+# Exclude exampleFolder
+exampleFolder/**
+
+# Exclude src files
+**/*.ts
+src/**
+
+# Exclude map files
+**/*.js.map
+
+
+

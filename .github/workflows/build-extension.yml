@@ -1,0 +1,107 @@
+name: build
+
+on:
+  push:
+    tags:
+      - "v[0-9]+.*"
+
+  workflow_dispatch: # trigger manually
+    inputs:
+      cli_version:
+        description: "FastEdge cli version"
+        required: true
+        default: "latest"
+      tag_version:
+        description: "Release tag e.g. v1.0.0"
+        required: true
+        default: ""
+
+jobs:
+  check_tags:
+    runs-on: [self-hosted, ubuntu-22-04, regular]
+    outputs:
+      has_release_tag: ${{ steps.determine-tag.outputs.has_tag }}
+
+    steps:
+      - name: Checkout this repository
+        uses: actions/checkout@v4
+
+      - name: Create release tag
+        id: determine-tag
+        run: |
+          if [ -n "${{ github.event.inputs.tag_version }}" ]; then
+            echo "Creating new release tag: ${{ github.event.inputs.tag_version }}"
+            git tag -a ${{ github.event.inputs.tag_version }} -m "Release ${{ github.event.inputs.tag_version }}"
+            git push origin ${{ github.event.inputs.tag_version }}
+            echo "has_tag=false" >> $GITHUB_OUTPUT
+          else
+            echo "No release tag provided"
+            echo "has_tag=${{ startsWith(github.ref, 'refs/tags/') }}" >> $GITHUB_OUTPUT
+          fi
+
+  download_fastedge_cli:
+    uses: ./.github/workflows/download-cli.yml
+    needs: check_tags
+    if: ${{ needs.check_tags.outputs.has_release_tag == 'true' }}
+    with:
+      cli_version: ${{ inputs.cli_version }}
+
+  build_extension:
+    runs-on: [self-hosted, ubuntu-22-04, regular]
+    needs: ["check_tags", "download_fastedge_cli"]
+    if: ${{ needs.check_tags.outputs.has_release_tag == 'true' }}
+    strategy:
+      matrix:
+        include:
+          - target: linux-x64
+            os: ubuntu-latest
+
+          - target: darwin-arm64
+            os: macos-latest
+
+    steps:
+      - name: Checkout this repository
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js latest
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20.x
+          cache: "npm"
+
+      - name: Download fastedge-cli Artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: fastedge-cli-${{ matrix.os }}-artifact
+          path: fastedge-cli
+
+      - name: Install dependencies
+        run: |
+          npm ci
+
+      - name: Build JavaScript extension
+        run: |
+          npm run build
+
+      - name: List extension files
+        run: |
+          npx vsce ls
+
+      - name: Package extension
+        run: |
+          npx @vscode/vsce package --target ${{ matrix.target }}
+          FILENAME=$(ls *.vsix)
+          echo "VSIX_FILENAME=$FILENAME" >> $GITHUB_ENV
+
+      - name: Create SHA256 checksum
+        run: |
+          shasum -a 256 $VSIX_FILENAME > $VSIX_FILENAME.sha256
+          echo "ASSET=$VSIX_FILENAME" >> $GITHUB_ENV
+          echo "ASSET_SUM=$VSIX_FILENAME.sha256" >> $GITHUB_ENV
+
+      - name: Upload release archive
+        uses: softprops/action-gh-release@v2
+        with:
+          files: |
+            ${{ env.ASSET }}
+            ${{ env.ASSET_SUM }}

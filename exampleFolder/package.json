@@ -1,0 +1,16 @@
+{
+  "name": "extension-playground",
+  "version": "1.0.0",
+  "description": "test pen for different vscode extension debugger times",
+  "main": "js-workspace/index.js",
+  "scripts": {
+    "build": "tsc -p .",
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "type": "module",
+  "author": "Gordon Farquharson",
+  "devDependencies": {
+    "@gcoredev/fastedge-sdk-js": "^1.1.1",
+    "typescript": "^5.4.5"
+  }
+}

@@ -1,108 +1,94 @@
 import * as vscode from "vscode";
 
-import { compileJavascriptBinary } from "./js_build";
-import { compileRustAndFindBinary } from "./rust_build";
-
-type ExtLanguage = "javascript" | "rust";
-export type DebugContext = "file" | "workspace";
-
-function getActiveFileLanguage(): ExtLanguage | null {
-  const languageId = vscode.window.activeTextEditor?.document.languageId ?? "";
-  const javascriptLanguageIds = [
-    "javascript",
-    "typescript",
-    "javascriptreact",
-    "typescriptreact",
-  ];
-  if (javascriptLanguageIds.includes(languageId)) {
-    return "javascript";
-  } else if (languageId === "rust") {
-    return "rust";
-  }
-  return null;
-}
-
-async function compileActiveEditorsBinary(
-  debugContext: DebugContext = "file"
-): Promise<string> {
-  const activeFile =
-    debugContext === "workspace"
-      ? vscode.workspace?.workspaceFolders?.[0].uri.fsPath + "/"
-      : vscode.window.activeTextEditor?.document.uri.fsPath;
-
-  const activeFileLanguage = getActiveFileLanguage();
-  if (!activeFile || !activeFileLanguage) {
-    // return an error.. need to have a rust or javascript file selected
-    throw new Error(
-      "No active file or language detected is incorrect! Only Rust or Javascript files are supported"
-    );
-  }
-  if (activeFileLanguage === "javascript") {
-    return compileJavascriptBinary(activeFile, debugContext);
-  } else if (activeFileLanguage === "rust") {
-    const activeFilePath = activeFile?.slice(0, activeFile?.lastIndexOf("/"));
-    return compileRustAndFindBinary(activeFilePath as string);
-  }
-  return "";
-}
-
-class MyDebugAdapterDescriptorFactory {
-  createDebugAdapterDescriptor(
-    _session: vscode.DebugSession,
-    executable: vscode.DebugAdapterExecutable
-  ): vscode.DebugAdapterExecutable {
-    return new vscode.DebugAdapterExecutable(executable.command);
-  }
-}
-
-class BinaryDebugConfigurationProvider {
-  async resolveDebugConfiguration(
-    _folder: vscode.WorkspaceFolder,
-    config: vscode.DebugConfiguration,
-    _token: vscode.CancellationToken
-  ) {
-    try {
-      config.binary = await compileActiveEditorsBinary(config?.debugContext);
-      return config;
-    } catch (err) {
-      vscode.window.showErrorMessage(`Error: ${(err as Error).message}`);
-      return undefined;
-    }
-  }
-}
+import { FastEdgeDebugAdapterDescriptorFactory } from "./FastEdgeDebugAdapterDescriptorFactory";
+import { BinaryDebugConfigurationProvider } from "./BinaryDebugConfigurationProvider";
 
 export function activate(context: vscode.ExtensionContext) {
   context.subscriptions.push(
-    vscode.commands.registerCommand("fastegde.run-file", () => {
-      // The code you place here will be executed every time your command is executed
-      // Display a message box to the user
-      vscode.window.showInformationMessage("FastEdge: Running File!");
-      vscode.debug.startDebugging(undefined, {
-        type: "fastedge",
-        name: "Debug File",
-        request: "launch",
-        program: "${file}",
-        debugContext: "file",
-      });
+    vscode.commands.registerCommand("fastedge.run-file", () => {
+      const activeEditor = vscode.window.activeTextEditor;
+      if (activeEditor) {
+        const activeEditor = vscode.window.activeTextEditor;
+        vscode.window.showInformationMessage(
+          `activeEditor: ${activeEditor?.document.uri.fsPath}`
+        );
+        const workspaceFolder = vscode.workspace.workspaceFolders?.[0];
+        vscode.window.showInformationMessage(
+          `workspaceFolder ${workspaceFolder?.uri.fsPath}`
+        );
+
+        vscode.window.showInformationMessage("FastEdge: Running File");
+        vscode.debug.startDebugging(undefined, {
+          type: "fastedge",
+          name: "Debug File",
+          request: "launch",
+          program: "${file}",
+          debugContext: "file",
+        });
+      } else {
+        vscode.window.showErrorMessage("No active file to debug.");
+      }
     }),
-    vscode.commands.registerCommand("fastegde.run-workspace", () => {
-      vscode.window.showInformationMessage("FastEdge: Running Workspace!");
-      vscode.debug.startDebugging(undefined, {
-        type: "fastedge",
-        name: "Debug Workspace",
-        request: "launch",
-        program: "${file}",
-        debugContext: "workspace",
-      });
+    vscode.commands.registerCommand("fastedge.run-workspace", () => {
+      const workspaceFolder = vscode.workspace.workspaceFolders?.[0];
+      if (workspaceFolder) {
+        vscode.window.showInformationMessage("FastEdge: Running Workspace");
+        vscode.debug.startDebugging(undefined, {
+          type: "fastedge",
+          name: "Debug Workspace",
+          request: "launch",
+          program: "${file}",
+          debugContext: "workspace",
+        });
+      } else {
+        vscode.window.showErrorMessage("No workspace folder available.");
+      }
     }),
+    vscode.commands.registerCommand(
+      "fastedge.generate-launch-json",
+      async () => {
+        const workspaceFolder = vscode.workspace.workspaceFolders?.[0];
+        if (workspaceFolder) {
+          const launchJsonPath = vscode.Uri.joinPath(
+            workspaceFolder.uri,
+            ".vscode",
+            "launch.json"
+          );
+          const launchJsonContent = {
+            version: "0.2.0",
+            configurations: [
+              {
+                type: "fastedge",
+                name: "FastEdge App",
+                request: "launch",
+                port: 8181,
+                env: {},
+                headers: {},
+                geoIpHeaders: false,
+                traceLogging: false,
+              },
+            ],
+          };
+          await vscode.workspace.fs.writeFile(
+            launchJsonPath,
+            Buffer.from(JSON.stringify(launchJsonContent, null, 2))
+          );
+          vscode.window.showInformationMessage(
+            "Generated launch.json with default settings."
+          );
+        } else {
+          vscode.window.showErrorMessage("No workspace folder available.");
+        }
+      }
+    ),
     vscode.debug.registerDebugAdapterDescriptorFactory(
       "fastedge",
-      new MyDebugAdapterDescriptorFactory()
+      new FastEdgeDebugAdapterDescriptorFactory()
     )
   );
-}
 
-vscode.debug.registerDebugConfigurationProvider(
-  "fastedge",
-  new BinaryDebugConfigurationProvider()
-);
+  vscode.debug.registerDebugConfigurationProvider(
+    "fastedge",
+    new BinaryDebugConfigurationProvider(context)
+  );
+}

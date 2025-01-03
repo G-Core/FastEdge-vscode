@@ -1,14 +1,15 @@
 {
   "compilerOptions": {
-    "module": "Node16",
-    "target": "ES2022",
-    "outDir": "js-extension",
-    "lib": ["ES2022"],
-    "sourceMap": false,
-    "rootDir": "src",
+    "target": "es6",
+    "module": "commonjs",
+    "moduleResolution": "node",
+    "outDir": "./dist",
+    "rootDir": "./src",
     "strict": true,
-    "noImplicitReturns": true,
-    "noFallthroughCasesInSwitch": true,
-    "noUnusedParameters": true
-  }
+    "esModuleInterop": true,
+    "skipLibCheck": true,
+    "forceConsistentCasingInFileNames": true
+  },
+  "include": ["src"],
+  "exclude": ["node_modules", ".vscode", "dist"]
 }
