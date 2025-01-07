@@ -28,6 +28,7 @@ fastedge-*.vsix
 
 # Build files
 build/
+**/target/
 dist/
 exampleFolder/target/
 runner

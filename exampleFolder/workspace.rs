@@ -6,7 +6,7 @@ use fastedge::{
 
 #[fastedge::http]
 fn main(req: Request<Body>) -> Result<Response<Body>, Error> {
-    let mut body: String = "Print: \nMethod:".to_string();
+    let mut body: String = "WORKSPACE - MAIN: \nMethod: ".to_string();
     body.push_str(req.method().as_str());
 
     body.push_str("\nURL: ");

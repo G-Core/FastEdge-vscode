@@ -109,6 +109,14 @@ jobs:
         run: |
           npx vsce ls
 
+      - name: Ensure extension is exectuable
+        run: |
+          chmod +x ./fastedge-cli/cli-${{ matrix.target }}
+
+      - name: View exectuables
+        run: |
+          ls -la ./fastedge-cli
+
       - name: Package extension
         run: |
           npx @vscode/vsce package --target ${{ matrix.target }}
