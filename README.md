@@ -37,31 +37,7 @@ More detail can be found in the SDK documentation above. 👆
 
 🚧 This extension will be added to the VS Code marketplace soon... 🚀
 
-In the meantime, it is possible to install from source:
-
-1. Clone the repo
-
-```sh
-git clone git@github.com:G-Core/FastEdge-vscode.git
-```
-
-2. Setup Node environment
-
-```sh
-cd FastEdge-vscode && npm i
-```
-
-3. Build your OS specific extension using the Makefile
-
-```sh
-make
-```
-
-4. Install the extension
-
-```sh
-make install
-```
+In the meantime, it is possible to install from source: [Releases](https://github.com/G-Core/FastEdge-vscode/releases)
 
 ## Running your first application
 
@@ -92,7 +68,7 @@ When running this for the first time in any project, you will want to create a `
 
 The easiest way to do this is to let the extension create it for you, from the default settings provided by the extension.
 
-Simply run Command Palette (Ctrl+Shift+P): `Debug: Add Configuration...` and select the `FastEdge App Runner` extension as the source.
+Simply run Command Palette (Ctrl+Shift+P): `Debug: FastEdge (Generate launch.json)`.
 
 This will create the `.vscode` directory in your project and add a `launch.json` with the basic required configuration to run.
 
@@ -130,4 +106,4 @@ Both these commands will use the associated `cargo.toml` to configure the target
   This will use VS Codes open Workspace as the cwd, where it will then read the top level `package.json` for the "main" entrypoint.
 
 As the javascript build tool `fastedge-build` requires an output location for you compiled binary.
-This is set by default to your workspace `.vscode/bin/ext.wasm`
+This is set by default to your workspace `.vscode/bin/debugger.wasm`
