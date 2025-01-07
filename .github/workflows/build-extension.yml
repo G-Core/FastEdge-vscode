@@ -113,10 +113,6 @@ jobs:
         run: |
           chmod +x ./fastedge-cli/cli-${{ matrix.target }}
 
-      - name: View exectuables
-        run: |
-          ls -la ./fastedge-cli
-
       - name: Package extension
         run: |
           npx @vscode/vsce package --target ${{ matrix.target }}
@@ -135,3 +131,16 @@ jobs:
           files: |
             ${{ env.ASSET }}
             ${{ env.ASSET_SUM }}
+
+      - name: Import Personal Access Token
+        uses: hashicorp/vault-action@v3
+        id: secrets
+        with:
+          url: https://puppet-vault.gc.onl
+          token: ${{ secrets.VAULT_TOKEN }}
+          secrets: |
+            secret/project_fastedge/vscode_marketplace publish_token | PUBLISH_TOKEN ;
+
+      - name: Publish extension to VS Marketplace
+        run: |
+          npx @vscode/vsce publish --target ${{ matrix.target }} --pat ${{ steps.secrets.outputs.PUBLISH_TOKEN }}
