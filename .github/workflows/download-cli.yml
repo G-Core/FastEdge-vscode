@@ -65,6 +65,7 @@ jobs:
       - name: Rename and copy fastedge-cli
         run: |
           cp cli-$VERSION-${{ matrix.file_suffix }}/cli ./fastedge-cli/cli-${{ matrix.target }}
+          chmod +x ./fastedge-cli/cli-${{ matrix.target }}
 
       - name: Upload fastedge-cli Artifact
         uses: actions/upload-artifact@v4

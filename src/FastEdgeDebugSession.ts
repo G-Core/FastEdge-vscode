@@ -42,7 +42,7 @@ export class FastEdgeDebugSession extends DebugSession {
     const binary = args.binary;
     const cli = args.cliPath;
     const port = args.port ?? 8181;
-    const logging = args.traceLogging ? "info,http_service=trace" : "info";
+    const loggingLevel = args.traceLogging ? "info,http_service=trace" : "info";
     const execArgs = [
       "http",
       "-p",
@@ -52,12 +52,30 @@ export class FastEdgeDebugSession extends DebugSession {
       ...(args.args ?? []),
     ];
 
+    if (args.geoIpHeaders) {
+      execArgs.push("--geo");
+    }
+
+    if (args.memoryLimit) {
+      execArgs.push("-m", args.memoryLimit);
+    }
+
     if (binary.lang === "javascript") {
       execArgs.push("--wasi-http", true);
     }
+
+    if (args.headers) {
+      execArgs.push(...this.injectVariables("headers", args.headers));
+    }
+
+    if (args.env) {
+      execArgs.push(...this.injectVariables("env", args.env));
+    }
+
+    console.log("Farq: FastEdgeDebugSession -> execArgs", execArgs);
     this.childProcess = cp.spawn(cli, execArgs, {
       env: {
-        RUST_LOG: logging,
+        RUST_LOG: loggingLevel,
         ...process.env, // Preserve existing environment variables
       },
     });
@@ -84,6 +102,20 @@ export class FastEdgeDebugSession extends DebugSession {
     }
   }
 
+  private injectVariables(
+    type: "env" | "headers",
+    vars: { [key: string]: string } = {}
+  ): Array<string> {
+    const result = [];
+    for (const key in vars) {
+      result.push(
+        type === "env" ? "--env" : "--headers",
+        `${key}=${vars[key]}`
+      );
+    }
+    return result;
+  }
+
   protected disconnectRequest(
     response: DebugProtocol.DisconnectResponse,
     args: DebugProtocol.DisconnectArguments
@@ -92,7 +124,7 @@ export class FastEdgeDebugSession extends DebugSession {
       this.childProcess.kill();
       this.childProcess = undefined;
     }
-    this.sendEvent(new OutputEvent(" FastEdge App stopping...", "stdout"));
+    this.sendEvent(new OutputEvent("FastEdge App stopping...", "stdout"));
     this.sendResponse(response);
   }
 }

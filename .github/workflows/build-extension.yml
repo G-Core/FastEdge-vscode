@@ -3,7 +3,7 @@ name: build
 on:
   push:
     tags:
-      - "v[0-9]+.*"
+      - "[0-9]+.[0-9]+.[0-9]+(-[0-9]+)?"
 
   workflow_dispatch: # trigger manually
     inputs:
@@ -12,7 +12,7 @@ on:
         required: true
         default: "latest"
       tag_version:
-        description: "Release tag e.g. v1.0.0"
+        description: "Release tag e.g. 1.0.1"
         required: true
         default: ""
 
@@ -30,9 +30,14 @@ jobs:
         id: determine-tag
         run: |
           if [ -n "${{ github.event.inputs.tag_version }}" ]; then
-            echo "Creating new release tag: ${{ github.event.inputs.tag_version }}"
-            git tag -a ${{ github.event.inputs.tag_version }} -m "Release ${{ github.event.inputs.tag_version }}"
-            git push origin ${{ github.event.inputs.tag_version }}
+            TAG_VERSION="${{ github.event.inputs.tag_version }}"
+            if [[ ! "$TAG_VERSION" =~ ^[0-9]+\.[0-9]+\.[0-9]+(-[0-9]+)?$ ]]; then
+              echo "Invalid tag format: $TAG_VERSION"
+              exit 1
+            fi
+            echo "Creating new release tag: $TAG_VERSION""
+            git tag -a $TAG_VERSION" -m "Release $TAG_VERSION""
+            git push origin $TAG_VERSION"
             echo "has_tag=false" >> $GITHUB_OUTPUT
           else
             echo "No release tag provided"
@@ -78,6 +83,18 @@ jobs:
       - name: Install dependencies
         run: |
           npm ci
+
+      - name: Extract tag version
+        id: extract_version
+        run: |
+          TAG_VERSION=${GITHUB_REF#refs/tags/}
+          echo "TAG_VERSION=$TAG_VERSION" >> $GITHUB_ENV
+
+      - name: Update package.json version
+        run: |
+          TAG_VERSION=${{ env.TAG_VERSION }}
+          jq --arg version "$TAG_VERSION" '.version = $version' package.json > package.tmp.json
+          mv package.tmp.json package.json
 
       - name: Build JavaScript extension
         run: |
