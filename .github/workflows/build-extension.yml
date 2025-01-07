@@ -3,7 +3,7 @@ name: build
 on:
   push:
     tags:
-      - "[0-9]+.[0-9]+.[0-9]+(-[0-9]+)?"
+      - "v[0-9]+.*"
 
   workflow_dispatch: # trigger manually
     inputs:
@@ -12,7 +12,7 @@ on:
         required: true
         default: "latest"
       tag_version:
-        description: "Release tag e.g. 1.0.1"
+        description: "Release tag e.g. v1.0.1"
         required: true
         default: ""
 
@@ -31,7 +31,7 @@ jobs:
         run: |
           if [ -n "${{ github.event.inputs.tag_version }}" ]; then
             TAG_VERSION="${{ github.event.inputs.tag_version }}"
-            if [[ ! "$TAG_VERSION" =~ ^[0-9]+\.[0-9]+\.[0-9]+(-[0-9]+)?$ ]]; then
+            if [[ ! "$TAG_VERSION" =~ ^v[0-9]+\.[0-9]+\.[0-9]+(-[0-9]+)?$ ]]; then
               echo "Invalid tag format: $TAG_VERSION"
               exit 1
             fi
@@ -40,8 +40,12 @@ jobs:
             git push origin $TAG_VERSION"
             echo "has_tag=false" >> $GITHUB_OUTPUT
           else
-            echo "No release tag provided"
-            echo "has_tag=${{ startsWith(github.ref, 'refs/tags/') }}" >> $GITHUB_OUTPUT
+            TAG_VERSION=${GITHUB_REF#refs/tags/}
+            if [[ ! "$TAG_VERSION" =~ ^v[0-9]+\.[0-9]+\.[0-9]+(-[0-9]+)?$ ]]; then
+              echo "Invalid tag format: $TAG_VERSION"
+              exit 1
+            fi
+            echo "has_tag=true" >> $GITHUB_OUTPUT
           fi
 
   download_fastedge_cli:
@@ -88,6 +92,7 @@ jobs:
         id: extract_version
         run: |
           TAG_VERSION=${GITHUB_REF#refs/tags/}
+          TAG_VERSION=${TAG_VERSION#v}  # Remove the 'v' prefix
           echo "TAG_VERSION=$TAG_VERSION" >> $GITHUB_ENV
 
       - name: Update package.json version
