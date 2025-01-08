@@ -1,72 +1,23 @@
-name: build
+name: Build and Publish Extension
 
 on:
-  push:
-    tags:
-      - "v[0-9]+.*"
-
-  workflow_dispatch: # trigger manually
+  workflow_call:
     inputs:
-      cli_version:
-        description: "FastEdge cli version"
+      os_target:
+        description: "target architecture" # linux-x64, darwin-arm64
         required: true
-        default: "latest"
-      tag_version:
-        description: "Release tag e.g. v1.0.1"
+        type: string
+      os_name:
+        description: "operating system" # ubuntu-latest, macos-latest
         required: true
-        default: ""
+        type: string
+    secrets:
+      VAULT_TOKEN:
+        required: true
 
 jobs:
-  check_tags:
-    runs-on: [self-hosted, ubuntu-22-04, regular]
-    outputs:
-      has_release_tag: ${{ steps.determine-tag.outputs.has_tag }}
-
-    steps:
-      - name: Checkout this repository
-        uses: actions/checkout@v4
-
-      - name: Create release tag
-        id: determine-tag
-        run: |
-          if [ -n "${{ github.event.inputs.tag_version }}" ]; then
-            TAG_VERSION="${{ github.event.inputs.tag_version }}"
-            if [[ ! "$TAG_VERSION" =~ ^v[0-9]+\.[0-9]+\.[0-9]+(-[0-9]+)?$ ]]; then
-              echo "Invalid tag format: $TAG_VERSION"
-              exit 1
-            fi
-            echo "Creating new release tag: $TAG_VERSION""
-            git tag -a $TAG_VERSION" -m "Release $TAG_VERSION""
-            git push origin $TAG_VERSION"
-            echo "has_tag=false" >> $GITHUB_OUTPUT
-          else
-            TAG_VERSION=${GITHUB_REF#refs/tags/}
-            if [[ ! "$TAG_VERSION" =~ ^v[0-9]+\.[0-9]+\.[0-9]+(-[0-9]+)?$ ]]; then
-              echo "Invalid tag format: $TAG_VERSION"
-              exit 1
-            fi
-            echo "has_tag=true" >> $GITHUB_OUTPUT
-          fi
-
-  download_fastedge_cli:
-    uses: ./.github/workflows/download-cli.yml
-    needs: check_tags
-    if: ${{ needs.check_tags.outputs.has_release_tag == 'true' }}
-    with:
-      cli_version: ${{ inputs.cli_version }}
-
   build_extension:
     runs-on: [self-hosted, ubuntu-22-04, regular]
-    needs: ["check_tags", "download_fastedge_cli"]
-    if: ${{ needs.check_tags.outputs.has_release_tag == 'true' }}
-    strategy:
-      matrix:
-        include:
-          - target: linux-x64
-            os: ubuntu-latest
-
-          - target: darwin-arm64
-            os: macos-latest
 
     steps:
       - name: Checkout this repository
@@ -81,7 +32,7 @@ jobs:
       - name: Download fastedge-cli Artifact
         uses: actions/download-artifact@v4
         with:
-          name: fastedge-cli-${{ matrix.os }}-artifact
+          name: fastedge-cli-${{ inputs.os_name }}-artifact
           path: fastedge-cli
 
       - name: Install dependencies
@@ -97,7 +48,6 @@ jobs:
 
       - name: Update package.json version
         run: |
-          TAG_VERSION=${{ env.TAG_VERSION }}
           jq --arg version "$TAG_VERSION" '.version = $version' package.json > package.tmp.json
           mv package.tmp.json package.json
 
@@ -111,11 +61,11 @@ jobs:
 
       - name: Ensure extension is exectuable
         run: |
-          chmod +x ./fastedge-cli/cli-${{ matrix.target }}
+          chmod +x ./fastedge-cli/cli-${{ inputs.os_target }}
 
       - name: Package extension
         run: |
-          npx @vscode/vsce package --target ${{ matrix.target }}
+          npx @vscode/vsce package --target ${{ inputs.os_target }}
           FILENAME=$(ls *.vsix)
           echo "VSIX_FILENAME=$FILENAME" >> $GITHUB_ENV
 
@@ -143,4 +93,4 @@ jobs:
 
       - name: Publish extension to VS Marketplace
         run: |
-          npx @vscode/vsce publish --target ${{ matrix.target }} --pat ${{ steps.secrets.outputs.PUBLISH_TOKEN }}
+          npx @vscode/vsce publish --target ${{ inputs.os_target }} --pat ${{ steps.secrets.outputs.PUBLISH_TOKEN }}

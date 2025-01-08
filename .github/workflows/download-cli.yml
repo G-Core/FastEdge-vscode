@@ -18,13 +18,13 @@ jobs:
       - name: Determine version
         id: determine-version
         run: |
-          if [ "${{ github.event.inputs.cli_version }}" == "latest" ] || [ -z "${{ github.event.inputs.cli_version }}" ]; then
+          if [ "${{ inputs.cli_version }}" == "latest" ] || [ -z "${{ inputs.cli_version }}" ]; then
             echo "Fetching latest release version..."
             LATEST_VERSION=$(curl -s https://api.github.com/repos/G-Core/FastEdge-lib/releases/latest | jq -r .tag_name)
             echo "Latest version is $LATEST_VERSION"
             echo "version=$LATEST_VERSION"  >> $GITHUB_OUTPUT
           else
-            echo "version=${{ github.event.inputs.cli_version }}" >> $GITHUB_OUTPUT
+            echo "version=${{ inputs.cli_version }}" >> $GITHUB_OUTPUT
           fi
 
   download-and-verify:
