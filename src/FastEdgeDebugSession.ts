@@ -13,6 +13,70 @@ import { compileActiveEditorsBinary } from "./compiler";
 export class FastEdgeDebugSession extends DebugSession {
   private childProcess: cp.ChildProcess | undefined;
 
+  public constructor() {
+    super();
+    this.setDebuggerLinesStartAt1(false);
+    this.setDebuggerColumnsStartAt1(false);
+  }
+
+  protected initializeRequest(
+    response: DebugProtocol.InitializeResponse,
+    args: DebugProtocol.InitializeRequestArguments
+  ): void {
+    // build and return the capabilities of this debug adapter:
+    response.body = response.body || {};
+    response.body.supportsBreakpointLocationsRequest = true; // Enable breakpoint locations request
+    response.body.supportsCancelRequest = false;
+    response.body.supportsCompletionsRequest = false;
+    response.body.supportsConfigurationDoneRequest = true;
+    response.body.supportsDataBreakpoints = true;
+    response.body.supportsDisassembleRequest = false;
+    response.body.supportsEvaluateForHovers = false;
+    response.body.supportsFunctionBreakpoints = true;
+    response.body.supportsGotoTargetsRequest = false;
+    response.body.supportsInstructionBreakpoints = true;
+    response.body.supportsReadMemoryRequest = false;
+    response.body.supportsRestartFrame = false;
+    response.body.supportsSetExpression = false;
+    response.body.supportsSetExpression = false;
+    response.body.supportsSetVariable = false;
+    response.body.supportsStepBack = false;
+    response.body.supportsSteppingGranularity = false;
+    response.body.supportsStepInTargetsRequest = false;
+    response.body.supportsTerminateRequest = true;
+    response.body.supportsTerminateThreadsRequest = false;
+    response.body.supportsValueFormattingOptions = false;
+
+    this.sendResponse(response);
+  }
+
+  /**
+   * Called at the end of the configuration sequence.
+   * Indicates that all breakpoints etc. have been sent to the DA and that the 'launch' can start.
+   */
+  protected configurationDoneRequest(
+    response: DebugProtocol.ConfigurationDoneResponse,
+    args: DebugProtocol.ConfigurationDoneArguments
+  ): void {
+    super.configurationDoneRequest(response, args);
+  }
+
+  protected setBreakpointsRequest(
+    response: DebugProtocol.SetBreakpointsResponse,
+    args: DebugProtocol.SetBreakpointsArguments
+  ): void {
+    response.body = { breakpoints: [] };
+    this.sendResponse(response);
+  }
+
+  protected setDataBreakpointsRequest(
+    response: DebugProtocol.SetDataBreakpointsResponse,
+    args: DebugProtocol.SetDataBreakpointsArguments
+  ): void {
+    response.body = { breakpoints: [] };
+    this.sendResponse(response);
+  }
+
   protected async launchRequest(
     response: DebugProtocol.LaunchResponse,
     _args: unknown
@@ -23,17 +87,19 @@ export class FastEdgeDebugSession extends DebugSession {
     this.clearDebugConsole();
 
     try {
-      args.binary = await compileActiveEditorsBinary(args?.debugContext);
+      args.binary = await compileActiveEditorsBinary(
+        args?.debugContext,
+        (...args) => this.logDebugConsole(...args)
+      );
     } catch (compileError) {
       vscode.window.showErrorMessage(`Compile Error: View Debug Console`);
-      this.sendEvent(
-        new OutputEvent(
-          `Compile Error: ${(compileError as Error).message}`,
-          "stderr"
-        )
+      this.logDebugConsole(
+        `Compile Error: ${(compileError as Error).message}\n`,
+        "stderr"
       );
-      this.sendEvent(
-        new OutputEvent("Compilation failed. Stopping debug session.", "stderr")
+      this.logDebugConsole(
+        `Compilation failed. Stopping debug session.\n`,
+        "stderr"
       );
       this.sendEvent(new TerminatedEvent());
       this.sendResponse(response);
@@ -72,7 +138,6 @@ export class FastEdgeDebugSession extends DebugSession {
       execArgs.push(...this.injectVariables("env", args.env));
     }
 
-    console.log("Farq: FastEdgeDebugSession -> execArgs", execArgs);
     this.childProcess = cp.spawn(cli, execArgs, {
       env: {
         RUST_LOG: loggingLevel,
@@ -81,11 +146,11 @@ export class FastEdgeDebugSession extends DebugSession {
     });
 
     this.childProcess?.stdout?.on("data", (data) => {
-      this.sendEvent(new OutputEvent(data.toString(), "stdout"));
+      this.logDebugConsole(data.toString(), "stdout");
     });
 
     this.childProcess?.stderr?.on("data", (data) => {
-      this.sendEvent(new OutputEvent(data.toString(), "stderr"));
+      this.logDebugConsole(data.toString(), "stderr");
     });
 
     this.childProcess?.on("close", (code) => {
@@ -100,6 +165,10 @@ export class FastEdgeDebugSession extends DebugSession {
     if (debugConsole) {
       debugConsole.append("\x1b[2J\x1b[0f"); // ANSI escape codes to clear the console
     }
+  }
+
+  private logDebugConsole(msg: string, type: "stdout" | "stderr" = "stdout") {
+    this.sendEvent(new OutputEvent(msg, type));
   }
 
   private injectVariables(
@@ -124,7 +193,7 @@ export class FastEdgeDebugSession extends DebugSession {
       this.childProcess.kill();
       this.childProcess = undefined;
     }
-    this.sendEvent(new OutputEvent("FastEdge App stopping...", "stdout"));
+    this.logDebugConsole("FastEdge App stopping...");
     this.sendResponse(response);
   }
 }

@@ -49,14 +49,21 @@ export class BinaryDebugConfigurationProvider
         config?.debugContext !== "workspace"
       ) {
         // Prompt the user to select a debug context if not provided
-        const selectedContext = await vscode.window.showQuickPick([
-          { label: "File", description: "Debug the active file" },
-          { label: "Workspace", description: "Debug the workspace" },
-        ]);
-        if (!selectedContext) {
-          throw new Error("No program specified for debugging.");
+        console.log("Farq: config", config.entrypoint);
+        if (!config.entrypoint || config.entrypoint.toLowerCase() === "file") {
+          config.debugContext = "file";
+        } else if (config.entrypoint.toLowerCase() === "workspace") {
+          config.debugContext = config.entrypoint;
+        } else {
+          const selectedContext = await vscode.window.showQuickPick([
+            { label: "File", description: "Debug the active file" },
+            { label: "Workspace", description: "Debug the workspace" },
+          ]);
+          if (!selectedContext) {
+            throw new Error("No program specified for debugging.");
+          }
+          config.debugContext = selectedContext.label.toLowerCase();
         }
-        config.debugContext = selectedContext.label.toLowerCase();
       }
       // Get the path to the FastEdge CLI - this is required to launch the binary
       // Can be overwritten in launch.json configuration

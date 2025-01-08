@@ -1,6 +1,10 @@
 import { spawn } from "child_process";
+import { LogToDebugConsole } from "./types";
 
-export function compileRustAndFindBinary(activeFilePath: string) {
+export function compileRustAndFindBinary(
+  activeFilePath: string,
+  logDebugConsole: LogToDebugConsole
+) {
   return new Promise<string>(async (resolve, reject) => {
     const cargoBuild = spawn("cargo", ["build", "--message-format=json"], {
       cwd: activeFilePath,
@@ -14,6 +18,7 @@ export function compileRustAndFindBinary(activeFilePath: string) {
     });
 
     cargoBuild.stderr.on("data", (data: Buffer) => {
+      logDebugConsole(data.toString());
       stderr += data;
     });
 

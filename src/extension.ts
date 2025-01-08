@@ -37,13 +37,17 @@ export function activate(context: vscode.ExtensionContext) {
         );
 
         vscode.window.showInformationMessage("FastEdge: Running File");
-        vscode.debug.startDebugging(undefined, {
-          type: "fastedge",
-          name: "Debug File",
-          request: "launch",
-          program: "${file}",
-          debugContext: "file",
-        });
+        vscode.debug.startDebugging(
+          undefined,
+          {
+            type: "fastedge",
+            name: "Debug File",
+            request: "launch",
+            program: "${file}",
+            debugContext: "file",
+          },
+          { noDebug: true }
+        );
       } else {
         vscode.window.showErrorMessage("No active file to debug.");
       }
@@ -52,13 +56,17 @@ export function activate(context: vscode.ExtensionContext) {
       const workspaceFolder = vscode.workspace.workspaceFolders?.[0];
       if (workspaceFolder) {
         vscode.window.showInformationMessage("FastEdge: Running Workspace");
-        vscode.debug.startDebugging(undefined, {
-          type: "fastedge",
-          name: "Debug Workspace",
-          request: "launch",
-          program: "${file}",
-          debugContext: "workspace",
-        });
+        vscode.debug.startDebugging(
+          undefined,
+          {
+            type: "fastedge",
+            name: "Debug Workspace",
+            request: "launch",
+            program: "${file}",
+            debugContext: "workspace",
+          },
+          { noDebug: true }
+        );
       } else {
         vscode.window.showErrorMessage("No workspace folder available.");
       }
@@ -79,6 +87,7 @@ export function activate(context: vscode.ExtensionContext) {
               {
                 type: "fastedge",
                 name: "FastEdge App",
+                entrypoint: "file",
                 request: "launch",
                 port: 8181,
                 env: {},
@@ -103,11 +112,10 @@ export function activate(context: vscode.ExtensionContext) {
     vscode.debug.registerDebugAdapterDescriptorFactory(
       "fastedge",
       new FastEdgeDebugAdapterDescriptorFactory()
+    ),
+    vscode.debug.registerDebugConfigurationProvider(
+      "fastedge",
+      new BinaryDebugConfigurationProvider(context)
     )
-  );
-
-  vscode.debug.registerDebugConfigurationProvider(
-    "fastedge",
-    new BinaryDebugConfigurationProvider(context)
   );
 }

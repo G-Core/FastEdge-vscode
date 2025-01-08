@@ -71,6 +71,11 @@
                 "description": "Path to the FastEdge CLI, typically populated automatically",
                 "default": ""
               },
+              "entrypoint": {
+                "type": "string",
+                "description": "Entrypoint for building the app. (\"file\" or \"workspace\" are valid options)",
+                "default": "file"
+              },
               "binary": {
                 "type": "string",
                 "description": "Wasm binary path, typically populated automatically"

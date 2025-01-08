@@ -6,4 +6,6 @@ type BinaryInfo = {
   lang: ExtLanguage;
 };
 
-export { BinaryInfo, DebugContext, ExtLanguage };
+type LogToDebugConsole = (message: string, type?: "stdout" | "stderr") => void;
+
+export { BinaryInfo, DebugContext, ExtLanguage, LogToDebugConsole };
