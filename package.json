@@ -1,6 +1,6 @@
 {
   "name": "fastedge",
-  "displayName": "FastEdge Runner",
+  "displayName": "FastEdge Launcher",
   "version": "0.2.0",
   "publisher": "gcore-fastedge",
   "description": "Launcher for FastEdge apps",
@@ -27,6 +27,19 @@
     "lint": "eslint src --ext ts"
   },
   "contributes": {
+    "configuration": {
+      "type": "object",
+      "title": "FastEdge Launcher",
+      "properties": {
+        "fastedge.cliVersion": {
+          "type": "string",
+          "default": "unknown",
+          "description": "The version of the FastEdge CLI used by the extension",
+          "scope": "window",
+          "readOnly": true
+        }
+      }
+    },
     "commands": [
       {
         "command": "fastedge.run-file",

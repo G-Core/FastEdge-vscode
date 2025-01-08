@@ -1,9 +1,28 @@
 import * as vscode from "vscode";
+import path from "path";
+import { readFileSync } from "fs";
 
 import { FastEdgeDebugAdapterDescriptorFactory } from "./FastEdgeDebugAdapterDescriptorFactory";
 import { BinaryDebugConfigurationProvider } from "./BinaryDebugConfigurationProvider";
 
 export function activate(context: vscode.ExtensionContext) {
+  // Read the cliVersion from METADATA.json
+  const metadataJsonPath = path.join(
+    context.extensionPath,
+    "fastedge-cli/METADATA.json"
+  );
+  const metadataJson = JSON.parse(readFileSync(metadataJsonPath, "utf8"));
+  const cliVersion = metadataJson.fastedge_cli_version || "unknown";
+
+  // Set the cliVersion setting
+  vscode.workspace
+    .getConfiguration()
+    .update(
+      "fastedge.cliVersion",
+      cliVersion,
+      vscode.ConfigurationTarget.Global
+    );
+
   context.subscriptions.push(
     vscode.commands.registerCommand("fastedge.run-file", () => {
       const activeEditor = vscode.window.activeTextEditor;

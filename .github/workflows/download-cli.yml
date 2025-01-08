@@ -46,7 +46,9 @@ jobs:
         uses: actions/checkout@v4
 
       - name: Use version from determine-cli-version job
-        run: echo "VERSION=${{ needs.determine-cli-version.outputs.version }}" >> $GITHUB_ENV
+        id: used-cli-version
+        run: |
+          echo "VERSION=${{ needs.determine-cli-version.outputs.version }}" >> $GITHUB_ENV
 
       - name: Download FastEdge-lib assets
         run: |
@@ -65,6 +67,10 @@ jobs:
       - name: Rename and copy fastedge-cli
         run: |
           cp cli-$VERSION-${{ matrix.file_suffix }}/cli ./fastedge-cli/cli-${{ matrix.target }}
+
+      - name: Create a RELEASE.json file
+        run: |
+          echo "{\"fastedge_cli_version\": \"$VERSION\"}" > fastedge-cli/METADATA.json
 
       - name: Upload fastedge-cli Artifact
         uses: actions/upload-artifact@v4

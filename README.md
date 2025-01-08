@@ -22,6 +22,13 @@ Having completed compilation it then serves the running application at http://lo
 
 This is done using our application runner based from [FastEdge-cli](https://github.com/G-Core/FastEdge-lib).
 
+**Note** To view which version of the FastEdge-cli your extension is using.
+
+1. Open the Command Palette (Ctrl+Shift+P or Cmd+Shift+P on macOS).
+2. Type Preferences: Open Settings (UI) and select it.
+3. In the Settings UI, search for FastEdge or navigate to the section for your extension.
+4. You should see the cliVersion setting displayed as read-only.
+
 ## Prerequisites
 
 In order for this extension to compile and run any code, you will need to have the basic compilation tools installed for your given language.
