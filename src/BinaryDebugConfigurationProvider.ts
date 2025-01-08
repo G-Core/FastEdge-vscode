@@ -49,7 +49,6 @@ export class BinaryDebugConfigurationProvider
         config?.debugContext !== "workspace"
       ) {
         // Prompt the user to select a debug context if not provided
-        console.log("Farq: config", config.entrypoint);
         if (!config.entrypoint || config.entrypoint.toLowerCase() === "file") {
           config.debugContext = "file";
         } else if (config.entrypoint.toLowerCase() === "workspace") {

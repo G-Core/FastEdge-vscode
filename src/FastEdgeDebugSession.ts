@@ -12,6 +12,8 @@ import { compileActiveEditorsBinary } from "./compiler";
 
 export class FastEdgeDebugSession extends DebugSession {
   private childProcess: cp.ChildProcess | undefined;
+  private breakpoints: vscode.Breakpoint[] = [];
+  private disabledBreakpoints: vscode.Breakpoint[] = [];
 
   public constructor() {
     super();
@@ -85,6 +87,34 @@ export class FastEdgeDebugSession extends DebugSession {
 
     // Clear the debug console before starting a new session
     this.clearDebugConsole();
+
+    // Disable all breakpoints
+    this.breakpoints = [...vscode.debug.breakpoints];
+    this.disabledBreakpoints = this.breakpoints.map((bp) => {
+      if (bp instanceof vscode.SourceBreakpoint) {
+        return new vscode.SourceBreakpoint(
+          bp.location,
+          false,
+          bp.condition,
+          bp.hitCondition,
+          bp.logMessage
+        );
+      } else if (bp instanceof vscode.FunctionBreakpoint) {
+        return new vscode.FunctionBreakpoint(
+          bp.functionName,
+          false,
+          bp.condition,
+          bp.hitCondition,
+          bp.logMessage
+        );
+      }
+      return bp;
+    });
+
+    // Remove all existing breakpoints
+    vscode.debug.removeBreakpoints(this.breakpoints);
+    // Add disabled breakpoints
+    vscode.debug.addBreakpoints(this.disabledBreakpoints);
 
     try {
       args.binary = await compileActiveEditorsBinary(
@@ -193,6 +223,11 @@ export class FastEdgeDebugSession extends DebugSession {
       this.childProcess.kill();
       this.childProcess = undefined;
     }
+    // Remove all disabled breakpoints
+    vscode.debug.removeBreakpoints(this.disabledBreakpoints);
+    // Add original breakpoints
+    vscode.debug.addBreakpoints(this.breakpoints);
+
     this.logDebugConsole("FastEdge App stopping...");
     this.sendResponse(response);
   }
