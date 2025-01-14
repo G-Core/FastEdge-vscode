@@ -2,7 +2,7 @@
   "name": "fastedge",
   "displayName": "FastEdge Launcher",
   "version": "0.2.0",
-  "publisher": "gcore-fastedge",
+  "publisher": "g-corelabssa",
   "description": "Launcher for FastEdge apps",
   "icon": "images/fastedge.png",
   "repository": "https://github.com/G-Core/FastEdge-vscode",
