@@ -77,7 +77,7 @@ jobs:
 
   build_windows_extension:
     uses: ./.github/workflows/build-extension.yml
-    needs: ["check_tags", "download_fastedge_cli"]
+    needs: ["check_tags", "build_darwin_extension"]
     if: ${{ needs.check_tags.outputs.has_release_tag == 'true' }}
     with:
       os_target: win32-x64

@@ -29,10 +29,10 @@ jobs:
           node-version: 20.x
           cache: "npm"
 
-      - name: Download fastedge-cli Artifact
+      - name: Download fastedge-run Artifact
         uses: actions/download-artifact@v4
         with:
-          name: fastedge-cli-${{ inputs.os_name }}-artifact
+          name: fastedge-run-${{ inputs.os_name }}-artifact
           path: fastedge-cli
 
       - name: Install dependencies
@@ -62,7 +62,7 @@ jobs:
       - name: Ensure extension is exectuable
         if: ${{ inputs.os_target != 'win32-x64' }}
         run: |
-          chmod +x ./fastedge-cli/cli-${{ inputs.os_target }}
+          chmod +x ./fastedge-cli/fastedge-run-${{ inputs.os_target }}
 
       - name: Package extension
         run: |
