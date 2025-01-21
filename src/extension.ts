@@ -12,7 +12,7 @@ export function activate(context: vscode.ExtensionContext) {
     "fastedge-cli/METADATA.json"
   );
   const metadataJson = JSON.parse(readFileSync(metadataJsonPath, "utf8"));
-  const cliVersion = metadataJson.fastedge_cli_version || "unknown";
+  const cliVersion = metadataJson.fastedge_run_version || "unknown";
 
   // Set the cliVersion setting
   vscode.workspace
