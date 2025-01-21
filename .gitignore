@@ -14,12 +14,26 @@
 # Output of the go coverage tool, specifically when used with LiteIDE
 *.out
 
-# Dependency directories (remove the comment below to include it)
-# vendor/
+# Dependency directories
+node_modules
 
-# Go workspace file
-go.work
+# fastedge-cli - should be downloaded during build from https://github.com/G-Core/FastEdge-lib/releases
+fastedge-cli/
+
+# VSCode workspace
+.vscode/
 
 # VSIX package
 fastedge-*.vsix
+
+# Build files
+build/
+**/target/
+dist/
+exampleFolder/target/
 runner
+distr/
+js-extension/
+
+# Dev tools
+.nx

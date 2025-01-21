@@ -1,0 +1,13 @@
+[package]
+name = "one"
+version = "0.2.0"
+edition = "2021"
+
+[dependencies]
+fastedge = { workspace = true}
+mime = { workspace = true}
+
+
+[lib]
+path = "main.rs"
+crate-type = ["cdylib"]

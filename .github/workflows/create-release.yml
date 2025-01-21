@@ -1,0 +1,76 @@
+name: Create a versioned release
+
+on:
+  push:
+    tags:
+      - "v[0-9]+.*"
+
+  workflow_dispatch: # trigger manually
+    inputs:
+      cli_version:
+        description: "FastEdge cli version"
+        required: true
+        default: "latest"
+      tag_version:
+        description: "Release tag e.g. v1.0.1"
+        required: true
+        default: ""
+
+jobs:
+  check_tags:
+    runs-on: [self-hosted, ubuntu-22-04, regular]
+    outputs:
+      has_release_tag: ${{ steps.determine-tag.outputs.has_tag }}
+
+    steps:
+      - name: Checkout this repository
+        uses: actions/checkout@v4
+
+      - name: Create release tag
+        id: determine-tag
+        run: |
+          if [ -n "${{ github.event.inputs.tag_version }}" ]; then
+            TAG_VERSION="${{ github.event.inputs.tag_version }}"
+            if [[ ! "$TAG_VERSION" =~ ^v[0-9]+\.[0-9]+\.[0-9]+(-[0-9]+)?$ ]]; then
+              echo "Invalid tag format: $TAG_VERSION"
+              exit 1
+            fi
+            echo "Creating new release tag: $TAG_VERSION""
+            git tag -a $TAG_VERSION" -m "Release $TAG_VERSION""
+            git push origin $TAG_VERSION"
+            echo "has_tag=false" >> $GITHUB_OUTPUT
+          else
+            TAG_VERSION=${GITHUB_REF#refs/tags/}
+            if [[ ! "$TAG_VERSION" =~ ^v[0-9]+\.[0-9]+\.[0-9]+(-[0-9]+)?$ ]]; then
+              echo "Invalid tag format: $TAG_VERSION"
+              exit 1
+            fi
+            echo "has_tag=true" >> $GITHUB_OUTPUT
+          fi
+
+  download_fastedge_cli:
+    uses: ./.github/workflows/download-cli.yml
+    needs: check_tags
+    if: ${{ needs.check_tags.outputs.has_release_tag == 'true' }}
+    with:
+      cli_version: ${{ inputs.cli_version }}
+
+  build_linux_extension:
+    uses: ./.github/workflows/build-extension.yml
+    needs: ["check_tags", "download_fastedge_cli"]
+    if: ${{ needs.check_tags.outputs.has_release_tag == 'true' }}
+    with:
+      os_target: linux-x64
+      os_name: ubuntu-latest
+    secrets:
+      VAULT_TOKEN: ${{ secrets.VAULT_TOKEN }}
+
+  build_darwin_extension:
+    uses: ./.github/workflows/build-extension.yml
+    needs: ["check_tags", "build_linux_extension"]
+    if: ${{ needs.check_tags.outputs.has_release_tag == 'true' }}
+    with:
+      os_target: darwin-arm64
+      os_name: macos-latest
+    secrets:
+      VAULT_TOKEN: ${{ secrets.VAULT_TOKEN }}

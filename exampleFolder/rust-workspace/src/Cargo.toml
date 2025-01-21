@@ -1,0 +1,15 @@
+[workspace.package]
+version = "0.2.0"
+edition = "2021"
+
+[workspace.dependencies]
+fastedge = "0.1"
+mime = "0.3"
+
+[workspace]
+members = [
+    "one",
+    "two",
+]
+resolver = "2"
+

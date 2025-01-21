@@ -1,0 +1,96 @@
+name: Build and Publish Extension
+
+on:
+  workflow_call:
+    inputs:
+      os_target:
+        description: "target architecture" # linux-x64, darwin-arm64
+        required: true
+        type: string
+      os_name:
+        description: "operating system" # ubuntu-latest, macos-latest
+        required: true
+        type: string
+    secrets:
+      VAULT_TOKEN:
+        required: true
+
+jobs:
+  build_extension:
+    runs-on: [self-hosted, ubuntu-22-04, regular]
+
+    steps:
+      - name: Checkout this repository
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js latest
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20.x
+          cache: "npm"
+
+      - name: Download fastedge-cli Artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: fastedge-cli-${{ inputs.os_name }}-artifact
+          path: fastedge-cli
+
+      - name: Install dependencies
+        run: |
+          npm ci
+
+      - name: Extract tag version
+        id: extract_version
+        run: |
+          TAG_VERSION=${GITHUB_REF#refs/tags/}
+          TAG_VERSION=${TAG_VERSION#v}  # Remove the 'v' prefix
+          echo "TAG_VERSION=$TAG_VERSION" >> $GITHUB_ENV
+
+      - name: Update package.json version
+        run: |
+          jq --arg version "$TAG_VERSION" '.version = $version' package.json > package.tmp.json
+          mv package.tmp.json package.json
+
+      - name: Build JavaScript extension
+        run: |
+          npm run build
+
+      - name: List extension files
+        run: |
+          npx vsce ls
+
+      - name: Ensure extension is exectuable
+        run: |
+          chmod +x ./fastedge-cli/cli-${{ inputs.os_target }}
+
+      - name: Package extension
+        run: |
+          npx @vscode/vsce package --target ${{ inputs.os_target }}
+          FILENAME=$(ls *.vsix)
+          echo "VSIX_FILENAME=$FILENAME" >> $GITHUB_ENV
+
+      - name: Create SHA256 checksum
+        run: |
+          shasum -a 256 $VSIX_FILENAME > $VSIX_FILENAME.sha256
+          echo "ASSET=$VSIX_FILENAME" >> $GITHUB_ENV
+          echo "ASSET_SUM=$VSIX_FILENAME.sha256" >> $GITHUB_ENV
+
+      - name: Upload release archive
+        uses: softprops/action-gh-release@v2
+        with:
+          files: |
+            ${{ env.ASSET }}
+            ${{ env.ASSET_SUM }}
+
+      - name: Import Personal Access Token
+        uses: hashicorp/vault-action@v3
+        id: secrets
+        with:
+          url: https://puppet-vault.gc.onl
+          token: ${{ secrets.VAULT_TOKEN }}
+          secrets: |
+            secret/project_fastedge/vscode_marketplace publish_token | PUBLISH_TOKEN ;
+
+      - name: Publish extension to VS Marketplace
+        run: |
+          npx @vscode/vsce publish --target ${{ inputs.os_target }} --pat ${{ steps.secrets.outputs.PUBLISH_TOKEN }}

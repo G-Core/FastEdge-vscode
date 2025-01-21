@@ -1,0 +1,156 @@
+{
+  "name": "fastedge",
+  "displayName": "FastEdge Launcher",
+  "version": "0.2.0",
+  "publisher": "g-corelabssa",
+  "description": "Launcher for FastEdge apps",
+  "icon": "images/fastedge.png",
+  "repository": "https://github.com/G-Core/FastEdge-vscode",
+  "engines": {
+    "vscode": "^1.61.0",
+    "node": "20",
+    "npm": "^9 || ^10"
+  },
+  "categories": [
+    "Debuggers"
+  ],
+  "activationEvents": [
+    "onDebug"
+  ],
+  "main": "./dist/extension.js",
+  "scripts": {
+    "check-types": "tsc --noEmit",
+    "build:dev": "node esbuild/build-ext.js --watch",
+    "build": "npm run check-types && node esbuild/build-ext.js --prod",
+    "copy-files": "./scripts/copy-files.sh",
+    "package": "vsce package",
+    "lint": "eslint src --ext ts"
+  },
+  "contributes": {
+    "configuration": {
+      "type": "object",
+      "title": "FastEdge Launcher",
+      "properties": {
+        "fastedge.cliVersion": {
+          "type": "string",
+          "default": "unknown",
+          "description": "The version of the FastEdge CLI used by the extension",
+          "scope": "window",
+          "readOnly": true
+        }
+      }
+    },
+    "commands": [
+      {
+        "command": "fastedge.run-file",
+        "title": "Debug: FastEdge App (Current File)"
+      },
+      {
+        "command": "fastedge.run-workspace",
+        "title": "Debug: FastEdge App (Workspace)"
+      },
+      {
+        "command": "fastedge.generate-launch-json",
+        "title": "Debug: FastEdge (Generate launch.json)"
+      }
+    ],
+    "debuggers": [
+      {
+        "type": "fastedge",
+        "label": "FastEdge App Launcher",
+        "program": "./dist/extension.js",
+        "languages": [
+          "rust",
+          "javascript"
+        ],
+        "configurationAttributes": {
+          "launch": {
+            "properties": {
+              "cliPath": {
+                "type": "string",
+                "description": "Path to the FastEdge CLI, typically populated automatically",
+                "default": ""
+              },
+              "entrypoint": {
+                "type": "string",
+                "description": "Entrypoint for building the app. (\"file\" or \"workspace\" are valid options)",
+                "default": "file"
+              },
+              "binary": {
+                "type": "string",
+                "description": "Wasm binary path, typically populated automatically"
+              },
+              "port": {
+                "type": "number",
+                "description": "Port to listen for incoming requests",
+                "default": 8181
+              },
+              "geoIpHeaders": {
+                "type": "boolean",
+                "description": "Add sample GeoIP headers",
+                "default": false
+              },
+              "headers": {
+                "type": "object",
+                "description": "Extra request headers"
+              },
+              "env": {
+                "type": "object",
+                "description": "Environment variables"
+              },
+              "memoryLimit": {
+                "type": "number",
+                "description": "Memory limit in bytes",
+                "default": 10000000
+              },
+              "traceLogging": {
+                "type": "boolean",
+                "description": "Trace logging",
+                "default": false
+              },
+              "args": {
+                "type": "array",
+                "description": "Arguments to pass to the executable",
+                "items": {
+                  "type": "string"
+                }
+              }
+            }
+          }
+        },
+        "initialConfigurations": [
+          {
+            "type": "fastedge",
+            "request": "launch",
+            "name": "FastEdge App"
+          }
+        ],
+        "configurationSnippets": [
+          {
+            "label": "FastEdge App Runner: Launch",
+            "description": "Execute FastEdge app locally.",
+            "body": {
+              "name": "FastEdge App",
+              "type": "fastedge",
+              "request": "launch"
+            }
+          }
+        ]
+      }
+    ]
+  },
+  "devDependencies": {
+    "@types/node": "^20.12.7",
+    "@types/vscode": "^1.61.0",
+    "@typescript-eslint/eslint-plugin": "^7.7.1",
+    "@typescript-eslint/parser": "^7.7.1",
+    "@vscode/vsce": "^3.2.1",
+    "esbuild": "^0.24.2",
+    "eslint": "^8.57.0",
+    "typescript": "^5.4.5"
+  },
+  "dependencies": {
+    "vscode-debugadapter": "^1.51.0",
+    "vscode-debugprotocol": "^1.51.0"
+  }
+}

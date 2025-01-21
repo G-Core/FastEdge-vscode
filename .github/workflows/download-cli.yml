@@ -1,0 +1,81 @@
+name: Get FastEdge-lib Assets
+
+on:
+  workflow_call:
+    inputs:
+      cli_version:
+        description: "FastEdge cli version"
+        required: false
+        type: string
+        default: "latest"
+
+jobs:
+  determine-cli-version:
+    runs-on: [self-hosted, ubuntu-22-04, regular]
+    outputs:
+      version: ${{ steps.determine-version.outputs.version }}
+    steps:
+      - name: Determine version
+        id: determine-version
+        run: |
+          if [ "${{ inputs.cli_version }}" == "latest" ] || [ -z "${{ inputs.cli_version }}" ]; then
+            echo "Fetching latest release version..."
+            LATEST_VERSION=$(curl -s https://api.github.com/repos/G-Core/FastEdge-lib/releases/latest | jq -r .tag_name)
+            echo "Latest version is $LATEST_VERSION"
+            echo "version=$LATEST_VERSION"  >> $GITHUB_OUTPUT
+          else
+            echo "version=${{ inputs.cli_version }}" >> $GITHUB_OUTPUT
+          fi
+
+  download-and-verify:
+    runs-on: [self-hosted, ubuntu-22-04, regular]
+    needs: determine-cli-version
+    strategy:
+      matrix:
+        include:
+          - target: linux-x64
+            os: ubuntu-latest
+            file_suffix: x86_64-unknown-linux-gnu
+
+          - target: darwin-arm64
+            os: macos-latest
+            file_suffix: aarch64-apple-darwin
+
+    steps:
+      - name: Checkout this repository
+        uses: actions/checkout@v4
+
+      - name: Use version from determine-cli-version job
+        id: used-cli-version
+        run: |
+          echo "VERSION=${{ needs.determine-cli-version.outputs.version }}" >> $GITHUB_ENV
+
+      - name: Download FastEdge-lib assets
+        run: |
+          echo "Downloading version $VERSION for ${{ matrix.os }}"
+          curl -L -o cli-$VERSION-${{ matrix.file_suffix }}.tar.gz https://github.com/G-Core/FastEdge-lib/releases/download/$VERSION/cli-$VERSION-${{ matrix.file_suffix }}.tar.gz
+          curl -L -o cli-$VERSION-${{ matrix.file_suffix }}.tar.gz.sha256 https://github.com/G-Core/FastEdge-lib/releases/download/$VERSION/cli-$VERSION-${{ matrix.file_suffix }}.tar.gz.sha256
+
+      - name: Verify checksum
+        run: |
+          sha256sum -c cli-$VERSION-${{ matrix.file_suffix }}.tar.gz.sha256
+
+      - name: Extract fastedge-cli
+        run: |
+          tar -xzf cli-$VERSION-${{ matrix.file_suffix }}.tar.gz
+
+      - name: Rename and copy fastedge-cli
+        run: |
+          cp cli-$VERSION-${{ matrix.file_suffix }}/cli ./fastedge-cli/cli-${{ matrix.target }}
+
+      - name: Create a RELEASE.json file
+        run: |
+          echo "{\"fastedge_cli_version\": \"$VERSION\"}" > fastedge-cli/METADATA.json
+
+      - name: Upload fastedge-cli Artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: fastedge-cli-${{ matrix.os }}-artifact
+          retention-days: 1
+          path: |
+            fastedge-cli/
