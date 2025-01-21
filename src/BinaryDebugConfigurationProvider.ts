@@ -14,13 +14,12 @@ export class BinaryDebugConfigurationProvider
 
   private getLauncherPath(extensionPath: string): string {
     switch (os.platform()) {
-      // todo: add support for windows
-      // case "win32":
-      //   return vscode.Uri.joinPath(
-      //     vscode.Uri.file(extensionPath),
-      //     "fastedge-cli",
-      //     "cli.exe"
-      //   ).fsPath;
+      case "win32":
+        return vscode.Uri.joinPath(
+          vscode.Uri.file(extensionPath),
+          "fastedge-cli",
+          "cli.exe"
+        ).fsPath;
       case "darwin":
         return vscode.Uri.joinPath(
           vscode.Uri.file(extensionPath),

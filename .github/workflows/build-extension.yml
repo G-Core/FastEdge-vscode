@@ -4,11 +4,11 @@ on:
   workflow_call:
     inputs:
       os_target:
-        description: "target architecture" # linux-x64, darwin-arm64
+        description: "target architecture" # linux-x64, darwin-arm64, win32-x64
         required: true
         type: string
       os_name:
-        description: "operating system" # ubuntu-latest, macos-latest
+        description: "operating system" # ubuntu-latest, macos-latest, windows-latest
         required: true
         type: string
     secrets:
@@ -60,6 +60,7 @@ jobs:
           npx vsce ls
 
       - name: Ensure extension is exectuable
+        if: ${{ inputs.os_target != 'win32-x64' }}
         run: |
           chmod +x ./fastedge-cli/cli-${{ inputs.os_target }}
 
