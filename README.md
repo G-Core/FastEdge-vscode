@@ -42,9 +42,9 @@ More detail can be found in the SDK documentation above. 👆
 
 ## Installing the extension
 
-🚧 This extension will be added to the VS Code marketplace soon... 🚀
+This extension can be installed from the Visual Studio Marketplace. [FastEdge Launcher](https://marketplace.visualstudio.com/items?itemName=G-CoreLabsSA.fastedge)
 
-In the meantime, it is possible to install from source: [Releases](https://github.com/G-Core/FastEdge-vscode/releases)
+It is also possible to install from source: [Releases](https://github.com/G-Core/FastEdge-vscode/releases)
 
 ## Running your first application
 
