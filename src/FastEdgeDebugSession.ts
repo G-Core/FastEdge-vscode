@@ -84,7 +84,6 @@ export class FastEdgeDebugSession extends DebugSession {
     _args: unknown
   ): Promise<void> {
     const args: DebugConfig = _args as DebugConfig;
-
     // Clear the debug console before starting a new session
     this.clearDebugConsole();
 

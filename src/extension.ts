@@ -4,6 +4,18 @@ import { readFileSync } from "fs";
 
 import { FastEdgeDebugAdapterDescriptorFactory } from "./FastEdgeDebugAdapterDescriptorFactory";
 import { BinaryDebugConfigurationProvider } from "./BinaryDebugConfigurationProvider";
+import { LaunchConfiguration } from "./compiler/types";
+
+function getLaunchConfigurations(
+  scope?: vscode.ConfigurationScope | null
+): LaunchConfiguration {
+  const config = vscode.workspace.getConfiguration("launch", scope);
+  const configurations = config.get<any[]>("configurations");
+  const fastedgeConfig = configurations?.find(
+    (c) => c.type === "fastedge" && c.request === "launch"
+  );
+  return fastedgeConfig ?? {};
+}
 
 export function activate(context: vscode.ExtensionContext) {
   // Read the cliVersion from METADATA.json
@@ -31,23 +43,15 @@ export function activate(context: vscode.ExtensionContext) {
         vscode.window.showInformationMessage(
           `activeEditor: ${activeEditor?.document.uri.fsPath}`
         );
-        const workspaceFolder = vscode.workspace.workspaceFolders?.[0];
-        vscode.window.showInformationMessage(
-          `workspaceFolder ${workspaceFolder?.uri.fsPath}`
-        );
-
         vscode.window.showInformationMessage("FastEdge: Running File");
-        vscode.debug.startDebugging(
-          undefined,
-          {
-            type: "fastedge",
-            name: "Debug File",
-            request: "launch",
-            program: "${file}",
-            debugContext: "file",
-          },
-          { noDebug: true }
-        );
+        vscode.debug.startDebugging(undefined, {
+          ...getLaunchConfigurations(activeEditor?.document.uri),
+          type: "fastedge",
+          name: "Debug File",
+          request: "launch",
+          program: "${file}",
+          debugContext: "file",
+        });
       } else {
         vscode.window.showErrorMessage("No active file to debug.");
       }
@@ -59,6 +63,7 @@ export function activate(context: vscode.ExtensionContext) {
         vscode.debug.startDebugging(
           undefined,
           {
+            ...getLaunchConfigurations(workspaceFolder.uri),
             type: "fastedge",
             name: "Debug Workspace",
             request: "launch",

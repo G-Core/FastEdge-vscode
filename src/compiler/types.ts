@@ -8,4 +8,22 @@ type BinaryInfo = {
 
 type LogToDebugConsole = (message: string, type?: "stdout" | "stderr") => void;
 
-export { BinaryInfo, DebugContext, ExtLanguage, LogToDebugConsole };
+interface LaunchConfiguration {
+  cliPath?: string;
+  entrypoint?: string;
+  binary?: string;
+  port?: number;
+  geoIpHeaders?: boolean;
+  headers?: Record<string, string>;
+  env?: Record<string, string>;
+  memoryLimit?: number;
+  traceLogging?: boolean;
+}
+
+export {
+  BinaryInfo,
+  DebugContext,
+  ExtLanguage,
+  LaunchConfiguration,
+  LogToDebugConsole,
+};
