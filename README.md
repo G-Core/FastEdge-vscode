@@ -35,7 +35,7 @@ In order for this extension to compile and run any code, you will need to have t
 
 Examples:
 
-- Rust: `rustup target add wasm32-wasi`
+- Rust: `rustup target add wasm32-wasip1`
 - Javascript: `npm install --save-dev @gcoredev/fastedge-sdk-js`
 
 More detail can be found in the SDK documentation above. 👆
