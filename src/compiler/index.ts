@@ -1,4 +1,5 @@
 import * as vscode from "vscode";
+import path from "node:path";
 
 import { compileJavascriptBinary } from "./jsBuild";
 import { compileRustAndFindBinary } from "./rustBuild";
@@ -45,11 +46,18 @@ async function compileActiveEditorsBinary(
 
   if (activeFileLanguage === "javascript") {
     return {
-      path: await compileJavascriptBinary(activeFile, debugContext),
+      path: await compileJavascriptBinary(
+        activeFile,
+        debugContext,
+        logDebugConsole
+      ),
       lang: activeFileLanguage,
     };
   } else if (activeFileLanguage === "rust") {
-    const activeFilePath = activeFile?.slice(0, activeFile?.lastIndexOf("/"));
+    const activeFilePath = activeFile?.slice(
+      0,
+      activeFile?.lastIndexOf(path.sep)
+    );
     return {
       path: await compileRustAndFindBinary(activeFilePath, logDebugConsole),
       lang: activeFileLanguage,

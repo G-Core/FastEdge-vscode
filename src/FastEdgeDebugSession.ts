@@ -1,17 +1,20 @@
+import * as os from "os";
 import * as vscode from "vscode";
-import * as cp from "child_process";
+import treeKill from "tree-kill";
+import { DebugProtocol } from "vscode-debugprotocol";
 import {
   DebugSession,
   OutputEvent,
   TerminatedEvent,
 } from "vscode-debugadapter";
-import { DebugProtocol } from "vscode-debugprotocol";
+import { spawn, ChildProcess } from "child_process";
+
 import { DebugConfig } from "./BinaryDebugConfigurationProvider";
 
 import { compileActiveEditorsBinary } from "./compiler";
 
 export class FastEdgeDebugSession extends DebugSession {
-  private childProcess: cp.ChildProcess | undefined;
+  private childProcess: ChildProcess | undefined;
   private breakpoints: vscode.Breakpoint[] = [];
   private disabledBreakpoints: vscode.Breakpoint[] = [];
 
@@ -167,22 +170,27 @@ export class FastEdgeDebugSession extends DebugSession {
       execArgs.push(...this.injectVariables("env", args.env));
     }
 
-    this.childProcess = cp.spawn(cli, execArgs, {
+    const isWindows = os.platform() === "win32";
+    const shell = isWindows ? "cmd.exe" : "sh";
+
+    this.childProcess = spawn(cli, execArgs, {
+      shell,
+      stdio: ["ignore", "pipe", "pipe"],
       env: {
         RUST_LOG: loggingLevel,
         ...process.env, // Preserve existing environment variables
       },
     });
 
-    this.childProcess?.stdout?.on("data", (data) => {
+    this.childProcess?.stdout?.on("data", (data: Buffer) => {
       this.logDebugConsole(data.toString(), "stdout");
     });
 
-    this.childProcess?.stderr?.on("data", (data) => {
+    this.childProcess?.stderr?.on("data", (data: Buffer) => {
       this.logDebugConsole(data.toString(), "stderr");
     });
 
-    this.childProcess?.on("close", (code) => {
+    this.childProcess?.on("close", (code: number) => {
       this.sendEvent(new TerminatedEvent());
     });
 
@@ -208,7 +216,7 @@ export class FastEdgeDebugSession extends DebugSession {
     for (const key in vars) {
       result.push(
         type === "env" ? "--env" : "--headers",
-        `${key}=${vars[key]}`
+        `"${key}=${vars[key]}"`
       );
     }
     return result;
@@ -219,7 +227,11 @@ export class FastEdgeDebugSession extends DebugSession {
     args: DebugProtocol.DisconnectArguments
   ): void {
     if (this.childProcess) {
-      this.childProcess.kill();
+      if (this.childProcess?.pid) {
+        treeKill(this.childProcess.pid);
+      } else {
+        this.childProcess.kill();
+      }
       this.childProcess = undefined;
     }
     // Remove all disabled breakpoints
@@ -227,7 +239,7 @@ export class FastEdgeDebugSession extends DebugSession {
     // Add original breakpoints
     vscode.debug.addBreakpoints(this.breakpoints);
 
-    this.logDebugConsole("FastEdge App stopping...");
+    this.logDebugConsole("FastEdge App stopping...\n");
     this.sendResponse(response);
   }
 }

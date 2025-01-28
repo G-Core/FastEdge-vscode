@@ -150,6 +150,8 @@
     "typescript": "^5.4.5"
   },
   "dependencies": {
+    "toml": "^3.0.0",
+    "tree-kill": "^1.2.2",
     "vscode-debugadapter": "^1.51.0",
     "vscode-debugprotocol": "^1.51.0"
   }

@@ -1,9 +1,9 @@
 import * as vscode from "vscode";
-import { exec } from "child_process";
+import { spawn } from "child_process";
 import fs from "fs";
 import path from "path";
 
-import { DebugContext } from "./types";
+import { DebugContext, LogToDebugConsole } from "./types";
 
 const BINARY_NAME = "debugger.wasm";
 
@@ -41,8 +41,10 @@ const getPackageJsonEntryPoint = (workspaceFolder: vscode.WorkspaceFolder) =>
 
 export function compileJavascriptBinary(
   activeFilePath: string,
-  debugContext: DebugContext
+  debugContext: DebugContext,
+  logDebugConsole: LogToDebugConsole
 ) {
+  logDebugConsole("Compiling javascript binary...");
   return new Promise<string>(async (resolve, reject) => {
     try {
       const workspaceFolder = vscode.workspace.workspaceFolders?.[0];
@@ -63,13 +65,35 @@ export function compileJavascriptBinary(
               await getPackageJsonEntryPoint(workspaceFolder)
             );
 
-      exec(
-        `npx fastedge-build ${jsEntryPoint} ${binPath}/${BINARY_NAME}`,
-        { cwd: workspaceFolder?.uri.fsPath },
-        (err) => {
-          return err ? reject(err) : resolve(`${binPath}/${BINARY_NAME}`);
+      const jsBuild = spawn(
+        "npx",
+        ["fastedge-build", jsEntryPoint, `${binPath}/${BINARY_NAME}`],
+        {
+          shell: true,
+          stdio: ["ignore", "pipe", "pipe"],
+          cwd: workspaceFolder?.uri.fsPath,
         }
       );
+
+      let stdout = "";
+      let stderr = "";
+
+      jsBuild.stdout?.on("data", (data: Buffer) => {
+        stdout += data;
+      });
+
+      jsBuild.stderr?.on("data", (data: Buffer) => {
+        logDebugConsole(data.toString());
+        stderr += data;
+      });
+
+      jsBuild.on("close", (code: number) => {
+        if (code !== 0) {
+          reject(new Error(`build exited with code ${code}: ${stderr}`));
+          return;
+        }
+        resolve(`${binPath}/${BINARY_NAME}`);
+      });
     } catch (err) {
       reject(err);
     }
