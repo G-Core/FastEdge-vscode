@@ -9,12 +9,12 @@ export function compileRustAndFindBinary(
   logDebugConsole: LogToDebugConsole
 ) {
   return new Promise<string>(async (resolve, reject) => {
-    logDebugConsole("Compiling Rust binary...");
+    logDebugConsole("Compiling Rust binary...\n");
     const isWindows = os.platform() === "win32";
     const shell = isWindows ? "cmd.exe" : "sh";
 
     const target = rustConfigWasiTarget(logDebugConsole, activeFilePath);
-    logDebugConsole("wasm build target: " + target, "stderr");
+    logDebugConsole("wasm build target: " + target + "\n", "stderr");
     const cargoBuild = spawn(
       "cargo",
       ["build", "--message-format=json", `--target=${target}`],

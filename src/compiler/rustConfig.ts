@@ -32,7 +32,7 @@ function rustConfigWasiTarget(
     }
   } catch (error) {
     logDebugConsole(
-      `Failed to read or parse config.toml (fallback target: ${wasiTarget})`,
+      `Failed to read or parse config.toml (fallback target: ${wasiTarget})\n`,
       "stderr"
     );
   } finally {
