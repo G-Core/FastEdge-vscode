@@ -35,11 +35,18 @@ jobs:
         include:
           - target: linux-x64
             os: ubuntu-latest
-            file_suffix: x86_64-unknown-linux-gnu
+            file_name: x86_64-unknown-linux-gnu
+            file_ext: tar.gz
 
           - target: darwin-arm64
             os: macos-latest
-            file_suffix: aarch64-apple-darwin
+            file_name: aarch64-apple-darwin
+            file_ext: tar.gz
+
+          - target: win32
+            os: windows-latest
+            file_name: x86_64-pc-windows-msvc
+            file_ext: zip
 
     steps:
       - name: Checkout this repository
@@ -53,29 +60,43 @@ jobs:
       - name: Download FastEdge-lib assets
         run: |
           echo "Downloading version $VERSION for ${{ matrix.os }}"
-          curl -L -o cli-$VERSION-${{ matrix.file_suffix }}.tar.gz https://github.com/G-Core/FastEdge-lib/releases/download/$VERSION/cli-$VERSION-${{ matrix.file_suffix }}.tar.gz
-          curl -L -o cli-$VERSION-${{ matrix.file_suffix }}.tar.gz.sha256 https://github.com/G-Core/FastEdge-lib/releases/download/$VERSION/cli-$VERSION-${{ matrix.file_suffix }}.tar.gz.sha256
+          curl -L -o fastedge-run-$VERSION-${{ matrix.file_name }}.${{ matrix.file_ext }} https://github.com/G-Core/FastEdge-lib/releases/download/$VERSION/fastedge-run-$VERSION-${{ matrix.file_name }}.${{ matrix.file_ext }}
+          curl -L -o fastedge-run-$VERSION-${{ matrix.file_name }}.${{ matrix.file_ext }}.sha256 https://github.com/G-Core/FastEdge-lib/releases/download/$VERSION/fastedge-run-$VERSION-${{ matrix.file_name }}.${{ matrix.file_ext }}.sha256
+
+      - name: Convert Windows SHA256 to Linux format
+        if: ${{ matrix.os == 'windows-latest' }}
+        run: |
+          HASH=$(grep -oP '^[0-9a-f]{64}' fastedge-run-$VERSION-${{ matrix.file_name }}.${{ matrix.file_ext }}.sha256)
+          echo "$HASH fastedge-run-$VERSION-${{ matrix.file_name }}.${{ matrix.file_ext }}" > fastedge-run-$VERSION-${{ matrix.file_name }}.${{ matrix.file_ext }}.sha256
 
       - name: Verify checksum
         run: |
-          sha256sum -c cli-$VERSION-${{ matrix.file_suffix }}.tar.gz.sha256
+          sha256sum -c fastedge-run-$VERSION-${{ matrix.file_name }}.${{ matrix.file_ext }}.sha256
 
-      - name: Extract fastedge-cli
+      - name: Extract fastedge-run
         run: |
-          tar -xzf cli-$VERSION-${{ matrix.file_suffix }}.tar.gz
+          if [[ ${{ matrix.os }} == 'windows-latest' ]]; then
+            unzip fastedge-run-$VERSION-${{ matrix.file_name }}.${{ matrix.file_ext }}
+          else
+            tar -xzf fastedge-run-$VERSION-${{ matrix.file_name }}.${{ matrix.file_ext }}
+          fi
 
-      - name: Rename and copy fastedge-cli
+      - name: Rename and copy fastedge-run
         run: |
-          cp cli-$VERSION-${{ matrix.file_suffix }}/cli ./fastedge-cli/cli-${{ matrix.target }}
+          if [[ ${{ matrix.os }} == 'windows-latest' ]]; then
+            cp fastedge-run-$VERSION-${{ matrix.file_name }}/fastedge-run.exe ./fastedge-cli/fastedge-run.exe
+          else
+            cp fastedge-run-$VERSION-${{ matrix.file_name }}/fastedge-run ./fastedge-cli/fastedge-run-${{ matrix.target }}
+          fi
 
       - name: Create a RELEASE.json file
         run: |
-          echo "{\"fastedge_cli_version\": \"$VERSION\"}" > fastedge-cli/METADATA.json
+          echo "{\"fastedge_run_version\": \"$VERSION\"}" > fastedge-cli/METADATA.json
 
-      - name: Upload fastedge-cli Artifact
+      - name: Upload fastedge-run Artifact
         uses: actions/upload-artifact@v4
         with:
-          name: fastedge-cli-${{ matrix.os }}-artifact
+          name: fastedge-run-${{ matrix.os }}-artifact
           retention-days: 1
           path: |
             fastedge-cli/

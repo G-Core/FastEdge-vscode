@@ -38,7 +38,7 @@ jobs:
             echo "Creating new release tag: $TAG_VERSION""
             git tag -a $TAG_VERSION" -m "Release $TAG_VERSION""
             git push origin $TAG_VERSION"
-            echo "has_tag=false" >> $GITHUB_OUTPUT
+            echo "has_tag=true" >> $GITHUB_OUTPUT
           else
             TAG_VERSION=${GITHUB_REF#refs/tags/}
             if [[ ! "$TAG_VERSION" =~ ^v[0-9]+\.[0-9]+\.[0-9]+(-[0-9]+)?$ ]]; then
@@ -72,5 +72,15 @@ jobs:
     with:
       os_target: darwin-arm64
       os_name: macos-latest
+    secrets:
+      VAULT_TOKEN: ${{ secrets.VAULT_TOKEN }}
+
+  build_windows_extension:
+    uses: ./.github/workflows/build-extension.yml
+    needs: ["check_tags", "build_darwin_extension"]
+    if: ${{ needs.check_tags.outputs.has_release_tag == 'true' }}
+    with:
+      os_target: win32-x64
+      os_name: windows-latest
     secrets:
       VAULT_TOKEN: ${{ secrets.VAULT_TOKEN }}

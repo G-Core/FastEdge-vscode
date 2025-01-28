@@ -14,24 +14,23 @@ export class BinaryDebugConfigurationProvider
 
   private getLauncherPath(extensionPath: string): string {
     switch (os.platform()) {
-      // todo: add support for windows
-      // case "win32":
-      //   return vscode.Uri.joinPath(
-      //     vscode.Uri.file(extensionPath),
-      //     "fastedge-cli",
-      //     "cli.exe"
-      //   ).fsPath;
+      case "win32":
+        return vscode.Uri.joinPath(
+          vscode.Uri.file(extensionPath),
+          "fastedge-cli",
+          "fastedge-run.exe"
+        ).fsPath;
       case "darwin":
         return vscode.Uri.joinPath(
           vscode.Uri.file(extensionPath),
           "fastedge-cli",
-          "cli-darwin-arm64"
+          "fastedge-run-darwin-arm64"
         ).fsPath;
       case "linux":
         return vscode.Uri.joinPath(
           vscode.Uri.file(extensionPath),
           "fastedge-cli",
-          "cli-linux-x64"
+          "fastedge-run-linux-x64"
         ).fsPath;
       default:
         throw new Error("Unsupported platform");
