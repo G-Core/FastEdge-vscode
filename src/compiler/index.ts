@@ -33,7 +33,7 @@ async function compileActiveEditorsBinary(
 ): Promise<BinaryInfo> {
   const activeFile =
     debugContext === "workspace"
-      ? vscode.workspace?.workspaceFolders?.[0].uri.fsPath + "/"
+      ? vscode.workspace?.workspaceFolders?.[0].uri.fsPath + path.sep
       : vscode.window.activeTextEditor?.document.uri.fsPath;
 
   const activeFileLanguage = getActiveFileLanguage();

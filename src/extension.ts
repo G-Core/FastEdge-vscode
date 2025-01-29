@@ -40,9 +40,6 @@ export function activate(context: vscode.ExtensionContext) {
       const activeEditor = vscode.window.activeTextEditor;
       if (activeEditor) {
         const activeEditor = vscode.window.activeTextEditor;
-        vscode.window.showInformationMessage(
-          `activeEditor: ${activeEditor?.document.uri.fsPath}`
-        );
         vscode.window.showInformationMessage("FastEdge: Running File");
         vscode.debug.startDebugging(undefined, {
           ...getLaunchConfigurations(activeEditor?.document.uri),
