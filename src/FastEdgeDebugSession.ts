@@ -126,7 +126,7 @@ export class FastEdgeDebugSession extends DebugSession {
     } catch (compileError) {
       vscode.window.showErrorMessage(`Compile Error: View Debug Console`);
       this.logDebugConsole(
-        `Compile Error: ${(compileError as Error).message}\n`,
+        `Compile Error:\n${(compileError as Error).message}\n`,
         "stderr"
       );
       this.logDebugConsole(
