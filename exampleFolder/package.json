@@ -13,6 +13,6 @@
     "typescript": "^5.8.2"
   },
   "dependencies": {
-    "@gcoredev/fastedge-sdk-js": "file:../../FastEdge-sdk-js"
+    "@gcoredev/fastedge-sdk-js": "1.2.0-alpha.1"
   }
 }

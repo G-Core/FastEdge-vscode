@@ -84,7 +84,6 @@ export function compileJavascriptBinary(
       });
 
       jsBuild.stderr?.on("data", (data: Buffer) => {
-        // logDebugConsole(data.toString());
         stderr += data;
       });
 
