@@ -170,6 +170,10 @@ export class FastEdgeDebugSession extends DebugSession {
       execArgs.push(...this.injectVariables("env", args.env));
     }
 
+    if (args.secrets) {
+      execArgs.push(...this.injectVariables("secrets", args.secrets));
+    }
+
     const isWindows = os.platform() === "win32";
     const shell = isWindows ? "cmd.exe" : "sh";
 
@@ -209,13 +213,17 @@ export class FastEdgeDebugSession extends DebugSession {
   }
 
   private injectVariables(
-    type: "env" | "headers",
+    type: "env" | "headers" | "secrets",
     vars: { [key: string]: string } = {}
   ): Array<string> {
     const result = [];
     for (const key in vars) {
       result.push(
-        type === "env" ? "--env" : "--headers",
+        type === "env"
+          ? "--env"
+          : type === "headers"
+          ? "--headers"
+          : "--secret",
         `"${key}=${vars[key]}"`
       );
     }
@@ -227,8 +235,14 @@ export class FastEdgeDebugSession extends DebugSession {
     args: DebugProtocol.DisconnectArguments
   ): void {
     if (this.childProcess) {
-      if (this.childProcess?.pid) {
-        treeKill(this.childProcess.pid);
+      const childProcessId = this.childProcess.pid;
+      if (childProcessId) {
+        treeKill(childProcessId, "SIGINT", (err) => {
+          // Ctrl-C interupt never worked, kill the process
+          treeKill(childProcessId, "SIGKILL", (err) => {
+            this.logDebugConsole("SIGKILL: App not terminated succesfully.\n");
+          });
+        });
       } else {
         this.childProcess.kill();
       }

@@ -98,6 +98,10 @@
                 "type": "object",
                 "description": "Environment variables"
               },
+              "secrets": {
+                "type": "object",
+                "description": "Secret variables"
+              },
               "memoryLimit": {
                 "type": "number",
                 "description": "Memory limit in bytes",
