@@ -16,6 +16,7 @@ interface LaunchConfiguration {
   geoIpHeaders?: boolean;
   headers?: Record<string, string>;
   env?: Record<string, string>;
+  secrets?: Record<string, string>;
   memoryLimit?: number;
   traceLogging?: boolean;
 }

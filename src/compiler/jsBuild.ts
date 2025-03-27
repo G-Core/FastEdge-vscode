@@ -44,7 +44,7 @@ export function compileJavascriptBinary(
   debugContext: DebugContext,
   logDebugConsole: LogToDebugConsole
 ) {
-  logDebugConsole("Compiling javascript binary...");
+  logDebugConsole("Compiling javascript binary...\n");
   return new Promise<string>(async (resolve, reject) => {
     try {
       const workspaceFolder = vscode.workspace.workspaceFolders?.[0];
@@ -79,11 +79,11 @@ export function compileJavascriptBinary(
       let stderr = "";
 
       jsBuild.stdout?.on("data", (data: Buffer) => {
+        logDebugConsole(data.toString());
         stdout += data;
       });
 
       jsBuild.stderr?.on("data", (data: Buffer) => {
-        logDebugConsole(data.toString());
         stderr += data;
       });
 

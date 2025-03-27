@@ -92,6 +92,7 @@ export function activate(context: vscode.ExtensionContext) {
                 request: "launch",
                 port: 8181,
                 env: {},
+                secrets: {},
                 headers: {},
                 geoIpHeaders: false,
                 traceLogging: false,
