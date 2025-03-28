@@ -62,6 +62,7 @@ jobs:
     with:
       os_target: linux-x64
       os_name: ubuntu-latest
+      tag_version: ${{ github.event.inputs.tag_version || github.ref_name }}
     secrets:
       VAULT_TOKEN: ${{ secrets.VAULT_TOKEN }}
 
@@ -72,6 +73,7 @@ jobs:
     with:
       os_target: darwin-arm64
       os_name: macos-latest
+      tag_version: ${{ github.event.inputs.tag_version || github.ref_name }}
     secrets:
       VAULT_TOKEN: ${{ secrets.VAULT_TOKEN }}
 
@@ -82,5 +84,6 @@ jobs:
     with:
       os_target: win32-x64
       os_name: windows-latest
+      tag_version: ${{ github.event.inputs.tag_version || github.ref_name }}
     secrets:
       VAULT_TOKEN: ${{ secrets.VAULT_TOKEN }}
