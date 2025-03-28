@@ -86,6 +86,7 @@ jobs:
       - name: Upload release archive
         uses: softprops/action-gh-release@v2
         with:
+          tag_name: ${{ inputs.tag_version }} # Explicitly provide the tag version
           files: |
             ${{ env.ASSET }}
             ${{ env.ASSET_SUM }}
