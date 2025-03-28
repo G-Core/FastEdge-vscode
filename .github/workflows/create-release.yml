@@ -35,9 +35,9 @@ jobs:
               echo "Invalid tag format: $TAG_VERSION"
               exit 1
             fi
-            echo "Creating new release tag: $TAG_VERSION""
-            git tag -a $TAG_VERSION" -m "Release $TAG_VERSION""
-            git push origin $TAG_VERSION"
+            echo "Creating new release tag: $TAG_VERSION"
+            git tag -a "$TAG_VERSION" -m "Release $TAG_VERSION"
+            git push origin "$TAG_VERSION"
             echo "has_tag=true" >> $GITHUB_OUTPUT
           else
             TAG_VERSION=${GITHUB_REF#refs/tags/}
