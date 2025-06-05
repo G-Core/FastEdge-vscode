@@ -66,24 +66,43 @@
         "configurationAttributes": {
           "launch": {
             "properties": {
+              "args": {
+                "type": "array",
+                "description": "Arguments to pass to the executable",
+                "items": {
+                  "type": "string"
+                }
+              },
+              "binary": {
+                "type": "string",
+                "description": "Wasm binary path, typically populated automatically"
+              },
               "cliPath": {
                 "type": "string",
                 "description": "Path to the FastEdge CLI, typically populated automatically",
                 "default": ""
+              },
+              "dotenv": {
+                "oneOf": [
+                  {
+                    "type": "string",
+                    "description": "Path to the folder containing .env files to load environment variables"
+                  },
+                  {
+                    "type": "boolean",
+                    "description": "Enable dotenv support (true will use the project location)"
+                  }
+                ],
+                "default": true
               },
               "entrypoint": {
                 "type": "string",
                 "description": "Entrypoint for building the app. (\"file\" or \"workspace\" are valid options)",
                 "default": "file"
               },
-              "binary": {
-                "type": "string",
-                "description": "Wasm binary path, typically populated automatically"
-              },
-              "port": {
-                "type": "number",
-                "description": "Port to listen for incoming requests",
-                "default": 8181
+              "env": {
+                "type": "object",
+                "description": "Environment variables"
               },
               "geoIpHeaders": {
                 "type": "boolean",
@@ -94,30 +113,28 @@
                 "type": "object",
                 "description": "Extra request headers"
               },
-              "env": {
-                "type": "object",
-                "description": "Environment variables"
-              },
-              "secrets": {
-                "type": "object",
-                "description": "Secret variables"
-              },
               "memoryLimit": {
                 "type": "number",
                 "description": "Memory limit in bytes",
                 "default": 10000000
               },
+              "port": {
+                "type": "number",
+                "description": "Port to listen for incoming requests",
+                "default": 8181
+              },
+              "responseHeaders": {
+                "type": "object",
+                "description": "Response headers will be added to all responses"
+              },
+              "secrets": {
+                "type": "object",
+                "description": "Secret variables"
+              },
               "traceLogging": {
                 "type": "boolean",
                 "description": "Trace logging",
                 "default": false
-              },
-              "args": {
-                "type": "array",
-                "description": "Arguments to pass to the executable",
-                "items": {
-                  "type": "string"
-                }
               }
             }
           }

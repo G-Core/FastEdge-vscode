@@ -1,7 +1,7 @@
 import * as fs from "node:fs";
 import * as path from "node:path";
 import * as toml from "toml";
-import { LogToDebugConsole } from "./types";
+import { LogToDebugConsole } from "../types";
 
 function findCargoConfig(startDir: string): string | null {
   let dir = startDir;

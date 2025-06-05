@@ -3,7 +3,7 @@ import { spawn } from "child_process";
 import fs from "fs";
 import path from "path";
 
-import { DebugContext, LogToDebugConsole } from "./types";
+import { DebugContext, LogToDebugConsole } from "../types";
 
 const BINARY_NAME = "debugger.wasm";
 
@@ -53,6 +53,7 @@ export function compileJavascriptBinary(
           "No workspace folder found! Please open a workspace folder to compile"
         );
       }
+      
       const binPath = await makeBinDirectory(
         workspaceFolder as vscode.WorkspaceFolder
       );

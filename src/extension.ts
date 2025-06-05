@@ -4,7 +4,7 @@ import { readFileSync } from "fs";
 
 import { FastEdgeDebugAdapterDescriptorFactory } from "./FastEdgeDebugAdapterDescriptorFactory";
 import { BinaryDebugConfigurationProvider } from "./BinaryDebugConfigurationProvider";
-import { LaunchConfiguration } from "./compiler/types";
+import { LaunchConfiguration } from "./types";
 
 function getLaunchConfigurations(
   scope?: vscode.ConfigurationScope | null
@@ -91,10 +91,12 @@ export function activate(context: vscode.ExtensionContext) {
                 name: "FastEdge App",
                 request: "launch",
                 port: 8181,
+                dotenv: true,
                 env: {},
                 secrets: {},
                 headers: {},
                 geoIpHeaders: false,
+                responseHeaders: {},
                 traceLogging: false,
               },
             ],

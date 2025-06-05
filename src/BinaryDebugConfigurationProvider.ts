@@ -1,7 +1,8 @@
 import * as vscode from "vscode";
 import * as os from "os";
+import { LaunchConfiguration } from "./types";
 
-export type DebugConfig = vscode.DebugConfiguration;
+export type DebugConfig = vscode.DebugConfiguration & LaunchConfiguration;
 
 export class BinaryDebugConfigurationProvider
   implements vscode.DebugConfigurationProvider
