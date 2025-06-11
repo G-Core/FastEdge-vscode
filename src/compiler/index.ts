@@ -9,7 +9,7 @@ import {
   DebugContext,
   ExtLanguage,
   LogToDebugConsole,
-} from "./types";
+} from "../types";
 
 function getActiveFileLanguage(): ExtLanguage | null {
   const languageId = vscode.window.activeTextEditor?.document.languageId ?? "";

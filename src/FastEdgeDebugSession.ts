@@ -12,6 +12,7 @@ import { spawn, ChildProcess } from "child_process";
 import { DebugConfig } from "./BinaryDebugConfigurationProvider";
 
 import { compileActiveEditorsBinary } from "./compiler";
+import { findDotenvLocation, validateDotenvPath } from "./dotenv";
 
 export class FastEdgeDebugSession extends DebugSession {
   private childProcess: ChildProcess | undefined;
@@ -86,7 +87,7 @@ export class FastEdgeDebugSession extends DebugSession {
     response: DebugProtocol.LaunchResponse,
     _args: unknown
   ): Promise<void> {
-    const args: DebugConfig = _args as DebugConfig;
+    const args = _args as DebugConfig;
     // Clear the debug console before starting a new session
     this.clearDebugConsole();
 
@@ -139,6 +140,7 @@ export class FastEdgeDebugSession extends DebugSession {
     }
     const binary = args.binary;
     const cli = args.cliPath;
+
     const port = args.port ?? 8181;
     const loggingLevel = args.traceLogging ? "info,http_service=trace" : "info";
     const execArgs = [
@@ -163,7 +165,13 @@ export class FastEdgeDebugSession extends DebugSession {
     }
 
     if (args.headers) {
-      execArgs.push(...this.injectVariables("headers", args.headers));
+      execArgs.push(...this.injectVariables("reqHeaders", args.headers));
+    }
+
+    if (args.responseHeaders) {
+      execArgs.push(
+        ...this.injectVariables("rspHeaders", args.responseHeaders)
+      );
     }
 
     if (args.env) {
@@ -172,6 +180,21 @@ export class FastEdgeDebugSession extends DebugSession {
 
     if (args.secrets) {
       execArgs.push(...this.injectVariables("secrets", args.secrets));
+    }
+
+    if (args.dotenv) {
+      let dotenvLocation = null;
+      if (typeof args.dotenv === "string" && args.dotenv.trim().length > 0) {
+        dotenvLocation = validateDotenvPath(args.dotenv);
+      } else {
+        dotenvLocation = await findDotenvLocation(args.debugContext);
+      }
+      this.logDebugConsole(
+        " Loading dotenv files from: " + dotenvLocation + "\n"
+      );
+      if (dotenvLocation !== null) {
+        execArgs.push("--dotenv", dotenvLocation);
+      }
     }
 
     const isWindows = os.platform() === "win32";
@@ -213,7 +236,7 @@ export class FastEdgeDebugSession extends DebugSession {
   }
 
   private injectVariables(
-    type: "env" | "headers" | "secrets",
+    type: "reqHeaders" | "rspHeaders" | "env" | "secrets",
     vars: { [key: string]: string } = {}
   ): Array<string> {
     const result = [];
@@ -221,9 +244,11 @@ export class FastEdgeDebugSession extends DebugSession {
       result.push(
         type === "env"
           ? "--env"
-          : type === "headers"
+          : type === "secrets"
+          ? "--secret"
+          : type === "reqHeaders"
           ? "--headers"
-          : "--secret",
+          : "--rsp-headers",
         `"${key}=${vars[key]}"`
       );
     }

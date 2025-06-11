@@ -1,7 +1,7 @@
 import { spawn } from "child_process";
 import * as os from "os";
 
-import { LogToDebugConsole } from "./types";
+import { LogToDebugConsole } from "../types";
 import { rustConfigWasiTarget } from "./rustConfig";
 
 export function compileRustAndFindBinary(
