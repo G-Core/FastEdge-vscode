@@ -102,7 +102,8 @@
               },
               "env": {
                 "type": "object",
-                "description": "Environment variables"
+                "description": "Environment variables",
+                "default": {}
               },
               "geoIpHeaders": {
                 "type": "boolean",
@@ -111,7 +112,8 @@
               },
               "headers": {
                 "type": "object",
-                "description": "Extra request headers"
+                "description": "Extra request headers",
+                "default": {}
               },
               "memoryLimit": {
                 "type": "number",
@@ -125,11 +127,13 @@
               },
               "responseHeaders": {
                 "type": "object",
-                "description": "Response headers will be added to all responses"
+                "description": "Response headers will be added to all responses",
+                "default": {}
               },
               "secrets": {
                 "type": "object",
-                "description": "Secret variables"
+                "description": "Secret variables",
+                "default": {}
               },
               "traceLogging": {
                 "type": "boolean",
