@@ -3,38 +3,51 @@ import { getSecret } from "fastedge::secret";
 
 async function eventHandler(event) {
   const allValues = {
-    arguments: {
-      ENV_VAR_1: getEnv("ENV_VAR_1"),
-      ENV_VAR_2: getEnv("ENV_VAR_2"),
-      SECRET_VAR_1: getSecret("SECRET_VAR_1"),
-      SECRET_VAR_2: getSecret("SECRET_VAR_2"),
-      req_header_geoip_country_code: event.request.headers.get("req-header-1"),
-      req_header_some_other_header:
-        event.request.headers.get("some-other-header"),
-    },
-    variables: {
-      dotenv_var: getEnv("VAR_1"),
-      dotenv_var_named: getEnv("VAR_2"),
-      varaibles_var3: getEnv("VAR_3"),
-      varaibles_var4_named: getEnv("VAR_4_named"),
+    envVariables: {
+      // These come from top-level .env file
+      VAR_1: getEnv("VAR_1"),
+      VAR_2: getEnv("VAR_2"),
+      VAR_3: getEnv("VAR_3"),
+      VAR_4: getEnv("VAR_4"),
+      // These comes from the .env.variables file
+      ENV_VARIABLE_1: getEnv("ENV_VARIABLE_1"),
+      ENV_VARIABLE_2: getEnv("ENV_VARIABLE_2"),
+      // This will be "null" - no named variables allowed in .env.variables file
+      ENV_VARIABLE_3_INVALID: getEnv("ENV_VARIABLE_3"),
     },
     secrets: {
-      secretDotEnv1: getSecret("secretDotEnv1"),
-      secretSecretEnv1: getSecret("secretSecretEnv1"),
-      secretSecretEnv2_named: getSecret("secretSecretEnv2_named"),
+      // These come from top-level .env file
+      JWT_SECRET: getSecret("JWT_SECRET"),
+      SECRET_ACCESS_KEY: getSecret("secret-access-key"),
+      // These comes from the .env.secrets file
+      SECRET_1: getSecret("SECRET_1"),
+      SECRET_2: getSecret("SECRET_2"),
+      // This will be "null" - no named variables allowed in .env.secrets file
+      SECRET_3_INVALID: getSecret("SECRET_3"),
     },
     reqHeaders: {
-      reqHeaderDotEnv1: event.request.headers.get("reqHeaderDotEnv1"),
-      reqHeaderReqEnv2: event.request.headers.get("reqHeaderReqEnv2"),
-      reqHeaderReqEnv3_named: event.request.headers.get(
-        "reqHeaderReqEnv3_named"
+      // These come from top-level .env file
+      CONTENT_TYPE: event.request.headers.get("Content-Type"),
+      X_CUSTOM_HEADER: event.request.headers.get("x-custom-header"),
+      // These comes from the .env.req_headers file
+      X_CUSTOM_REQ_HEADER: event.request.headers.get("x-custom-request-header"),
+      X_CUSTOM_REQ_HEADER_2: event.request.headers.get(
+        "x-custom-request-header-2"
       ),
+      // This will be "null" - no named variables allowed in .env.req_headers file
+      SOME_OTHER_HEADER_INVALID: event.request.headers.get("SOME_OTHER_HEADER"),
     },
   };
   return new Response(JSON.stringify(allValues, null, 2), {
+    /*
+    * This is not required as from the .env file we are already including
+    * response headers that have "Content-Type" set to "application/json"
+    *
+
     headers: {
       "Content-Type": "application/json",
     },
+    */
   });
 }
 

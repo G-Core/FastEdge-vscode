@@ -91,7 +91,7 @@ export function activate(context: vscode.ExtensionContext) {
                 name: "FastEdge App",
                 request: "launch",
                 port: 8181,
-                dotenv: true,
+                dotenv: false,
                 env: {},
                 secrets: {},
                 headers: {},

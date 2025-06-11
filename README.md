@@ -20,9 +20,9 @@ The specific SDK's can be found here:
 
 Having completed compilation it then serves the running application at http://localhost:8181
 
-This is done using our application runner based from [FastEdge-cli](https://github.com/G-Core/FastEdge-lib).
+This is done using our application runner based from [FastEdge-run](https://github.com/G-Core/FastEdge-lib).
 
-**Note** To view which version of the FastEdge-cli your extension is using.
+**Note** To view which version of the FastEdge-run your extension is using.
 
 1. Open the Command Palette (Ctrl+Shift+P or Cmd+Shift+P on macOS).
 2. Type Preferences: Open Settings (UI) and select it.
@@ -114,3 +114,25 @@ Both these commands will use the associated `cargo.toml` to configure the target
 
 As the javascript build tool `fastedge-build` requires an output location for you compiled binary.
 This is set by default to your workspace `.vscode/bin/debugger.wasm`
+
+## Runtime Arguments
+
+Providing `Environment Variables`, `Secrets`, `Request Headers` and `Response Headers` can all be achieved from editing your `.vscode/launch.json`.
+
+Alternatively you can provide these same arguments by creating `.env` files and setting the VS Code extension to import them.
+
+Please be aware that if you are adding **sensitive** information to these files, they should be added to your `.gitignore` file.
+
+e.g.
+
+```
+# VSCode workspace
+.vscode/
+
+# dotenv files
+.env
+.env.*
+
+```
+
+For more information on how this extension locates and uses dotenv files, see [here](https://github.com/G-Core/FastEdge-vscode/blob/main/DOTENV.md)

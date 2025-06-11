@@ -34,7 +34,7 @@
         "fastedge.cliVersion": {
           "type": "string",
           "default": "unknown",
-          "description": "The version of the FastEdge CLI used by the extension",
+          "description": "The version of the FastEdge-run executable used by the extension",
           "scope": "window",
           "readOnly": true
         }
@@ -90,7 +90,7 @@
                   },
                   {
                     "type": "boolean",
-                    "description": "Enable dotenv support (true will use the project location)"
+                    "description": "Enable dotenv support (true will use the active debugger location)"
                   }
                 ],
                 "default": true
