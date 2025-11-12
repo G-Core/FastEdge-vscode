@@ -52,6 +52,10 @@
       {
         "command": "fastedge.generate-launch-json",
         "title": "Debug: FastEdge (Generate launch.json)"
+      },
+      {
+        "command": "fastedge.generate-mcp-json",
+        "title": "FastEdge (Generate mcp.json)"
       }
     ],
     "debuggers": [

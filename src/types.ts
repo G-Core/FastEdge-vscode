@@ -8,6 +8,11 @@ type BinaryInfo = {
 
 type LogToDebugConsole = (message: string, type?: "stdout" | "stderr") => void;
 
+type MCPServerConfiguration = Record<string, unknown>;
+interface MCPConfiguration {
+  servers: Record<string, MCPServerConfiguration>;
+}
+
 interface LaunchConfiguration {
   cliPath: string;
   entrypoint?: string;
@@ -29,4 +34,5 @@ export {
   ExtLanguage,
   LaunchConfiguration,
   LogToDebugConsole,
+  MCPConfiguration,
 };
