@@ -189,10 +189,17 @@ async function createMCPJson(context?: vscode.ExtensionContext) {
         },
       },
     };
-    await vscode.workspace.fs.writeFile(
-      mcpJsonPath,
-      Buffer.from(JSON.stringify(mcpJsonContent, null, 2))
-    );
+    try {
+      await vscode.workspace.fs.writeFile(
+        mcpJsonPath,
+        Buffer.from(JSON.stringify(mcpJsonContent, null, 2))
+      );
+    } catch (error: any) {
+      vscode.window.showErrorMessage(
+        `Failed to write mcp.json: ${error?.message || error}`
+      );
+      return;
+    }
 
     // Security warning about the generated file
     const securityWarning = await vscode.window.showWarningMessage(
