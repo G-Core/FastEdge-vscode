@@ -36,9 +36,8 @@ export function activate(context: vscode.ExtensionContext) {
       "fastedge.generate-launch-json",
       createLaunchJson
     ),
-    vscode.commands.registerCommand(
-      "fastedge.generate-mcp-json",
-      createMCPJson
+    vscode.commands.registerCommand("fastedge.generate-mcp-json", () =>
+      createMCPJson(context)
     ),
     vscode.debug.registerDebugAdapterDescriptorFactory(
       "fastedge",

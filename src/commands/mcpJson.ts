@@ -2,7 +2,9 @@ import * as vscode from "vscode";
 
 import { MCPConfiguration } from "../types";
 
-async function createMCPJson() {
+const DEFAULT_API_URL = "https://api.gcore.com";
+
+async function createMCPJson(context?: vscode.ExtensionContext) {
   const workspaceFolder = vscode.workspace.workspaceFolders?.[0];
   if (workspaceFolder) {
     const mcpJsonPath = vscode.Uri.joinPath(
@@ -27,11 +29,21 @@ async function createMCPJson() {
       return;
     }
 
+    // Get existing configuration values as defaults
+    const config = vscode.workspace.getConfiguration("fastedge");
+    const defaultApiUrl = config.get<string>("apiUrl") || DEFAULT_API_URL;
+
+    // Get API key from secure storage (VS Code's secret storage)
+    let defaultApiKey = "";
+    if (context?.secrets) {
+      defaultApiKey = (await context.secrets.get("fastedge.apiKey")) || "";
+    }
+
     // Prompt user for FASTEDGE_API_KEY
     const apiKey = await vscode.window.showInputBox({
       prompt: "Enter your FastEdge API Key",
-      placeHolder: "Your API key here...",
-      password: true, // Hides the input for security
+      placeHolder: defaultApiKey || "Your API key here...",
+      value: defaultApiKey, // Pre-fill with saved value
       validateInput: (value) => {
         if (!value || value.trim().length === 0) {
           return "API Key is required";
@@ -50,8 +62,8 @@ async function createMCPJson() {
     // Prompt user for FASTEDGE_API_URL
     const apiUrl = await vscode.window.showInputBox({
       prompt: "Enter your FastEdge API URL",
-      placeHolder: "e.g., https://api.gcore.com",
-      value: "https://api.gcore.com", // Default value
+      placeHolder: `e.g., ${DEFAULT_API_URL}`,
+      value: defaultApiUrl, // Pre-fill with saved value
       validateInput: (value) => {
         if (!value || value.trim().length === 0) {
           return "API URL is required";
@@ -70,6 +82,35 @@ async function createMCPJson() {
         "API URL is required to configure MCP server."
       );
       return;
+    }
+
+    // Check if values have changed and ask user if they want to save them as defaults
+    const apiKeyChanged = apiKey !== defaultApiKey;
+    const apiUrlChanged = apiUrl !== defaultApiUrl;
+
+    if (apiKeyChanged || apiUrlChanged) {
+      const saveAsDefaults = await vscode.window.showQuickPick(["Yes", "No"], {
+        placeHolder: "Save these values as defaults for future use?",
+        canPickMany: false,
+      });
+
+      if (saveAsDefaults === "Yes") {
+        // Save API key securely using VS Code's secret storage
+        if (apiKeyChanged && context?.secrets) {
+          await context.secrets.store("fastedge.apiKey", apiKey);
+        }
+        // Save API URL in regular configuration (not sensitive)
+        if (apiUrlChanged) {
+          await config.update(
+            "apiUrl",
+            apiUrl,
+            vscode.ConfigurationTarget.Global
+          );
+        }
+        vscode.window.showInformationMessage(
+          "Default values updated successfully."
+        );
+      }
     }
 
     const mcpJsonContent = {
