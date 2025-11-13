@@ -6,3 +6,4 @@ async function eventHandler(event) {
 addEventListener("fetch", (event) => {
   event.respondWith(eventHandler(event));
 });
+

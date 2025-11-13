@@ -1,8 +1,35 @@
 import * as vscode from "vscode";
+import * as os from "os";
 
 import { MCPConfiguration } from "../types";
 
 const DEFAULT_API_URL = "https://api.gcore.com";
+
+function getPlatformDockerCommand(): { command: string; args: string[] } {
+  const platform = os.platform();
+
+  if (platform === "win32") {
+    // Windows - use cmd with Windows-style environment variables (%VAR%)
+    // Note: Removed --user flag as it's not supported on Windows Docker Desktop
+    return {
+      command: "cmd",
+      args: [
+        "/c",
+        'docker run --rm -i -v "%WORKSPACE_ROOT%:/workspace" -e "WORKSPACE_ROOT=/workspace" -e "FASTEDGE_API_KEY=%FASTEDGE_API_KEY%" -e "FASTEDGE_API_URL=%FASTEDGE_API_URL%" ghcr.io/g-core/fastedge-mcp-server:latest',
+      ],
+    };
+  } else {
+    // macOS and Linux - use bash with Unix-style environment variables ($VAR)
+    // Includes --user flag for proper permissions
+    return {
+      command: "bash",
+      args: [
+        "-c",
+        'docker run --user $(id -u):$(id -g) --rm -i -v "$WORKSPACE_ROOT:/workspace" -e "WORKSPACE_ROOT=/workspace" -e "FASTEDGE_API_KEY=$FASTEDGE_API_KEY" -e "FASTEDGE_API_URL=$FASTEDGE_API_URL" ghcr.io/g-core/fastedge-mcp-server:latest',
+      ],
+    };
+  }
+}
 
 async function addToGitignore(workspaceFolder: vscode.WorkspaceFolder) {
   const gitignorePath = vscode.Uri.joinPath(workspaceFolder.uri, ".gitignore");
@@ -171,16 +198,23 @@ async function createMCPJson(context?: vscode.ExtensionContext) {
       }
     }
 
+    // Get platform-specific Docker command
+    const dockerConfig = getPlatformDockerCommand();
+    const platformName =
+      os.platform() === "win32"
+        ? "Windows"
+        : os.platform() === "darwin"
+        ? "macOS"
+        : "Linux";
+
     const mcpJsonContent = {
+      [`// Generated for ${platformName}`]: `Platform: ${os.platform()}`,
       servers: {
         ...existingMCPJson.servers,
         "fastedge-assistant": {
           type: "stdio",
-          command: "bash",
-          args: [
-            "-c",
-            'docker run --user $(id -u):$(id -g) --rm -i -v "$WORKSPACE_ROOT:/workspace" -e "WORKSPACE_ROOT=/workspace" -e "FASTEDGE_API_KEY=$FASTEDGE_API_KEY" -e "FASTEDGE_API_URL=$FASTEDGE_API_URL" ghcr.io/g-core/fastedge-mcp-server:latest',
-          ],
+          command: dockerConfig.command,
+          args: dockerConfig.args,
           env: {
             WORKSPACE_ROOT: "${workspaceFolder}",
             FASTEDGE_API_KEY: apiKey,
@@ -212,7 +246,7 @@ async function createMCPJson(context?: vscode.ExtensionContext) {
     }
 
     vscode.window.showInformationMessage(
-      "Generated mcp.json with default settings."
+      `Generated mcp.json with ${platformName} configuration.`
     );
   } else {
     vscode.window.showErrorMessage("No workspace folder available.");
