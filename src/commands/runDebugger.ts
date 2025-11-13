@@ -16,7 +16,6 @@ function getLaunchConfigurations(
 function runFile() {
   const activeEditor = vscode.window.activeTextEditor;
   if (activeEditor) {
-    const activeEditor = vscode.window.activeTextEditor;
     vscode.window.showInformationMessage("FastEdge: Running File");
     vscode.debug.startDebugging(undefined, {
       ...getLaunchConfigurations(activeEditor?.document.uri),

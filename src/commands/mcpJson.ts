@@ -4,6 +4,46 @@ import { MCPConfiguration } from "../types";
 
 const DEFAULT_API_URL = "https://api.gcore.com";
 
+async function addToGitignore(workspaceFolder: vscode.WorkspaceFolder) {
+  const gitignorePath = vscode.Uri.joinPath(workspaceFolder.uri, ".gitignore");
+  const mcpJsonPattern = ".vscode/mcp.json";
+
+  try {
+    // Try to read existing .gitignore
+    const fileData = await vscode.workspace.fs.readFile(gitignorePath);
+    const gitignoreContent = Buffer.from(fileData).toString("utf8");
+
+    // Check if the pattern already exists
+    if (gitignoreContent.includes(mcpJsonPattern)) {
+      vscode.window.showInformationMessage("mcp.json is already in .gitignore");
+      return;
+    }
+
+    // Append the pattern to .gitignore
+    const updatedContent = gitignoreContent.endsWith("\n")
+      ? gitignoreContent + mcpJsonPattern + "\n"
+      : gitignoreContent + "\n" + mcpJsonPattern + "\n";
+
+    await vscode.workspace.fs.writeFile(
+      gitignorePath,
+      Buffer.from(updatedContent)
+    );
+    vscode.window.showInformationMessage(
+      "Added .vscode/mcp.json to .gitignore"
+    );
+  } catch {
+    // .gitignore doesn't exist, create it
+    const newGitignoreContent = `# VS Code MCP configuration (contains API keys)\n${mcpJsonPattern}\n`;
+    await vscode.workspace.fs.writeFile(
+      gitignorePath,
+      Buffer.from(newGitignoreContent)
+    );
+    vscode.window.showInformationMessage(
+      "Created .gitignore and added .vscode/mcp.json"
+    );
+  }
+}
+
 async function createMCPJson(context?: vscode.ExtensionContext) {
   const workspaceFolder = vscode.workspace.workspaceFolders?.[0];
   if (workspaceFolder) {
@@ -22,7 +62,13 @@ async function createMCPJson(context?: vscode.ExtensionContext) {
       /* Do nothing - just means there is not an existing mcp.json */
     }
 
-    if (existingMCPJson.servers?.hasOwnProperty("fastedge-assistant")) {
+    if (
+      existingMCPJson.servers &&
+      Object.prototype.hasOwnProperty.call(
+        existingMCPJson.servers,
+        "fastedge-assistant"
+      )
+    ) {
       vscode.window.showInformationMessage(
         "mcp.json already contains 'fastedge-assistant' server configuration."
       );
@@ -37,6 +83,18 @@ async function createMCPJson(context?: vscode.ExtensionContext) {
     let defaultApiKey = "";
     if (context?.secrets) {
       defaultApiKey = (await context.secrets.get("fastedge.apiKey")) || "";
+    }
+
+    // Security notice before proceeding
+    const proceed = await vscode.window.showWarningMessage(
+      "🔐 Security Notice: This will create an mcp.json file containing your API credentials. " +
+        "The file will be created in .vscode/mcp.json and should not be committed to version control.",
+      "Continue",
+      "Cancel"
+    );
+
+    if (proceed !== "Continue") {
+      return;
     }
 
     // Prompt user for FASTEDGE_API_KEY
@@ -135,6 +193,24 @@ async function createMCPJson(context?: vscode.ExtensionContext) {
       mcpJsonPath,
       Buffer.from(JSON.stringify(mcpJsonContent, null, 2))
     );
+
+    // Security warning about the generated file
+    const securityWarning = await vscode.window.showWarningMessage(
+      "⚠️ Security Notice: The generated mcp.json contains your API key in plain text. " +
+        "Ensure this file is not committed to version control.",
+      "Add to .gitignore",
+      "I'll handle it manually",
+      "Show me the file"
+    );
+
+    if (securityWarning === "Add to .gitignore") {
+      await addToGitignore(workspaceFolder);
+    } else if (securityWarning === "Show me the file") {
+      // Open the generated file for user review
+      const document = await vscode.workspace.openTextDocument(mcpJsonPath);
+      await vscode.window.showTextDocument(document);
+    }
+
     vscode.window.showInformationMessage(
       "Generated mcp.json with default settings."
     );
