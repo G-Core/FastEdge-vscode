@@ -1,12 +1,12 @@
 import * as os from "os";
 import * as vscode from "vscode";
 import treeKill from "tree-kill";
-import { DebugProtocol } from "vscode-debugprotocol";
+import { DebugProtocol } from "@vscode/debugprotocol";
 import {
   DebugSession,
   OutputEvent,
   TerminatedEvent,
-} from "vscode-debugadapter";
+} from "@vscode/debugadapter";
 import { spawn, ChildProcess } from "child_process";
 
 import { DebugConfig } from "./BinaryDebugConfigurationProvider";

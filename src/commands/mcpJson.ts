@@ -15,7 +15,19 @@ function getPlatformDockerCommand(): { command: string; args: string[] } {
       command: "cmd",
       args: [
         "/c",
-        'docker run --rm -i -v "%WORKSPACE_ROOT%:/workspace" -e "WORKSPACE_ROOT=/workspace" -e "FASTEDGE_API_KEY=%FASTEDGE_API_KEY%" -e "FASTEDGE_API_URL=%FASTEDGE_API_URL%" ghcr.io/g-core/fastedge-mcp-server:latest',
+        "docker",
+        "run",
+        "--rm",
+        "-i",
+        "-v",
+        "${workspaceFolder}:/workspace",
+        "-e",
+        "WORKSPACE_ROOT=/workspace",
+        "-e",
+        "FASTEDGE_API_KEY=%FASTEDGE_API_KEY%",
+        "-e",
+        "FASTEDGE_API_URL=%FASTEDGE_API_URL%",
+        "ghcr.io/g-core/fastedge-mcp-server:latest",
       ],
     };
   } else {
@@ -25,7 +37,7 @@ function getPlatformDockerCommand(): { command: string; args: string[] } {
       command: "bash",
       args: [
         "-c",
-        'docker run --user $(id -u):$(id -g) --rm -i -v "$WORKSPACE_ROOT:/workspace" -e "WORKSPACE_ROOT=/workspace" -e "FASTEDGE_API_KEY=$FASTEDGE_API_KEY" -e "FASTEDGE_API_URL=$FASTEDGE_API_URL" ghcr.io/g-core/fastedge-mcp-server:latest',
+        "docker run --rm -i -v ${workspaceFolder}:/workspace -e WORKSPACE_ROOT=/workspace -e FASTEDGE_API_KEY=$FASTEDGE_API_KEY -e FASTEDGE_API_URL=$FASTEDGE_API_URL ghcr.io/g-core/fastedge-mcp-server:latest",
       ],
     };
   }
@@ -112,10 +124,10 @@ async function createMCPJson(context?: vscode.ExtensionContext) {
       defaultApiKey = (await context.secrets.get("fastedge.apiKey")) || "";
     }
 
-    // Security notice before proceeding
-    const proceed = await vscode.window.showWarningMessage(
-      "🔐 Security Notice: This will create an mcp.json file containing your API credentials. " +
-        "The file will be created in .vscode/mcp.json and should not be committed to version control.",
+    // Security notice before proceeding - using modal dialog for prominence
+    const proceed = await vscode.window.showInformationMessage(
+      "🔐 Security Notice\n\nThis will create an mcp.json file containing your API credentials.\n\nThe file will be created in .vscode/mcp.json and should not be committed to version control.",
+      { modal: true },
       "Continue",
       "Cancel"
     );
@@ -208,7 +220,6 @@ async function createMCPJson(context?: vscode.ExtensionContext) {
         : "Linux";
 
     const mcpJsonContent = {
-      [`// Generated for ${platformName}`]: `Platform: ${os.platform()}`,
       servers: {
         ...existingMCPJson.servers,
         "fastedge-assistant": {
@@ -216,7 +227,6 @@ async function createMCPJson(context?: vscode.ExtensionContext) {
           command: dockerConfig.command,
           args: dockerConfig.args,
           env: {
-            WORKSPACE_ROOT: "${workspaceFolder}",
             FASTEDGE_API_KEY: apiKey,
             FASTEDGE_API_URL: apiUrl,
           },
@@ -235,10 +245,10 @@ async function createMCPJson(context?: vscode.ExtensionContext) {
       return;
     }
 
-    // Security warning about the generated file
-    const securityWarning = await vscode.window.showWarningMessage(
-      "⚠️ Security Notice: The generated mcp.json contains your API key in plain text. " +
-        "Ensure this file is not committed to version control.",
+    // Security warning about the generated file - using modal dialog for prominence
+    const securityWarning = await vscode.window.showInformationMessage(
+      "⚠️ Security Notice\n\nThe generated mcp.json contains your API key in plain text.\n\nEnsure this file is not committed to version control.",
+      { modal: true },
       "Add to .gitignore",
       "I'll handle it manually",
       "Show me the file"
