@@ -9,6 +9,14 @@ At present this Extension supports both Rust and Javascript.
   <img width=50px src="https://raw.githubusercontent.com/github/explore/80688e429a7d4ef2fca1e82350fe8e3517d3494d/topics/javascript/javascript.png">&nbsp;
 </div>
 
+## ✨ New Feature 🚀
+
+The latest version now supplies a new command: `FastEdge (Generate mcp.json)`
+
+This will prompt you for required information, followed by inserting the "FastEdge Assistant" MCP Server into your workspace.
+
+For more information on this MCP Server see [here](https://github.com/G-Core/FastEdge-mcp-server)
+
 ## How it works
 
 Under the hood this extension compiles your code into a wasm binary using the associated language's build tools:

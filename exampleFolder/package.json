@@ -10,8 +10,7 @@
   "type": "module",
   "author": "Gordon Farquharson",
   "devDependencies": {
-    "@gcoredev/fastedge-sdk-js": "1.2.0",
-    "typescript": "^5.8.2"
-  },
-  "dependencies": {}
+    "@gcoredev/fastedge-sdk-js": "2.1.0",
+    "typescript": "^5.9.3"
+  }
 }

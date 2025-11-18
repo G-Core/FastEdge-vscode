@@ -1,14 +1,14 @@
 {
   "name": "fastedge",
   "displayName": "FastEdge Launcher",
-  "version": "0.2.0",
+  "version": "0.1.0",
   "publisher": "g-corelabssa",
   "description": "Launcher for FastEdge apps",
   "icon": "images/fastedge.png",
   "repository": "https://github.com/G-Core/FastEdge-vscode",
   "engines": {
-    "vscode": "^1.61.0",
-    "node": "20",
+    "vscode": "^1.106.0",
+    "node": "20 - 24.x.x",
     "npm": "^9 || ^10"
   },
   "categories": [
@@ -37,6 +37,12 @@
           "description": "The version of the FastEdge-run executable used by the extension",
           "scope": "window",
           "readOnly": true
+        },
+        "fastedge.apiUrl": {
+          "type": "string",
+          "default": "https://api.gcore.com",
+          "description": "Default FastEdge API URL for MCP server configuration",
+          "scope": "application"
         }
       }
     },
@@ -52,6 +58,10 @@
       {
         "command": "fastedge.generate-launch-json",
         "title": "Debug: FastEdge (Generate launch.json)"
+      },
+      {
+        "command": "fastedge.generate-mcp-json",
+        "title": "FastEdge (Generate mcp.json)"
       }
     ],
     "debuggers": [
@@ -165,19 +175,19 @@
     ]
   },
   "devDependencies": {
-    "@types/node": "^20.12.7",
-    "@types/vscode": "^1.61.0",
-    "@typescript-eslint/eslint-plugin": "^7.7.1",
-    "@typescript-eslint/parser": "^7.7.1",
-    "@vscode/vsce": "^3.2.1",
-    "esbuild": "^0.24.2",
-    "eslint": "^8.57.0",
-    "typescript": "^5.4.5"
+    "@types/node": "^24.10.1",
+    "@types/vscode": "^1.106.0",
+    "@typescript-eslint/eslint-plugin": "^8.46.4",
+    "@typescript-eslint/parser": "^8.46.4",
+    "@vscode/vsce": "^3.7.0",
+    "esbuild": "^0.27.0",
+    "eslint": "^9.39.1",
+    "typescript": "^5.9.3"
   },
   "dependencies": {
+    "@vscode/debugadapter": "^1.68.0",
+    "@vscode/debugprotocol": "^1.68.0",
     "toml": "^3.0.0",
-    "tree-kill": "^1.2.2",
-    "vscode-debugadapter": "^1.51.0",
-    "vscode-debugprotocol": "^1.51.0"
+    "tree-kill": "^1.2.2"
   }
 }

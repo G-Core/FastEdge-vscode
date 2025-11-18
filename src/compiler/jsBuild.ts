@@ -53,7 +53,7 @@ export function compileJavascriptBinary(
           "No workspace folder found! Please open a workspace folder to compile"
         );
       }
-      
+
       const binPath = await makeBinDirectory(
         workspaceFolder as vscode.WorkspaceFolder
       );

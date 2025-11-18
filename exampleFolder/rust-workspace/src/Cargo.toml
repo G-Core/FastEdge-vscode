@@ -3,7 +3,7 @@ version = "0.2.0"
 edition = "2021"
 
 [workspace.dependencies]
-fastedge = "0.2.0"
+fastedge = "0.2"
 mime = "0.3"
 
 [workspace]
