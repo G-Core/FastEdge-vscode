@@ -48,16 +48,22 @@ jobs:
             echo "has_tag=true" >> $GITHUB_OUTPUT
           fi
 
+  fossa:
+    uses: ./.github/workflows/fossa.yaml
+    needs: [check_tags]
+    secrets:
+      FOSSA_PUB_API_KEY: ${{ secrets.FOSSA_PUB_API_KEY }}
+
   download_fastedge_cli:
     uses: ./.github/workflows/download-cli.yml
-    needs: check_tags
+    needs: [check_tags]
     if: ${{ needs.check_tags.outputs.has_release_tag == 'true' }}
     with:
       cli_version: ${{ inputs.cli_version }}
 
   build_linux_extension:
     uses: ./.github/workflows/build-extension.yml
-    needs: ["check_tags", "download_fastedge_cli"]
+    needs: ["fossa", "check_tags", "download_fastedge_cli"]
     if: ${{ needs.check_tags.outputs.has_release_tag == 'true' }}
     with:
       os_target: linux-x64
@@ -68,7 +74,7 @@ jobs:
 
   build_darwin_extension:
     uses: ./.github/workflows/build-extension.yml
-    needs: ["check_tags", "build_linux_extension"]
+    needs: ["fossa", "check_tags", "build_linux_extension"]
     if: ${{ needs.check_tags.outputs.has_release_tag == 'true' }}
     with:
       os_target: darwin-arm64
@@ -79,7 +85,7 @@ jobs:
 
   build_windows_extension:
     uses: ./.github/workflows/build-extension.yml
-    needs: ["check_tags", "build_darwin_extension"]
+    needs: ["fossa", "check_tags", "build_darwin_extension"]
     if: ${{ needs.check_tags.outputs.has_release_tag == 'true' }}
     with:
       os_target: win32-x64
