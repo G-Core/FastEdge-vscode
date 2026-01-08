@@ -23,8 +23,15 @@
     "build:dev": "node esbuild/build-ext.js --watch",
     "build": "npm run check-types && node esbuild/build-ext.js --prod",
     "copy-files": "./scripts/copy-files.sh",
-    "package": "vsce package",
+    "package": "vsce package --no-dependencies",
     "lint": "eslint src --ext ts"
+  },
+  "pnpm": {
+    "onlyBuiltDependencies": [
+      "esbuild",
+      "@vscode/vsce-sign",
+      "keytar"
+    ]
   },
   "contributes": {
     "configuration": {

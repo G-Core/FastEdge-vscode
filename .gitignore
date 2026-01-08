@@ -26,6 +26,9 @@ fastedge-cli/
 # VSIX package
 fastedge-*.vsix
 
+# Using pnpm
+package-lock.json
+
 # Build files
 build/
 **/target/

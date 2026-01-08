@@ -25,23 +25,16 @@ jobs:
 
     steps:
       - name: Checkout this repository
-        uses: actions/checkout@v4
+        uses: actions/checkout@v6
 
-      - name: Setup Node.js latest
-        uses: actions/setup-node@v4
-        with:
-          node-version: 20.x
-          cache: "npm"
+      - name: Setup Node Environment
+        uses: ./.github/setup-node
 
       - name: Download fastedge-run Artifact
         uses: actions/download-artifact@v4
         with:
           name: fastedge-run-${{ inputs.os_name }}-artifact
           path: fastedge-cli
-
-      - name: Install dependencies
-        run: |
-          npm ci
 
       - name: Extract tag version
         id: extract_version
@@ -71,7 +64,7 @@ jobs:
 
       - name: Package extension
         run: |
-          npx @vscode/vsce package --target ${{ inputs.os_target }}
+          npx @vscode/vsce package --no-dependencies --target ${{ inputs.os_target }}
           FILENAME=$(ls *.vsix)
           echo "VSIX_FILENAME=$FILENAME" >> $GITHUB_ENV
 
@@ -100,4 +93,4 @@ jobs:
 
       - name: Publish extension to VS Marketplace
         run: |
-          npx @vscode/vsce publish --target ${{ inputs.os_target }} --pat ${{ steps.secrets.outputs.PUBLISH_TOKEN }}
+          npx @vscode/vsce publish --no-dependencies --target ${{ inputs.os_target }} --pat ${{ steps.secrets.outputs.PUBLISH_TOKEN }}
