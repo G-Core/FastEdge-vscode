@@ -51,11 +51,11 @@ jobs:
 
       - name: Build JavaScript extension
         run: |
-          npm run build
+          pnpm run build
 
       - name: List extension files
         run: |
-          npx vsce ls
+          pnpm exec vsce ls --no-dependencies
 
       - name: Ensure extension is exectuable
         if: ${{ inputs.os_target != 'win32-x64' }}
@@ -64,7 +64,7 @@ jobs:
 
       - name: Package extension
         run: |
-          npx @vscode/vsce package --no-dependencies --target ${{ inputs.os_target }}
+          pnpm exec vsce package --no-dependencies --target ${{ inputs.os_target }}
           FILENAME=$(ls *.vsix)
           echo "VSIX_FILENAME=$FILENAME" >> $GITHUB_ENV
 
@@ -93,4 +93,4 @@ jobs:
 
       - name: Publish extension to VS Marketplace
         run: |
-          npx @vscode/vsce publish --no-dependencies --target ${{ inputs.os_target }} --pat ${{ steps.secrets.outputs.PUBLISH_TOKEN }}
+          pnpm exec vsce publish --no-dependencies --target ${{ inputs.os_target }} --pat ${{ steps.secrets.outputs.PUBLISH_TOKEN }}
