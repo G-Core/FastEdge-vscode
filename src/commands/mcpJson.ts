@@ -2,6 +2,7 @@ import * as vscode from "vscode";
 import * as os from "os";
 
 import { MCPConfiguration } from "../types";
+import { isCodespace, setupCodespaceSecret } from "./codespaceSecrets";
 
 const DEFAULT_API_URL = "https://api.gcore.com";
 
@@ -65,20 +66,20 @@ async function addToGitignore(workspaceFolder: vscode.WorkspaceFolder) {
 
     await vscode.workspace.fs.writeFile(
       gitignorePath,
-      Buffer.from(updatedContent)
+      Buffer.from(updatedContent),
     );
     vscode.window.showInformationMessage(
-      "Added .vscode/mcp.json to .gitignore"
+      "Added .vscode/mcp.json to .gitignore",
     );
   } catch {
     // .gitignore doesn't exist, create it
     const newGitignoreContent = `# VS Code MCP configuration (contains API keys)\n${mcpJsonPattern}\n`;
     await vscode.workspace.fs.writeFile(
       gitignorePath,
-      Buffer.from(newGitignoreContent)
+      Buffer.from(newGitignoreContent),
     );
     vscode.window.showInformationMessage(
-      "Created .gitignore and added .vscode/mcp.json"
+      "Created .gitignore and added .vscode/mcp.json",
     );
   }
 }
@@ -89,7 +90,7 @@ async function createMCPJson(context?: vscode.ExtensionContext) {
     const mcpJsonPath = vscode.Uri.joinPath(
       workspaceFolder.uri,
       ".vscode",
-      "mcp.json"
+      "mcp.json",
     );
 
     let existingMCPJson = {} as MCPConfiguration;
@@ -105,11 +106,11 @@ async function createMCPJson(context?: vscode.ExtensionContext) {
       existingMCPJson.servers &&
       Object.prototype.hasOwnProperty.call(
         existingMCPJson.servers,
-        "fastedge-assistant"
+        "fastedge-assistant",
       )
     ) {
       vscode.window.showInformationMessage(
-        "mcp.json already contains 'fastedge-assistant' server configuration."
+        "mcp.json already contains 'fastedge-assistant' server configuration.",
       );
       return;
     }
@@ -124,12 +125,41 @@ async function createMCPJson(context?: vscode.ExtensionContext) {
       defaultApiKey = (await context.secrets.get("fastedge.apiKey")) || "";
     }
 
+    // Check if running in Codespace and if secret is set
+    const inCodespace = isCodespace();
+    let securityNotice =
+      "🔐 Security Notice\n\nThis will create an mcp.json file containing your API credentials.\n\nThe file will be created in .vscode/mcp.json and should not be committed to version control.";
+
+    if (inCodespace) {
+      const hasSecret =
+        process.env.GCORE_API_TOKEN || process.env.FASTEDGE_API_KEY;
+      if (!hasSecret) {
+        const useSecretSetup = await vscode.window.showInformationMessage(
+          "🌐 Codespace Detected\n\nFor better security in Codespaces, we recommend using environment variables instead of storing API keys in mcp.json.\n\nWould you like to set up GCORE_API_TOKEN as a Codespace secret?",
+          { modal: true },
+          "Set Up Secret",
+          "Continue with mcp.json",
+          "Cancel",
+        );
+
+        if (useSecretSetup === "Set Up Secret") {
+          await setupCodespaceSecret(context);
+          return;
+        } else if (useSecretSetup === "Cancel") {
+          return;
+        }
+        // If "Continue with mcp.json", proceed below
+      }
+      securityNotice +=
+        "\n\n⚠️ Note: You are in a Codespace. Consider using Codespace secrets (GCORE_API_TOKEN) instead.";
+    }
+
     // Security notice before proceeding - using modal dialog for prominence
     const proceed = await vscode.window.showInformationMessage(
-      "🔐 Security Notice\n\nThis will create an mcp.json file containing your API credentials.\n\nThe file will be created in .vscode/mcp.json and should not be committed to version control.",
+      securityNotice,
       { modal: true },
       "Continue",
-      "Cancel"
+      "Cancel",
     );
 
     if (proceed !== "Continue") {
@@ -151,7 +181,7 @@ async function createMCPJson(context?: vscode.ExtensionContext) {
 
     if (!apiKey) {
       vscode.window.showErrorMessage(
-        "API Key is required to configure MCP server."
+        "API Key is required to configure MCP server.",
       );
       return;
     }
@@ -176,7 +206,7 @@ async function createMCPJson(context?: vscode.ExtensionContext) {
 
     if (!apiUrl) {
       vscode.window.showErrorMessage(
-        "API URL is required to configure MCP server."
+        "API URL is required to configure MCP server.",
       );
       return;
     }
@@ -201,11 +231,11 @@ async function createMCPJson(context?: vscode.ExtensionContext) {
           await config.update(
             "apiUrl",
             apiUrl,
-            vscode.ConfigurationTarget.Global
+            vscode.ConfigurationTarget.Global,
           );
         }
         vscode.window.showInformationMessage(
-          "Default values updated successfully."
+          "Default values updated successfully.",
         );
       }
     }
@@ -216,8 +246,8 @@ async function createMCPJson(context?: vscode.ExtensionContext) {
       os.platform() === "win32"
         ? "Windows"
         : os.platform() === "darwin"
-        ? "macOS"
-        : "Linux";
+          ? "macOS"
+          : "Linux";
 
     const mcpJsonContent = {
       servers: {
@@ -236,11 +266,11 @@ async function createMCPJson(context?: vscode.ExtensionContext) {
     try {
       await vscode.workspace.fs.writeFile(
         mcpJsonPath,
-        Buffer.from(JSON.stringify(mcpJsonContent, null, 2))
+        Buffer.from(JSON.stringify(mcpJsonContent, null, 2)),
       );
     } catch (error: any) {
       vscode.window.showErrorMessage(
-        `Failed to write mcp.json: ${error?.message || error}`
+        `Failed to write mcp.json: ${error?.message || error}`,
       );
       return;
     }
@@ -251,7 +281,7 @@ async function createMCPJson(context?: vscode.ExtensionContext) {
       { modal: true },
       "Add to .gitignore",
       "I'll handle it manually",
-      "Show me the file"
+      "Show me the file",
     );
 
     if (securityWarning === "Add to .gitignore") {
@@ -263,7 +293,7 @@ async function createMCPJson(context?: vscode.ExtensionContext) {
     }
 
     vscode.window.showInformationMessage(
-      `Generated mcp.json with ${platformName} configuration.`
+      `Generated mcp.json with ${platformName} configuration.`,
     );
   } else {
     vscode.window.showErrorMessage("No workspace folder available.");

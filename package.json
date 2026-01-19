@@ -64,11 +64,15 @@
       },
       {
         "command": "fastedge.generate-launch-json",
-        "title": "Debug: FastEdge (Generate launch.json)"
+        "title": "FastEdge (Generate launch.json)"
       },
       {
         "command": "fastedge.generate-mcp-json",
         "title": "FastEdge (Generate mcp.json)"
+      },
+      {
+        "command": "fastedge.setup-codespace-secret",
+        "title": "FastEdge (Setup Codespace Secrets)"
       }
     ],
     "debuggers": [
