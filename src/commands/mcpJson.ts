@@ -120,70 +120,68 @@ async function createMCPJson(context?: vscode.ExtensionContext) {
     const defaultApiUrl = config.get<string>("apiUrl") || DEFAULT_API_URL;
 
     // Get API key from secure storage (VS Code's secret storage)
-    let defaultApiKey = "";
+    let defaultApiKey = "${env:GCORE_API_TOKEN}";
     if (context?.secrets) {
       defaultApiKey = (await context.secrets.get("fastedge.apiKey")) || "";
     }
 
     // Check if running in Codespace and if secret is set
     const inCodespace = isCodespace();
-    let securityNotice =
-      "🔐 Security Notice\n\nThis will create an mcp.json file containing your API credentials.\n\nThe file will be created in .vscode/mcp.json and should not be committed to version control.";
-
+    let usePlainMCPToken = true;
     if (inCodespace) {
-      const hasSecret =
-        process.env.GCORE_API_TOKEN || process.env.FASTEDGE_API_KEY;
-      if (!hasSecret) {
-        const useSecretSetup = await vscode.window.showInformationMessage(
-          "🌐 Codespace Detected\n\nFor better security in Codespaces, we recommend using environment variables instead of storing API keys in mcp.json.\n\nWould you like to set up GCORE_API_TOKEN as a Codespace secret?",
-          { modal: true },
-          "Set Up Secret",
-          "Continue with mcp.json",
-          "Cancel",
-        );
-
-        if (useSecretSetup === "Set Up Secret") {
-          await setupCodespaceSecret(context);
-          return;
-        } else if (useSecretSetup === "Cancel") {
-          return;
-        }
-        // If "Continue with mcp.json", proceed below
-      }
-      securityNotice +=
-        "\n\n⚠️ Note: You are in a Codespace. Consider using Codespace secrets (GCORE_API_TOKEN) instead.";
-    }
-
-    // Security notice before proceeding - using modal dialog for prominence
-    const proceed = await vscode.window.showInformationMessage(
-      securityNotice,
-      { modal: true },
-      "Continue",
-      "Cancel",
-    );
-
-    if (proceed !== "Continue") {
-      return;
-    }
-
-    // Prompt user for FASTEDGE_API_KEY
-    const apiKey = await vscode.window.showInputBox({
-      prompt: "Enter your FastEdge API Key",
-      placeHolder: defaultApiKey || "Your API key here...",
-      value: defaultApiKey, // Pre-fill with saved value
-      validateInput: (value) => {
-        if (!value || value.trim().length === 0) {
-          return "API Key is required";
-        }
-        return null;
-      },
-    });
-
-    if (!apiKey) {
-      vscode.window.showErrorMessage(
-        "API Key is required to configure MCP server.",
+      const useSecretSetup = await vscode.window.showInformationMessage(
+        "🌐 Codespace Detected\n\nFor better security in Codespaces, we recommend using environment variables instead of storing API keys in mcp.json.\n\nWould you like to set up GCORE_API_TOKEN as a Codespace secret?",
+        { modal: true },
+        "Set Up Secret",
+        "Continue with mcp.json",
+        "Cancel",
       );
-      return;
+
+      if (useSecretSetup === "Cancel") {
+        return;
+      } else if (useSecretSetup === "Set Up Secret") {
+        await setupCodespaceSecret(context);
+        usePlainMCPToken = false;
+      }
+    }
+
+    let apiKey: string | undefined = defaultApiKey;
+
+    if (usePlainMCPToken) {
+      const securityNotice =
+        "🔐 Security Notice\n\nThis will create an mcp.json file containing your API credentials.\n\nThe file will be created in .vscode/mcp.json and should not be committed to version control.";
+
+      // Security notice before proceeding - using modal dialog for prominence
+      const proceed = await vscode.window.showInformationMessage(
+        securityNotice,
+        { modal: true },
+        "Continue",
+        "Cancel",
+      );
+
+      if (proceed !== "Continue") {
+        return;
+      }
+
+      // Prompt user for FASTEDGE_API_KEY
+      apiKey = await vscode.window.showInputBox({
+        prompt: "Enter your FastEdge API Key",
+        placeHolder: defaultApiKey || "Your API key here...",
+        value: defaultApiKey, // Pre-fill with saved value
+        validateInput: (value) => {
+          if (!value || value.trim().length === 0) {
+            return "API Key is required";
+          }
+          return;
+        },
+      });
+
+      if (!apiKey) {
+        vscode.window.showErrorMessage(
+          "API Key is required to configure MCP server.",
+        );
+        return;
+      }
     }
 
     // Prompt user for FASTEDGE_API_URL
@@ -277,7 +275,7 @@ async function createMCPJson(context?: vscode.ExtensionContext) {
 
     // Security warning about the generated file - using modal dialog for prominence
     const securityWarning = await vscode.window.showInformationMessage(
-      "⚠️ Security Notice\n\nThe generated mcp.json contains your API key in plain text.\n\nEnsure this file is not committed to version control.",
+      "⚠️ Security Notice\n\nThe generated mcp.json could possibly contain your API key in plain text.\n\nEnsure this file is not committed to version control.",
       { modal: true },
       "Add to .gitignore",
       "I'll handle it manually",

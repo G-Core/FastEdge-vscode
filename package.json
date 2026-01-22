@@ -1,7 +1,7 @@
 {
   "name": "fastedge",
   "displayName": "FastEdge Launcher",
-  "version": "0.1.0",
+  "version": "0.1.3",
   "publisher": "g-corelabssa",
   "description": "Launcher for FastEdge apps",
   "icon": "images/fastedge.png",

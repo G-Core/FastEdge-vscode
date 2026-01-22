@@ -1,4 +1,8 @@
 import * as vscode from "vscode";
+import { exec } from "child_process";
+import { promisify } from "util";
+
+const execAsync = promisify(exec);
 
 function isCodespace(): boolean {
   return (
@@ -7,8 +11,23 @@ function isCodespace(): boolean {
   );
 }
 
-function getCodespaceName(): string | undefined {
-  return process.env.CODESPACE_NAME;
+function hasGitHubCLI(): Promise<boolean> {
+  return execAsync("gh --version")
+    .then(() => true)
+    .catch(() => false);
+}
+
+async function hasExistingCodespaceSecret(name: string): Promise<boolean> {
+  try {
+    // Get a list of current user codespace secrets
+    const command = `gh secret list --app codespaces --user --json name`;
+    const { stdout } = await execAsync(command);
+    const secrets = JSON.parse(stdout);
+    return secrets.some((secret: any) => secret.name === name);
+  } catch (error) {
+    console.error("Error trying to access available secrets", error);
+    return true;
+  }
 }
 
 async function setupCodespaceSecret(context?: vscode.ExtensionContext) {
@@ -20,18 +39,22 @@ async function setupCodespaceSecret(context?: vscode.ExtensionContext) {
     return;
   }
 
-  const codespace = getCodespaceName();
-  console.log("Farq: -> setupCodespaceSecret -> codespace:", codespace);
-
   // Get default API key from VS Code secret storage if available
   let defaultApiKey = "";
   if (context?.secrets) {
     defaultApiKey = (await context.secrets.get("fastedge.apiKey")) || "";
   }
 
+  const hasCli = await hasGitHubCLI();
+  if (!hasCli) {
+    vscode.window.showErrorMessage(
+      "GitHub CLI (gh) is not available. Please install it to use this feature.\n\nAlternatively, you can set the secret manually via:\n1. GitHub repository Settings > Secrets > Codespaces\n2. Or run: gh codespace secret set GCORE_API_TOKEN",
+    );
+    return;
+  }
+
   // Check if the secret is already set in the environment
-  const existingToken =
-    process.env.GCORE_API_TOKEN || process.env.FASTEDGE_API_KEY;
+  const existingToken = await hasExistingCodespaceSecret("GCORE_API_TOKEN");
   if (existingToken) {
     const overwrite = await vscode.window.showQuickPick(["Yes", "No"], {
       placeHolder: `GCORE_API_TOKEN is already set. Do you want to update it?`,
@@ -69,26 +92,14 @@ async function setupCodespaceSecret(context?: vscode.ExtensionContext) {
     },
     async (progress) => {
       try {
-        // Use GitHub CLI to set the secret
-        const { exec } = require("child_process");
-        const { promisify } = require("util");
-        const execAsync = promisify(exec);
-
-        // First, check if gh CLI is available
-        try {
-          await execAsync("gh --version");
-        } catch {
-          vscode.window.showErrorMessage(
-            "GitHub CLI (gh) is not available. Please install it to use this feature.\n\nAlternatively, you can set the secret manually via:\n1. GitHub repository Settings > Secrets > Codespaces\n2. Or run: gh codespace secret set GCORE_API_TOKEN",
-          );
-          return;
-        }
-
         progress.report({ message: "Configuring GCORE_API_TOKEN..." });
 
         // Set the secret for the current codespace
         // Note: This sets it at the user level for all codespaces
-        const command = `echo "${apiToken.replace(/"/g, '\\"')}" | gh codespace secret set GCORE_API_TOKEN`;
+        // const command = `echo "${apiToken.replace(/"/g, '\\"')}" | gh codespace secret set GCORE_API_TOKEN`;
+        const command = `echo "${apiToken.replace(/"/g, '\\"')}" | gh secret set GCORE_API_TOKEN --app codespaces --user`;
+
+        //  gh secret set GCORE_API_TOKEN -b "hello_there" --app codespaces --user
 
         await execAsync(command);
 
