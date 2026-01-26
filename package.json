@@ -186,7 +186,7 @@
     ]
   },
   "devDependencies": {
-    "@types/node": "^24.10.1",
+    "@types/node": "^25.0.10",
     "@types/vscode": "^1.106.0",
     "@typescript-eslint/eslint-plugin": "^8.46.4",
     "@typescript-eslint/parser": "^8.46.4",
@@ -198,7 +198,6 @@
   "dependencies": {
     "@vscode/debugadapter": "^1.68.0",
     "@vscode/debugprotocol": "^1.68.0",
-    "build": "^0.1.4",
     "toml": "^3.0.0",
     "tree-kill": "^1.2.2"
   }
