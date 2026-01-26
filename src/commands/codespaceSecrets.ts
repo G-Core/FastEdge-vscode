@@ -31,21 +31,69 @@ async function hasExistingCodespaceSecret(name: string): Promise<boolean> {
 }
 
 /**
+ * Gets the current repository owner and name.
+ * Returns in the format "owner/repo" or null if not available.
+ *
+ * In Codespaces, uses GITHUB_REPOSITORY env var which works even with template repos.
+ * Falls back to parsing git remote URL for non-Codespace environments.
+ */
+async function getCurrentRepository(): Promise<string | null> {
+  // In Codespaces, GITHUB_REPOSITORY is always set to the actual repository
+  // This works correctly even when created from a template
+  if (process.env.GITHUB_REPOSITORY) {
+    return process.env.GITHUB_REPOSITORY;
+  }
+
+  // Fallback: try to parse git remote URL
+  try {
+    const workspaceFolder = vscode.workspace.workspaceFolders?.[0];
+    if (!workspaceFolder) {
+      return null;
+    }
+
+    const { stdout } = await execAsync("git config --get remote.origin.url", {
+      cwd: workspaceFolder.uri.fsPath,
+    });
+
+    const remoteUrl = stdout.trim();
+
+    // Parse GitHub remote URL (supports both HTTPS and SSH formats)
+    // HTTPS: https://github.com/owner/repo.git
+    // SSH: git@github.com:owner/repo.git
+    const httpsMatch = remoteUrl.match(
+      /github\.com[/:]([\w-]+)\/([\w-]+?)(\.git)?$/,
+    );
+    if (httpsMatch) {
+      return `${httpsMatch[1]}/${httpsMatch[2]}`;
+    }
+
+    return null;
+  } catch (error) {
+    console.error("Error getting current repository", error);
+    return null;
+  }
+}
+
+/**
  * Securely sets a GitHub Codespace secret using gh CLI.
  * Passes the secret via stdin to avoid shell injection and process listing exposure.
  */
 async function setCodespaceSecret(
   secretName: string,
   secretValue: string,
+  repository?: string,
 ): Promise<void> {
   return new Promise<void>((resolve, reject) => {
-    const ghProcess = spawn(
-      "gh",
-      ["secret", "set", secretName, "--app", "codespaces", "--user"],
-      {
-        stdio: ["pipe", "pipe", "pipe"],
-      },
-    );
+    const args = ["secret", "set", secretName, "--app", "codespaces", "--user"];
+
+    // Add repository restriction if provided
+    if (repository) {
+      args.push("--repos", repository);
+    }
+
+    const ghProcess = spawn("gh", args, {
+      stdio: ["pipe", "pipe", "pipe"],
+    });
 
     let stderr = "";
     ghProcess.stderr?.on("data", (data) => {
@@ -132,9 +180,16 @@ async function setupCodespaceSecret(context?: vscode.ExtensionContext) {
       try {
         progress.report({ message: "Configuring GCORE_API_TOKEN..." });
 
+        // Get current repository to grant access
+        const currentRepo = await getCurrentRepository();
+
         // Set the secret for the current codespace securely
-        // Note: This sets it at the user level for all codespaces
-        await setCodespaceSecret("GCORE_API_TOKEN", apiToken);
+        // Note: This sets it at the user level and grants access to the current repository
+        await setCodespaceSecret(
+          "GCORE_API_TOKEN",
+          apiToken,
+          currentRepo ?? undefined,
+        );
 
         // Also save to VS Code secrets for future use
         if (context?.secrets) {
