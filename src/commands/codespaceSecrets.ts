@@ -56,7 +56,7 @@ async function setupCodespaceSecret(context?: vscode.ExtensionContext) {
   // Check if the secret is already set in the environment
   const existingToken = await hasExistingCodespaceSecret("GCORE_API_TOKEN");
   if (existingToken) {
-    const overwrite = await vscode.window.showQuickPick(["Yes", "No"], {
+    const overwrite = await vscode.window.showQuickPick(["No", "Yes"], {
       placeHolder: `GCORE_API_TOKEN is already set. Do you want to update it?`,
     });
     if (overwrite !== "Yes") {

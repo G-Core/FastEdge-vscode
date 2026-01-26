@@ -85,6 +85,13 @@ async function addToGitignore(workspaceFolder: vscode.WorkspaceFolder) {
 }
 
 async function createMCPJson(context?: vscode.ExtensionContext) {
+  /*
+  // Create output channel for debugging
+  const outputChannel = vscode.window.createOutputChannel("FastEdge Extension Debugging");
+  outputChannel.show(); // Make it visible immediately
+  outputChannel.appendLine("[DEBUG] Add this kind of line throughout, rather than console.log()");
+  */
+
   const workspaceFolder = vscode.workspace.workspaceFolders?.[0];
   if (workspaceFolder) {
     const mcpJsonPath = vscode.Uri.joinPath(
@@ -120,7 +127,8 @@ async function createMCPJson(context?: vscode.ExtensionContext) {
     const defaultApiUrl = config.get<string>("apiUrl") || DEFAULT_API_URL;
 
     // Get API key from secure storage (VS Code's secret storage)
-    let defaultApiKey = "${env:GCORE_API_TOKEN}";
+    const envApiKeyPlaceholder = "${env:GCORE_API_TOKEN}";
+    let defaultApiKey = "";
     if (context?.secrets) {
       defaultApiKey = (await context.secrets.get("fastedge.apiKey")) || "";
     }
@@ -142,6 +150,7 @@ async function createMCPJson(context?: vscode.ExtensionContext) {
       } else if (useSecretSetup === "Set Up Secret") {
         await setupCodespaceSecret(context);
         usePlainMCPToken = false;
+        defaultApiKey = envApiKeyPlaceholder;
       }
     }
 
@@ -261,6 +270,7 @@ async function createMCPJson(context?: vscode.ExtensionContext) {
         },
       },
     };
+
     try {
       await vscode.workspace.fs.writeFile(
         mcpJsonPath,
