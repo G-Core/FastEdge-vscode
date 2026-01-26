@@ -1,5 +1,5 @@
 import * as vscode from "vscode";
-import { exec } from "child_process";
+import { exec, spawn } from "child_process";
 import { promisify } from "util";
 
 const execAsync = promisify(exec);
@@ -28,6 +28,44 @@ async function hasExistingCodespaceSecret(name: string): Promise<boolean> {
     console.error("Error trying to access available secrets", error);
     return true;
   }
+}
+
+/**
+ * Securely sets a GitHub Codespace secret using gh CLI.
+ * Passes the secret via stdin to avoid shell injection and process listing exposure.
+ */
+async function setCodespaceSecret(
+  secretName: string,
+  secretValue: string,
+): Promise<void> {
+  return new Promise<void>((resolve, reject) => {
+    const ghProcess = spawn(
+      "gh",
+      ["secret", "set", secretName, "--app", "codespaces", "--user"],
+      {
+        stdio: ["pipe", "pipe", "pipe"],
+      },
+    );
+
+    let stderr = "";
+    ghProcess.stderr?.on("data", (data) => {
+      stderr += data.toString();
+    });
+
+    ghProcess.on("close", (code) => {
+      if (code === 0) {
+        resolve();
+      } else {
+        reject(new Error(`gh command failed with code ${code}: ${stderr}`));
+      }
+    });
+
+    ghProcess.on("error", reject);
+
+    // Write secret to stdin and close it
+    ghProcess.stdin?.write(secretValue);
+    ghProcess.stdin?.end();
+  });
 }
 
 async function setupCodespaceSecret(context?: vscode.ExtensionContext) {
@@ -94,14 +132,9 @@ async function setupCodespaceSecret(context?: vscode.ExtensionContext) {
       try {
         progress.report({ message: "Configuring GCORE_API_TOKEN..." });
 
-        // Set the secret for the current codespace
+        // Set the secret for the current codespace securely
         // Note: This sets it at the user level for all codespaces
-        // const command = `echo "${apiToken.replace(/"/g, '\\"')}" | gh codespace secret set GCORE_API_TOKEN`;
-        const command = `echo "${apiToken.replace(/"/g, '\\"')}" | gh secret set GCORE_API_TOKEN --app codespaces --user`;
-
-        //  gh secret set GCORE_API_TOKEN -b "hello_there" --app codespaces --user
-
-        await execAsync(command);
+        await setCodespaceSecret("GCORE_API_TOKEN", apiToken);
 
         // Also save to VS Code secrets for future use
         if (context?.secrets) {
