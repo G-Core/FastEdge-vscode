@@ -1,7 +1,7 @@
 {
   "name": "fastedge",
   "displayName": "FastEdge Launcher",
-  "version": "0.1.0",
+  "version": "0.1.8",
   "publisher": "g-corelabssa",
   "description": "Launcher for FastEdge apps",
   "icon": "images/fastedge.png",
@@ -64,11 +64,15 @@
       },
       {
         "command": "fastedge.generate-launch-json",
-        "title": "Debug: FastEdge (Generate launch.json)"
+        "title": "FastEdge (Generate launch.json)"
       },
       {
         "command": "fastedge.generate-mcp-json",
         "title": "FastEdge (Generate mcp.json)"
+      },
+      {
+        "command": "fastedge.setup-codespace-secret",
+        "title": "FastEdge (Setup Codespace Secrets)"
       }
     ],
     "debuggers": [
@@ -182,7 +186,7 @@
     ]
   },
   "devDependencies": {
-    "@types/node": "^24.10.1",
+    "@types/node": "^25.0.10",
     "@types/vscode": "^1.106.0",
     "@typescript-eslint/eslint-plugin": "^8.46.4",
     "@typescript-eslint/parser": "^8.46.4",
