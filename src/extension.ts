@@ -11,6 +11,7 @@ import {
   runFile,
   runWorkspace,
 } from "./commands";
+import { initializeTriggerFileHandler } from "./autorun/triggerFileHandler";
 
 export function activate(context: vscode.ExtensionContext) {
   // Read the cliVersion from METADATA.json
@@ -29,6 +30,9 @@ export function activate(context: vscode.ExtensionContext) {
       cliVersion,
       vscode.ConfigurationTarget.Global,
     );
+
+  // Initialize trigger file handler for auto-running commands
+  initializeTriggerFileHandler(context);
 
   context.subscriptions.push(
     vscode.commands.registerCommand("fastedge.run-file", runFile),
