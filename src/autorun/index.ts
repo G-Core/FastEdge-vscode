@@ -1,0 +1,1 @@
+export { initializeTriggerFileHandler } from "./triggerFileHandler";
