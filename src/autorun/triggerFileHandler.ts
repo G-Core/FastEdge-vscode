@@ -113,7 +113,6 @@ async function executeTriggerFile(
 ): Promise<void> {
   try {
     outputChannel.appendLine(`\nProcessing trigger file: ${uri.fsPath}`);
-    outputChannel.show(true);
 
     // Read file content
     const content = await vscode.workspace.fs.readFile(uri);
