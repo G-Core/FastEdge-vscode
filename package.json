@@ -1,7 +1,7 @@
 {
   "name": "fastedge",
   "displayName": "FastEdge Launcher",
-  "version": "0.1.8",
+  "version": "0.1.12",
   "publisher": "g-corelabssa",
   "description": "Launcher for FastEdge apps",
   "icon": "images/fastedge.png",
@@ -15,7 +15,7 @@
     "Debuggers"
   ],
   "activationEvents": [
-    "onDebug"
+    "onStartupFinished"
   ],
   "main": "./dist/extension.js",
   "scripts": {
