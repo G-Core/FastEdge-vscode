@@ -31,6 +31,7 @@ const ALLOWED_COMMANDS = [
   "fastedge.generate-mcp-json",
   "fastedge.run-file",
   "fastedge.run-workspace",
+  "workbench.action.reloadWindow",
 ];
 
 /**
