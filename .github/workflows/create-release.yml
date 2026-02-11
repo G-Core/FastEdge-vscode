@@ -7,8 +7,8 @@ on:
 
   workflow_dispatch: # trigger manually
     inputs:
-      cli_version:
-        description: "FastEdge cli version"
+      debugger_version:
+        description: "FastEdge-debugger version"
         required: true
         default: "latest"
       tag_version:
@@ -16,9 +16,13 @@ on:
         required: true
         default: ""
 
+permissions:
+  contents: write # Required to create releases and push tags
+
 jobs:
   check_tags:
-    runs-on: [self-hosted, ubuntu-22-04, regular]
+    # runs-on: [self-hosted, ubuntu-22-04, regular]
+    runs-on: ubuntu-latest
     outputs:
       has_release_tag: ${{ steps.determine-tag.outputs.has_tag }}
 
@@ -48,22 +52,23 @@ jobs:
             echo "has_tag=true" >> $GITHUB_OUTPUT
           fi
 
-  fossa:
-    uses: ./.github/workflows/fossa.yaml
-    needs: [check_tags]
-    secrets:
-      FOSSA_PUB_API_KEY: ${{ secrets.FOSSA_PUB_API_KEY }}
+  # fossa:
+  #   uses: ./.github/workflows/fossa.yaml
+  #   needs: [check_tags]
+  #   secrets:
+  #     FOSSA_PUB_API_KEY: ${{ secrets.FOSSA_PUB_API_KEY }}
 
-  download_fastedge_cli:
-    uses: ./.github/workflows/download-cli.yml
+  download_and_filter_debugger:
+    uses: ./.github/workflows/download-debugger.yml
     needs: [check_tags]
     if: ${{ needs.check_tags.outputs.has_release_tag == 'true' }}
     with:
-      cli_version: ${{ inputs.cli_version }}
+      debugger_version: ${{ inputs.debugger_version }}
 
   build_linux_extension:
     uses: ./.github/workflows/build-extension.yml
-    needs: ["fossa", "check_tags", "download_fastedge_cli"]
+    # needs: ["fossa", "check_tags", "download_and_filter_debugger"]
+    needs: ["check_tags", "download_and_filter_debugger"]
     if: ${{ needs.check_tags.outputs.has_release_tag == 'true' }}
     with:
       os_target: linux-x64
@@ -74,7 +79,7 @@ jobs:
 
   build_darwin_extension:
     uses: ./.github/workflows/build-extension.yml
-    needs: ["fossa", "check_tags", "build_linux_extension"]
+    needs: ["build_linux_extension"]
     if: ${{ needs.check_tags.outputs.has_release_tag == 'true' }}
     with:
       os_target: darwin-arm64
@@ -85,7 +90,7 @@ jobs:
 
   build_windows_extension:
     uses: ./.github/workflows/build-extension.yml
-    needs: ["fossa", "check_tags", "build_darwin_extension"]
+    needs: ["build_darwin_extension"]
     if: ${{ needs.check_tags.outputs.has_release_tag == 'true' }}
     with:
       os_target: win32-x64

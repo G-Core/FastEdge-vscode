@@ -32,5 +32,13 @@ src/**
 # Exclude map files
 **/*.js.map
 
+# IMPORTANT: Include the bundled debugger in the extension package
+# The dist/debugger/ folder contains the fastedge-debugger server
+# This must NOT be excluded - it's required for the extension to work
+!dist/debugger/**
+
+# But exclude node_modules inside debugger (causes vsce packaging issues)
+dist/debugger/node_modules/**
+
 
 

@@ -1,0 +1,168 @@
+name: Download and Filter FastEdge Debugger
+
+on:
+  workflow_call:
+    inputs:
+      debugger_version:
+        description: "FastEdge-debugger version (e.g., v1.0.0 or 'latest')"
+        required: false
+        type: string
+        default: "latest"
+
+jobs:
+  # Job 1: Download debugger ONCE
+  download-debugger:
+    # runs-on: [self-hosted, ubuntu-22-04, regular]
+    runs-on: ubuntu-latest
+    outputs:
+      version: ${{ steps.determine-version.outputs.version }}
+    steps:
+      - name: Determine debugger version
+        id: determine-version
+        run: |
+          if [ "${{ inputs.debugger_version }}" == "latest" ] || [ -z "${{ inputs.debugger_version }}" ]; then
+            echo "Fetching latest debugger release version..."
+            LATEST_VERSION=$(curl -s https://api.github.com/repos/godronus/fastedge-debugger/releases/latest | jq -r .tag_name)
+            echo "Latest debugger version is $LATEST_VERSION"
+            echo "version=$LATEST_VERSION" >> $GITHUB_OUTPUT
+          else
+            echo "Using specified version ${{ inputs.debugger_version }}"
+            echo "version=${{ inputs.debugger_version }}" >> $GITHUB_OUTPUT
+          fi
+
+      - name: Download debugger release
+        run: |
+          VERSION="${{ steps.determine-version.outputs.version }}"
+          echo "Downloading fastedge-debugger version $VERSION"
+          curl -L -o fastedge-debugger.zip \
+            https://github.com/godronus/fastedge-debugger/releases/download/$VERSION/fastedge-debugger.zip
+          curl -L -o fastedge-debugger.zip.sha256 \
+            https://github.com/godronus/fastedge-debugger/releases/download/$VERSION/fastedge-debugger.zip.sha256
+
+      - name: Fix checksum file (strip path if present)
+        run: |
+          # The checksum file may contain 'release/fastedge-debugger.zip'
+          # but we downloaded to 'fastedge-debugger.zip' (no release/ prefix)
+          # Strip any path prefix from the checksum file
+          sed -i 's|release/||g' fastedge-debugger.zip.sha256
+          cat fastedge-debugger.zip.sha256
+
+      - name: Verify checksum
+        run: |
+          sha256sum -c fastedge-debugger.zip.sha256
+
+      - name: Upload raw debugger artifact (all platforms)
+        uses: actions/upload-artifact@v4
+        with:
+          name: fastedge-debugger-raw
+          retention-days: 1
+          path: fastedge-debugger.zip
+
+  # Job 2: Filter for each platform (parallel matrix job)
+  filter-for-platforms:
+    # runs-on: [self-hosted, ubuntu-22-04, regular]
+    runs-on: ubuntu-latest
+    needs: download-debugger
+    strategy:
+      matrix:
+        include:
+          - os_target: linux-x64
+            binary_to_keep: fastedge-run-linux-x64
+          - os_target: darwin-arm64
+            binary_to_keep: fastedge-run-darwin-arm64
+          - os_target: win32-x64
+            binary_to_keep: fastedge-run.exe
+
+    steps:
+      - name: Download raw debugger artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: fastedge-debugger-raw
+
+      - name: Extract debugger
+        run: |
+          echo "Extracting debugger for ${{ matrix.os_target }}..."
+          mkdir -p debugger-extracted
+          unzip -q fastedge-debugger.zip -d debugger-extracted
+          ls -lah debugger-extracted/
+
+      - name: Verify extracted contents
+        run: |
+          echo "Verifying debugger structure..."
+          test -f debugger-extracted/dist/server.js || { echo "❌ Missing dist/server.js"; exit 1; }
+          test -d debugger-extracted/dist/frontend || { echo "❌ Missing dist/frontend"; exit 1; }
+          test -d debugger-extracted/dist/fastedge-cli || { echo "❌ Missing dist/fastedge-cli"; exit 1; }
+          echo "✅ Debugger structure verified"
+
+      - name: List all CLI binaries before filtering
+        run: |
+          echo "CLI binaries in release:"
+          ls -lh debugger-extracted/dist/fastedge-cli/
+
+      - name: Filter CLI binaries for target platform
+        run: |
+          echo "Filtering for platform: ${{ matrix.os_target }}"
+          echo "Keeping only: ${{ matrix.binary_to_keep }}"
+          cd debugger-extracted/dist/fastedge-cli
+
+          # Remove all fastedge-run binaries EXCEPT the one we need
+          find . -type f \( -name 'fastedge-run*' -o -name '*.exe' \) ! -name "${{ matrix.binary_to_keep }}" -delete
+
+          # Verify only the correct binary remains
+          echo "Remaining files:"
+          ls -lh
+          test -f "${{ matrix.binary_to_keep }}" || { echo "❌ Binary ${{ matrix.binary_to_keep }} not found after filtering"; exit 1; }
+          echo "✅ Filtered to ${{ matrix.binary_to_keep }} only"
+
+      - name: Make binary executable (Unix platforms)
+        if: ${{ matrix.os_target != 'win32-x64' }}
+        run: |
+          cd debugger-extracted/dist/fastedge-cli
+          chmod +x ${{ matrix.binary_to_keep }}
+
+      - name: Create combined metadata file
+        run: |
+          cd debugger-extracted/dist
+
+          # Extract fastedge_run_version from existing METADATA.json
+          if [ -f fastedge-cli/METADATA.json ]; then
+            FASTEDGE_RUN_VERSION=$(jq -r '.fastedge_run_version' fastedge-cli/METADATA.json)
+            echo "Found fastedge_run_version: $FASTEDGE_RUN_VERSION"
+          else
+            FASTEDGE_RUN_VERSION="unknown"
+            echo "⚠️ Warning: fastedge-cli/METADATA.json not found"
+          fi
+
+          # Create combined metadata with all versions
+          cat > debugger-metadata.json <<EOF
+          {
+            "fastedge_debugger_version": "${{ needs.download-debugger.outputs.version }}",
+            "fastedge_run_version": "$FASTEDGE_RUN_VERSION",
+            "platform": "${{ matrix.os_target }}"
+          }
+          EOF
+
+          echo "Created debugger-metadata.json:"
+          cat debugger-metadata.json
+
+      - name: Verify final structure
+        run: |
+          echo "Final debugger structure for ${{ matrix.os_target }}:"
+          find debugger-extracted/dist/fastedge-cli -type f
+          echo ""
+          echo "Binary details:"
+          ls -lh debugger-extracted/dist/fastedge-cli/${{ matrix.binary_to_keep }}
+          echo ""
+          BINARY_COUNT=$(find debugger-extracted/dist/fastedge-cli -type f \( -name 'fastedge-run*' -o -name '*.exe' \) | wc -l)
+          if [ "$BINARY_COUNT" -ne 1 ]; then
+            echo "❌ Expected exactly 1 binary, found $BINARY_COUNT"
+            exit 1
+          fi
+          echo "✅ Exactly 1 binary present"
+
+      - name: Upload platform-specific debugger artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: fastedge-debugger-${{ matrix.os_target }}-artifact
+          retention-days: 1
+          path: debugger-extracted/dist/
