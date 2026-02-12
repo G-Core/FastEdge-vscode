@@ -39,13 +39,14 @@ jobs:
           curl -L -o fastedge-debugger.zip.sha256 \
             https://github.com/godronus/fastedge-debugger/releases/download/$VERSION/fastedge-debugger.zip.sha256
 
-      - name: Fix checksum file (strip path if present)
-        run: |
-          # The checksum file may contain 'release/fastedge-debugger.zip'
-          # but we downloaded to 'fastedge-debugger.zip' (no release/ prefix)
-          # Strip any path prefix from the checksum file
-          sed -i 's|release/||g' fastedge-debugger.zip.sha256
-          cat fastedge-debugger.zip.sha256
+      # NOT NEEDED: The checksum file from the release is already in the format "checksum  filename" which is compatible with sha256sum -c. No need to fix it.
+      # - name: Fix checksum file (strip path if present)
+      #   run: |
+      #     # The checksum file may contain 'release/fastedge-debugger.zip'
+      #     # but we downloaded to 'fastedge-debugger.zip' (no release/ prefix)
+      #     # Strip any path prefix from the checksum file
+      #     sed -i 's|release/||g' fastedge-debugger.zip.sha256
+      #     cat fastedge-debugger.zip.sha256
 
       - name: Verify checksum
         run: |

@@ -6,7 +6,7 @@ This document describes all VS Code commands provided by the FastEdge extension 
 
 ## Overview
 
-The extension provides **5 commands** accessible via Command Palette (Ctrl+Shift+P / Cmd+Shift+P):
+The extension provides **8 commands** accessible via Command Palette (Ctrl+Shift+P / Cmd+Shift+P):
 
 | Command | ID | File |
 |---------|------|------|
@@ -15,6 +15,9 @@ The extension provides **5 commands** accessible via Command Palette (Ctrl+Shift
 | Debug: FastEdge App (Current File) | `fastedge.run-file` | `commands/runDebugger.ts` |
 | Debug: FastEdge App (Workspace) | `fastedge.run-workspace` | `commands/runDebugger.ts` |
 | FastEdge (Setup Codespace Secrets) | `fastedge.setup-codespace-secret` | `commands/codespaceSecrets.ts` |
+| FastEdge: Start Debugger Server | `fastedge.start-debugger-server` | `extension.ts` |
+| FastEdge: Stop Debugger Server | `fastedge.stop-debugger-server` | `extension.ts` |
+| FastEdge: Debug Application | `fastedge.debug-app` | `extension.ts` |
 
 ---
 
@@ -36,7 +39,10 @@ export function registerCommands(context: vscode.ExtensionContext) {
     vscode.commands.registerCommand('fastedge.generate-mcp-json', generateMcpJson),
     vscode.commands.registerCommand('fastedge.run-file', runFile),
     vscode.commands.registerCommand('fastedge.run-workspace', runWorkspace),
-    vscode.commands.registerCommand('fastedge.setup-codespace-secret', setupCodespaceSecrets)
+    vscode.commands.registerCommand('fastedge.setup-codespace-secret', setupCodespaceSecrets),
+    vscode.commands.registerCommand('fastedge.start-debugger-server', startDebuggerServer),
+    vscode.commands.registerCommand('fastedge.stop-debugger-server', stopDebuggerServer),
+    vscode.commands.registerCommand('fastedge.debug-app', debugFastEdgeApp)
   );
 }
 ```
@@ -493,6 +499,303 @@ export async function setupCodespaceSecrets() {
 
 ---
 
+## 6. Start Debugger Server
+
+**Command**: `FastEdge: Start Debugger Server`
+**ID**: `fastedge.start-debugger-server`
+**File**: `src/extension.ts`
+
+### Purpose
+
+Manually start the bundled debugger server process.
+
+### Implementation
+
+```typescript
+async function startDebuggerServer() {
+  if (!debuggerServerManager) {
+    vscode.window.showErrorMessage(
+      "Debugger not available. Extension may not be installed correctly."
+    );
+    return;
+  }
+
+  try {
+    await vscode.window.withProgress(
+      {
+        location: vscode.ProgressLocation.Notification,
+        title: "Starting FastEdge Debugger Server...",
+        cancellable: false,
+      },
+      async () => {
+        await debuggerServerManager.start();
+      }
+    );
+
+    vscode.window.showInformationMessage(
+      `FastEdge Debugger server started on port ${debuggerServerManager.getPort()}`
+    );
+  } catch (error) {
+    vscode.window.showErrorMessage(
+      `Failed to start debugger server: ${error.message}`
+    );
+  }
+}
+```
+
+### Behavior
+
+1. Checks if `debuggerServerManager` is initialized
+2. Shows progress notification during startup
+3. Forks bundled server process using VSCode's Node.js
+4. Server listens on `localhost:5179`
+5. Shows success message with port number
+
+### User Experience
+
+1. User runs command from palette
+2. Progress notification appears: "Starting FastEdge Debugger Server..."
+3. Server starts in background (separate process)
+4. Success message: "FastEdge Debugger server started on port 5179"
+5. Server is now accessible at `http://localhost:5179`
+
+### Edge Cases
+
+**Server already running**:
+- Command succeeds (no-op)
+- Shows "server started" message even if already running
+
+**Port 5179 in use**:
+- Server fails to start
+- Error message shown: "Failed to start debugger server: Port 5179 already in use"
+- User must stop conflicting process
+
+**Extension not initialized**:
+- Shows error: "Debugger not available. Extension may not be installed correctly."
+- Indicates extension activation failed
+
+### When to Use
+
+- Before using debugger features
+- When debugger server crashed and needs restart
+- When explicitly wanting server accessible before opening UI
+
+**Note**: The "FastEdge: Debug Application" command auto-starts the server if not running, so manual start is optional.
+
+---
+
+## 7. Stop Debugger Server
+
+**Command**: `FastEdge: Stop Debugger Server`
+**ID**: `fastedge.stop-debugger-server`
+**File**: `src/extension.ts`
+
+### Purpose
+
+Manually stop the running debugger server process.
+
+### Implementation
+
+```typescript
+async function stopDebuggerServer() {
+  if (!debuggerServerManager) {
+    vscode.window.showWarningMessage("Debugger server is not configured");
+    return;
+  }
+
+  try {
+    await debuggerServerManager.stop();
+    vscode.window.showInformationMessage("FastEdge Debugger server stopped");
+  } catch (error) {
+    vscode.window.showErrorMessage(
+      `Failed to stop debugger server: ${error.message}`
+    );
+  }
+}
+```
+
+### Behavior
+
+1. Checks if `debuggerServerManager` is initialized
+2. Calls `debuggerServerManager.stop()`
+3. Sends SIGTERM to server process
+4. Waits for graceful shutdown
+5. Shows success message
+
+### User Experience
+
+1. User runs command from palette
+2. Server process receives termination signal
+3. Server closes connections and cleans up
+4. Process exits
+5. Success message: "FastEdge Debugger server stopped"
+
+### Edge Cases
+
+**Server not running**:
+- Command succeeds (no-op)
+- Shows success message even if server wasn't running
+
+**Server hangs during shutdown**:
+- Timeout after reasonable period (e.g., 5 seconds)
+- Force kill server process
+- Error message shown if force kill fails
+
+**Extension not initialized**:
+- Shows warning: "Debugger server is not configured"
+- No action taken
+
+### When to Use
+
+- Free up port 5179 for other uses
+- Stop server to conserve resources
+- Before restarting server with different configuration
+- Debugging server issues (stop and restart)
+
+---
+
+## 8. Debug Application
+
+**Command**: `FastEdge: Debug Application`
+**ID**: `fastedge.debug-app`
+**File**: `src/extension.ts`
+
+### Purpose
+
+Open the debugger webview UI, optionally building the current file to WASM first.
+
+### Implementation
+
+```typescript
+async function debugFastEdgeApp() {
+  if (!debuggerWebviewProvider) {
+    vscode.window.showErrorMessage(
+      "Debugger not available. Extension may not be installed correctly."
+    );
+    return;
+  }
+
+  try {
+    // Get active editor
+    const editor = vscode.window.activeTextEditor;
+    if (!editor) {
+      vscode.window.showErrorMessage("No active file to debug");
+      return;
+    }
+
+    // Prompt for build mode
+    const shouldBuild = await vscode.window.showQuickPick(
+      [
+        {
+          label: "Build and Debug",
+          description: "Compile to WASM and load into debugger",
+          build: true,
+        },
+        {
+          label: "Debug Only",
+          description: "Open debugger without building",
+          build: false,
+        },
+      ],
+      { placeHolder: "Choose debug mode" }
+    );
+
+    if (!shouldBuild) {
+      return; // User cancelled
+    }
+
+    let wasmPath: string | undefined;
+
+    if (shouldBuild.build) {
+      // Prompt for WASM file (build integration TODO)
+      const result = await vscode.window.showOpenDialog({
+        canSelectFiles: true,
+        canSelectFolders: false,
+        filters: { 'WASM Files': ['wasm'] },
+        title: 'Select WASM file to debug'
+      });
+
+      if (result && result[0]) {
+        wasmPath = result[0].fsPath;
+      }
+    }
+
+    // Ensure server is running
+    if (debuggerServerManager && !debuggerServerManager.isRunning()) {
+      await debuggerServerManager.start();
+    }
+
+    // Show webview
+    await debuggerWebviewProvider.show(wasmPath);
+
+  } catch (error) {
+    vscode.window.showErrorMessage(
+      `Failed to start debugger: ${error.message}`
+    );
+  }
+}
+```
+
+### Behavior
+
+1. Checks if active file is open
+2. Prompts user to choose mode:
+   - **Build and Debug**: Compile to WASM first
+   - **Debug Only**: Just open debugger UI
+3. If "Build and Debug": Prompts for WASM file path
+4. Auto-starts server if not running
+5. Opens webview panel with debugger UI
+6. Optionally pre-loads WASM file
+
+### User Experience
+
+1. User runs command from palette
+2. Quick pick appears: "Build and Debug" vs "Debug Only"
+3. If building: File picker for WASM binary
+4. Server starts automatically (if not running)
+5. Webview panel opens with React debugging UI
+6. If WASM provided: Auto-loaded into debugger
+7. User can execute requests and view results
+
+### Edge Cases
+
+**No active file**:
+- Error: "No active file to debug"
+- Command exits
+
+**User cancels quick pick**:
+- Command exits silently (no error)
+
+**User cancels file picker**:
+- Debugger opens without pre-loaded WASM
+- User can manually load WASM through UI
+
+**Server fails to start**:
+- Error message shown
+- Webview not opened
+
+**WASM load fails**:
+- Webview still opens
+- Error shown in debugger UI
+- User can try loading different WASM
+
+### When to Use
+
+- **Primary debug workflow**: Quick access to visual debugger
+- **After compiling**: Load fresh WASM into debugger
+- **Testing changes**: Build → Debug → Test loop
+- **Inspecting WASM**: Examine requests/responses visually
+
+### Future Enhancements
+
+**Planned**:
+- Auto-detect WASM output path from workspace
+- Integrate with compiler system (auto-build before debug)
+- Remember last used WASM path
+- Support launch.json configuration integration
+
+---
+
 ## Command Patterns
 
 ### Error Handling
@@ -592,12 +895,13 @@ await vscode.commands.executeCommand('fastedge.generate-launch-json');
 
 ## Key Takeaways
 
-1. **Five commands** - launch.json, mcp.json, run-file, run-workspace, codespace-secrets
+1. **Eight commands** - Configuration generators, debug runners, and debugger controls
 2. **Command Palette** - All accessible via Ctrl+Shift+P
 3. **User-friendly** - Clear prompts, error messages, confirmations
 4. **Safe operations** - Check conditions, prompt before overwriting
 5. **Async** - Non-blocking, responsive UI
-6. **Integrated** - Work together with debug system
+6. **Integrated** - Work together with debugger and development workflow
+7. **Debugger commands** - New webview-based debugging (Feb 2026)
 
 ---
 
@@ -609,4 +913,4 @@ await vscode.commands.executeCommand('fastedge.generate-launch-json');
 
 ---
 
-**Last Updated**: February 2026
+**Last Updated**: February 11, 2026

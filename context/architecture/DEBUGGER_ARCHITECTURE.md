@@ -1,609 +1,469 @@
 # Debugger Architecture - FastEdge VSCode Extension
 
-This document describes how the FastEdge VSCode extension implements VS Code's Debug Adapter Protocol to enable debugging of FastEdge applications.
+**Last Updated**: February 11, 2026
+**Current Version**: Webview-based bundled debugger architecture
+
+This document describes how the FastEdge VSCode extension provides debugging capabilities through an embedded fastedge-debugger server and webview UI.
 
 ---
 
 ## Overview
 
-The debugger architecture consists of three main components:
-
-1. **Debug Configuration Provider** - Validates and resolves launch configurations
-2. **Debug Adapter Factory** - Creates debug adapter instances
-3. **Debug Session** - Implements Debug Adapter Protocol (DAP)
-
----
-
-## Debug Adapter Protocol (DAP)
-
-### What is DAP?
-
-**Debug Adapter Protocol** is a standardized protocol between VS Code and debuggers:
-- **Abstract**: Language/runtime agnostic
-- **JSON-based**: Messages sent as JSON-RPC
-- **Bidirectional**: Client (VS Code) ↔ Server (Debug Adapter)
-- **Event-driven**: Launch, breakpoints, pause, continue, terminate, etc.
-
-**VS Code perspective**:
-- VS Code is the **debug client**
-- Extension provides the **debug adapter** (server)
-- Communication via DAP messages
-
-### DAP Message Types
-
-**Three message types**:
-
-1. **Requests** (VS Code → Debug Adapter)
-   - `launch` - Start debugging
-   - `attach` - Attach to running process
-   - `setBreakpoints` - Set breakpoints (if supported)
-   - `continue`, `pause`, `stepIn`, `stepOut`, etc.
-   - `disconnect` - End debug session
-
-2. **Responses** (Debug Adapter → VS Code)
-   - Reply to requests with success/failure
-   - Includes result data
-
-3. **Events** (Debug Adapter → VS Code)
-   - `initialized` - Debug adapter ready
-   - `output` - Send text to debug console
-   - `terminated` - Debugging ended
-   - `exited` - Process exited with code
-
-**FastEdge implementation**:
-- Primarily uses `launch`, `disconnect` requests
-- Sends `output` events for console logging
-- Sends `terminated`/`exited` events when process ends
-- Does NOT support breakpoints/stepping (not applicable to WASM edge runtime)
+The FastEdge extension uses a **bundled debugger** approach instead of the traditional Debug Adapter Protocol (DAP). This provides:
+- ✅ Zero external setup required
+- ✅ Works without Node.js installed on user's machine
+- ✅ Visual debugging interface via webview
+- ✅ REST API for programmatic access
+- ✅ Real-time logging via WebSocket
 
 ---
 
-## Component 1: Debug Configuration Provider
+## Architecture Components
 
-**File**: `src/BinaryDebugConfigurationProvider.ts`
+### 1. Bundled Debugger Server
 
-### Purpose
+**Location**: `dist/debugger/server.js` (915KB bundled file)
 
-Validates and enhances debug configurations before they're used to launch a debug session.
+**Source**: fastedge-debugger repository (bundled during extension build)
 
-### Interface
+**Runtime**:
+- Runs as a separate Node.js process
+- Forked using VSCode's built-in Node.js runtime
+- Serves on `localhost:5179`
+- Exposes REST API and serves web UI
 
-Implements `vscode.DebugConfigurationProvider`:
+**Key Features**:
+- Load and test WASM binaries
+- Execute HTTP requests against WASM
+- Real-time logging via WebSocket
+- Configuration management
+- Health check endpoint
+
+### 2. DebuggerServerManager
+
+**File**: `src/debugger/DebuggerServerManager.ts`
+
+**Purpose**: Manages the debugger server lifecycle
+
+**Responsibilities**:
+- Start/stop server process
+- Monitor server health
+- Handle server crashes/failures
+- Provide server status to extension
+
+**Key Methods**:
+
 ```typescript
-class BinaryDebugConfigurationProvider implements vscode.DebugConfigurationProvider {
-  resolveDebugConfiguration(
-    folder: vscode.WorkspaceFolder | undefined,
-    config: vscode.DebugConfiguration,
-    token?: vscode.CancellationToken
-  ): vscode.ProviderResult<vscode.DebugConfiguration>
+class DebuggerServerManager {
+  async start(): Promise<void>
+  async stop(): Promise<void>
+  isRunning(): boolean
+  getServerUrl(): string
 }
 ```
 
-### Key Responsibilities
-
-1. **Validate configuration**
-   - Ensure `type: "fastedge"`
-   - Check required fields present
-   - Validate types of fields
-
-2. **Resolve placeholders**
-   - Convert `entrypoint: "workspace"` to actual workspace path
-   - Convert `entrypoint: "file"` to current active file
-   - Resolve `${workspaceFolder}` variables
-
-3. **Provide defaults**
-   - If launch.json missing, provide minimal default config
-   - Set default values for optional fields
-
-4. **Enhance configuration**
-   - Add computed values (e.g., binary path if already known)
-   - Merge with defaults
-
-### Return Values
-
-- **Valid config object** - Proceed with debug session
-- **undefined** - Cancel debug session (invalid config)
-- **null** - Use configuration as-is (no changes)
-
-### Example Flow
-
-**User's launch.json**:
-```json
-{
-  "type": "fastedge",
-  "request": "launch",
-  "entrypoint": "workspace"
-}
-```
-
-**Provider resolves to**:
-```json
-{
-  "type": "fastedge",
-  "request": "launch",
-  "entrypoint": "/absolute/path/to/workspace",
-  "port": 8181,
-  "memoryLimit": 10000000,
-  "dotenv": true
-}
-```
-
----
-
-## Component 2: Debug Adapter Factory
-
-**File**: `src/FastEdgeDebugAdapterDescriptorFactory.ts`
-
-### Purpose
-
-Creates debug adapter instances for each debug session.
-
-### Interface
-
-Implements `vscode.DebugAdapterDescriptorFactory`:
+**Process Management**:
 ```typescript
-class FastEdgeDebugAdapterDescriptorFactory
-  implements vscode.DebugAdapterDescriptorFactory {
+// Fork the bundled server using VSCode's Node.js
+const bundledServerPath = path.join(
+  this.extensionPath,
+  'dist/debugger/server.js'
+);
 
-  createDebugAdapterDescriptor(
-    session: vscode.DebugSession,
-    executable: vscode.DebugAdapterExecutable | undefined
-  ): vscode.ProviderResult<vscode.DebugAdapterDescriptor>
-}
-```
-
-### Key Responsibilities
-
-1. **Create debug session instance**
-   - Instantiate `FastEdgeDebugSession`
-
-2. **Return inline adapter**
-   - Wrap session in `DebugAdapterInlineImplementation`
-   - Runs in extension host process (no separate process)
-
-3. **Session isolation**
-   - Each debug session gets its own instance
-   - State is not shared between sessions
-
-### Example Implementation
-
-```typescript
-createDebugAdapterDescriptor(session: vscode.DebugSession) {
-  const debugSession = new FastEdgeDebugSession();
-  return new vscode.DebugAdapterInlineImplementation(debugSession);
-}
-```
-
-**Why inline?**
-- Simpler deployment (no separate debug adapter binary)
-- Faster communication (no IPC overhead)
-- Easier debugging (same process)
-
----
-
-## Component 3: Debug Session
-
-**File**: `src/FastEdgeDebugSession.ts`
-
-### Purpose
-
-Implements the Debug Adapter Protocol to manage the debug lifecycle.
-
-### Base Class
-
-Extends `@vscode/debugadapter` `DebugSession`:
-```typescript
-class FastEdgeDebugSession extends DebugSession {
-  // Override DAP request handlers
-}
-```
-
-**Provided by `@vscode/debugadapter` package** (official VS Code debug adapter library)
-
-### Key Methods
-
-#### 1. `initializeRequest()`
-
-**Called**: First request when debug session starts
-
-**Purpose**:
-- Respond with adapter capabilities
-- Tell VS Code what features we support
-
-**Response**:
-```typescript
-{
-  supportsConfigurationDoneRequest: true,
-  // Other capabilities (breakpoints, stepping, etc.) - false/not set
-}
-```
-
-**FastEdge capabilities**:
-- Supports launch (not attach)
-- Does NOT support breakpoints
-- Does NOT support stepping/pausing
-- Does NOT support variable inspection
-
-**Why limited capabilities?**
-- FastEdge-run is a process runner, not a debugger
-- WASM runs in edge runtime, not traditional debugger
-- Focus is on local testing, not interactive debugging
-
-#### 2. `launchRequest()`
-
-**Called**: When user starts debugging (F5 or command)
-
-**Purpose**:
-- Compile code (Rust or JS)
-- Launch FastEdge-run with WASM binary
-- Stream output to debug console
-
-**Flow**:
-```typescript
-async launchRequest(response, args) {
-  try {
-    // 1. Validate configuration
-    // 2. Determine language (Rust or JS)
-    // 3. Compile code to WASM
-    // 4. Collect configuration (dotenv, env vars, etc.)
-    // 5. Locate FastEdge-run CLI
-    // 6. Build CLI arguments
-    // 7. Spawn FastEdge-run process
-    // 8. Stream stdout/stderr to debug console
-    // 9. Handle process exit
-    // 10. Send success response
-  } catch (error) {
-    // Send error response
-    // Send terminated event
-  }
-}
-```
-
-**Compilation**:
-- Uses `src/compiler/index.ts` to orchestrate
-- Rust: `rustBuild.ts` - `cargo build --target wasm32-wasip1`
-- JS: `jsBuild.ts` - `fastedge-build <input> <output>`
-
-**Configuration collection**:
-- Load dotenv files (if enabled) via `src/dotenv/index.ts`
-- Merge with launch.json settings
-- Build FastEdge-run arguments
-
-**Process spawning**:
-- Uses Node.js `child_process.spawn()`
-- Captures stdout/stderr
-- Sends output as DAP `output` events
-
-**Output events**:
-```typescript
-this.sendEvent(new OutputEvent('Serving on http://localhost:8181\n', 'stdout'));
-```
-
-#### 3. `disconnectRequest()`
-
-**Called**: When user stops debugging or session ends
-
-**Purpose**:
-- Terminate FastEdge-run process
-- Clean up resources
-- End debug session
-
-**Flow**:
-```typescript
-async disconnectRequest(response, args) {
-  // 1. Kill FastEdge-run process (if running)
-  // 2. Clean up file watchers (if any)
-  // 3. Send terminated event
-  // 4. Send success response
-}
-```
-
-**Process termination**:
-- Uses `tree-kill` package to kill process tree
-- Ensures child processes are also terminated
-- Handles cases where process already exited
-
-#### 4. `configurationDoneRequest()`
-
-**Called**: After initialization complete, before launch
-
-**Purpose**:
-- Signal that configuration is finalized
-- Debug session can proceed
-
-**Current implementation**:
-- Simple acknowledgment
-- No special setup needed
-
----
-
-## Debug Flow (Complete Lifecycle)
-
-### 1. User Starts Debugging
-
-**Trigger**: F5, Debug: Start Debugging, or command
-
-### 2. Configuration Provider Validates
-
-`BinaryDebugConfigurationProvider.resolveDebugConfiguration()`:
-- Validate config
-- Resolve entrypoint
-- Provide defaults
-
-### 3. Factory Creates Adapter
-
-`FastEdgeDebugAdapterDescriptorFactory.createDebugAdapterDescriptor()`:
-- Instantiate `FastEdgeDebugSession`
-- Return inline adapter
-
-### 4. Debug Session Initializes
-
-DAP messages flow:
-```
-VS Code → initialize request
-Debug Adapter → initialize response (capabilities)
-VS Code → launch request
-```
-
-### 5. Launch Request Handling
-
-`FastEdgeDebugSession.launchRequest()`:
-- Compile code
-- Collect configuration
-- Launch FastEdge-run
-- Stream output
-
-**Console output appears**:
-```
-Compiling...
-Build successful
-Serving on http://localhost:8181
-```
-
-### 6. Process Runs
-
-- FastEdge-run serves WASM application
-- stdout/stderr streamed to debug console
-- User can access app at localhost:8181
-
-### 7. Process Ends
-
-**Exit scenarios**:
-- User stops debugging (Stop button)
-- Process crashes or exits naturally
-- Error during launch
-
-**Handling**:
-```typescript
-process.on('exit', (code) => {
-  this.sendEvent(new TerminatedEvent());
-  this.sendEvent(new ExitedEvent(code));
+this.serverProcess = fork(bundledServerPath, [], {
+  cwd: path.dirname(bundledServerPath),
+  execPath: process.execPath, // VSCode's Node.js!
+  stdio: ['ignore', 'pipe', 'pipe', 'ipc'],
+  env: {
+    ...process.env,
+    PORT: '5179',
+  },
 });
 ```
 
-### 8. Session Cleanup
+**Why fork() instead of spawn()**:
+- Uses VSCode's built-in Node.js (no external dependency)
+- No need for npm or node in user's PATH
+- Perfect for Rust developers without Node.js
+- Cleaner IPC communication
 
-`FastEdgeDebugSession.disconnectRequest()`:
-- Kill process
-- Send terminated event
-- Close session
+### 3. DebuggerWebviewProvider
 
-### 9. VS Code Updates UI
+**File**: `src/debugger/DebuggerWebviewProvider.ts`
 
-- Debug console shows exit code
-- Debug toolbar disappears
-- Extension ready for next session
+**Purpose**: Provides webview panel showing debugger UI
+
+**Responsibilities**:
+- Create and manage webview panel
+- Load debugger frontend (from bundled files)
+- Connect webview to debugger server
+- Handle webview lifecycle
+
+**Key Features**:
+- Embedded React-based UI
+- Connects to server on localhost:5179
+- Displays WASM execution results
+- Real-time log streaming
+- Request/response inspection
+
+**Webview Content**:
+```typescript
+// Points to bundled frontend
+const frontendPath = path.join(
+  extensionPath,
+  'dist/debugger/frontend/index.html'
+);
+
+// Webview displays the UI and connects to REST API
+webview.html = getWebviewContent(frontendPath, serverUrl);
+```
 
 ---
 
-## Configuration Arguments
+## How It Works
 
-**Launch.json configuration** is passed to `launchRequest()` as `args`:
+### Startup Flow
 
-```typescript
-interface FastEdgeLaunchArgs {
-  binary?: string;              // WASM binary path (auto-detected)
-  cliPath?: string;             // FastEdge-run path (auto-detected)
-  dotenv?: boolean | string;    // Dotenv support
-  entrypoint?: string;          // "file" or "workspace"
-  env?: Record<string, string>; // Environment variables
-  secrets?: Record<string, string>;
-  headers?: Record<string, string>;
-  responseHeaders?: Record<string, string>;
-  port?: number;                // Default: 8181
-  memoryLimit?: number;         // Default: 10000000
-  geoIpHeaders?: boolean;
-  traceLogging?: boolean;
-  args?: string[];              // Additional CLI args
-}
-```
+1. **Extension Activation** (`src/extension.ts`):
+   ```typescript
+   export function activate(context: vscode.ExtensionContext) {
+     // Initialize debugger components
+     debuggerServerManager = new DebuggerServerManager(context.extensionPath);
+     debuggerWebviewProvider = new DebuggerWebviewProvider(
+       context,
+       debuggerServerManager
+     );
+   }
+   ```
 
-**Used to**:
-- Determine compilation strategy
-- Build FastEdge-run command line
-- Configure runtime behavior
+2. **User Starts Debugger** (Command: "FastEdge: Start Debugger Server"):
+   ```typescript
+   async function startDebuggerServer() {
+     await debuggerServerManager.start();
+     // Server now running on localhost:5179
+   }
+   ```
+
+3. **User Opens Debug UI** (Command: "FastEdge: Debug Application"):
+   ```typescript
+   async function debugFastEdgeApp() {
+     // Ensure server is running
+     if (!debuggerServerManager.isRunning()) {
+       await debuggerServerManager.start();
+     }
+
+     // Show webview panel
+     debuggerWebviewProvider.show();
+   }
+   ```
+
+4. **Webview Connects**:
+   - Frontend loads in webview
+   - JavaScript connects to `http://localhost:5179`
+   - UI displays and ready for interaction
+
+### Debugging Flow
+
+1. **Load WASM Binary**:
+   ```bash
+   POST http://localhost:5179/api/load
+   {
+     "wasmBase64": "...",
+     "dotenvEnabled": true
+   }
+   ```
+   - Binary auto-detected as HTTP-WASM or Proxy-WASM
+   - Configuration loaded from .env files
+   - WASM module initialized
+
+2. **Execute Request**:
+   ```bash
+   POST http://localhost:5179/api/execute
+   {
+     "method": "GET",
+     "path": "/",
+     "headers": {},
+     "body": ""
+   }
+   ```
+   - Request processed by WASM
+   - Response captured
+   - Logs streamed via WebSocket
+
+3. **View Results**:
+   - Webview displays response headers, body, status
+   - Real-time logs shown in UI
+   - Can inspect request/response details
+
+### Shutdown Flow
+
+1. **User Stops Server** (Command: "FastEdge: Stop Debugger Server"):
+   ```typescript
+   async function stopDebuggerServer() {
+     await debuggerServerManager.stop();
+   }
+   ```
+
+2. **Process Cleanup**:
+   - Server process receives SIGTERM
+   - Graceful shutdown (close connections, cleanup)
+   - Process exits
+   - Extension updates server status
 
 ---
 
-## FastEdge-run Integration
+## REST API Endpoints
 
-### Locating the CLI
+The bundled server exposes these endpoints:
 
-**Bundled in extension**:
-```
-FastEdge-vscode/fastedge-cli/fastedge-run
-```
+| Endpoint | Method | Purpose |
+|----------|--------|---------|
+| `/health` | GET | Check if server is ready |
+| `/api/load` | POST | Load WASM binary |
+| `/api/execute` | POST | Execute HTTP request |
+| `/api/call` | POST | Call specific WASM function |
+| `/api/send` | POST | Send data to WASM |
+| `/api/config` | GET | Get current configuration |
+| `/api/config` | POST | Update configuration |
+| `/` | GET | Serve frontend UI |
+| `ws://` | WebSocket | Real-time log streaming |
 
-**Resolution**:
+**Example Usage** (from extension or external tools):
 ```typescript
-const cliPath = path.join(context.extensionPath, 'fastedge-cli', 'fastedge-run');
+// Load WASM
+const wasmBuffer = fs.readFileSync('app.wasm');
+const wasmBase64 = wasmBuffer.toString('base64');
+
+await fetch('http://localhost:5179/api/load', {
+  method: 'POST',
+  headers: { 'Content-Type': 'application/json' },
+  body: JSON.stringify({ wasmBase64, dotenvEnabled: true })
+});
+
+// Execute request
+const response = await fetch('http://localhost:5179/api/execute', {
+  method: 'POST',
+  headers: { 'Content-Type': 'application/json' },
+  body: JSON.stringify({
+    method: 'GET',
+    path: '/',
+    headers: {},
+    body: ''
+  })
+});
 ```
 
-**Platform-specific**:
-- Extension bundles correct binary for platform
-- Windows: `fastedge-run.exe`
-- macOS/Linux: `fastedge-run`
+---
 
-### Command Line Arguments
+## File Structure
 
-**Example command**:
+```
+dist/
+├── extension.js              (Extension code)
+└── debugger/                 (Bundled debugger - 1.3MB total)
+    ├── server.js             (915KB - all dependencies bundled!)
+    ├── frontend/             (~300KB - React UI)
+    │   ├── index.html
+    │   └── assets/
+    │       ├── index-*.css
+    │       └── index-*.js
+    ├── fastedge-host/        (Utilities)
+    ├── runner/               (WASM execution)
+    ├── utils/                (Helpers)
+    └── websocket/            (Real-time logs)
+```
+
+**Build Process**:
 ```bash
-fastedge-run \
-  --wasm /path/to/app.wasm \
-  --port 8181 \
-  --memory-limit 10000000 \
-  --env KEY=value \
-  --secret API_KEY=secret \
-  --req-header X-Custom=value \
-  --rsp-header X-Custom=value
+npm run package
+  └─→ prebuild hook
+      └─→ npm run bundle:debugger
+          └─→ Runs ../scripts/bundle-debugger-for-vscode.sh
+              ├─→ Builds fastedge-debugger (esbuild bundles to single file)
+              ├─→ Copies server.bundle.js → dist/debugger/server.js
+              └─→ Copies frontend/ → dist/debugger/frontend/
+  └─→ Builds extension code
+  └─→ Packages into .vsix (529KB compressed)
 ```
 
-**Built from configuration**:
-1. Required: `--wasm <binary-path>`
-2. Optional: `--port`, `--memory-limit`
-3. For each env var: `--env KEY=value`
-4. For each secret: `--secret KEY=value`
-5. For each header: `--req-header KEY=value`
-6. For each response header: `--rsp-header KEY=value`
-7. If geoIpHeaders: add sample geo headers
-8. If traceLogging: add `--trace-logging`
-9. Any additional args from `args[]`
+---
 
-### Output Parsing
+## Extension Commands
 
-**FastEdge-run output**:
+The extension provides these commands for debugger control:
+
+| Command | ID | Purpose |
+|---------|-----|---------|
+| FastEdge: Start Debugger Server | `fastedge.start-debugger-server` | Manually start server |
+| FastEdge: Stop Debugger Server | `fastedge.stop-debugger-server` | Stop running server |
+| FastEdge: Debug Application | `fastedge.debug-app` | Open debugger UI (auto-starts server) |
+
+**Registration** (in `src/extension.ts`):
+```typescript
+context.subscriptions.push(
+  vscode.commands.registerCommand("fastedge.start-debugger-server", startDebuggerServer),
+  vscode.commands.registerCommand("fastedge.stop-debugger-server", stopDebuggerServer),
+  vscode.commands.registerCommand("fastedge.debug-app", debugFastEdgeApp),
+);
 ```
-[INFO] Compiling...
-[INFO] Build successful
-[INFO] Serving on http://localhost:8181
-[REQUEST] GET / 200 45ms
-[ERROR] Something went wrong
-```
 
-**Streamed to debug console**:
-- stdout → console (white text)
-- stderr → console (red text)
-- No parsing/filtering currently
+---
+
+## Benefits Over DAP Approach
+
+### Old Approach (DAP-based)
+❌ Required implementing Debug Adapter Protocol
+❌ Limited to text-based debug console
+❌ No visual UI for request/response inspection
+❌ Complex protocol implementation (300+ lines)
+❌ Limited flexibility for FastEdge-specific features
+
+### New Approach (Webview-based)
+✅ Visual debugging interface with React UI
+✅ REST API allows programmatic access
+✅ Real-time logs via WebSocket
+✅ Reuses existing fastedge-debugger (battle-tested)
+✅ Can be used standalone (localhost:5179)
+✅ Zero external dependencies
+✅ Works without Node.js on user's machine
+✅ Simpler architecture (fork server, show webview)
 
 ---
 
 ## Error Handling
 
-### Compilation Errors
+### Server Startup Failures
 
-**If compilation fails**:
+**If server fails to start**:
 ```typescript
 try {
-  const binary = await compile(config);
+  await debuggerServerManager.start();
 } catch (error) {
-  this.sendEvent(new OutputEvent(`Compilation failed: ${error.message}\n`, 'stderr'));
-  this.sendErrorResponse(response, {
-    id: 1,
-    format: 'Compilation failed',
-    showUser: true
-  });
-  this.sendEvent(new TerminatedEvent());
-  return;
+  vscode.window.showErrorMessage(
+    `Failed to start debugger server: ${error.message}`
+  );
 }
 ```
 
-**User sees**:
-- Error in debug console
-- Error notification
-- Debug session ends
+**Common Issues**:
+- Port 5179 already in use → Show error, suggest stopping other process
+- Bundled server missing → Extension installation corrupted
+- Node.js runtime issue → VSCode problem (very rare)
 
-### Runtime Errors
+### Server Crashes
 
-**If FastEdge-run fails to start**:
+**Process exit handling**:
 ```typescript
-process.on('error', (error) => {
-  this.sendEvent(new OutputEvent(`Failed to start: ${error.message}\n`, 'stderr'));
-  this.sendEvent(new TerminatedEvent());
-});
-```
-
-**User sees**:
-- Error message in console
-- Debug session terminates
-
-### Process Crashes
-
-**If FastEdge-run crashes**:
-```typescript
-process.on('exit', (code) => {
+serverProcess.on('exit', (code) => {
   if (code !== 0) {
-    this.sendEvent(new OutputEvent(`Process exited with code ${code}\n`, 'stderr'));
+    vscode.window.showErrorMessage(
+      `Debugger server crashed with code ${code}`
+    );
   }
-  this.sendEvent(new ExitedEvent(code));
-  this.sendEvent(new TerminatedEvent());
+  this.serverProcess = null;
 });
 ```
 
-**User sees**:
-- Exit code in console
-- Session ends
+**Auto-restart**: Currently not implemented (user must manually restart)
+
+### Webview Errors
+
+**If webview fails to connect**:
+- Check if server is running (health check)
+- Verify port 5179 is accessible
+- Show error in webview with retry button
 
 ---
 
-## Multiple Debug Sessions
+## Development and Testing
 
-**VS Code supports concurrent debug sessions**:
-- Each gets its own `FastEdgeDebugSession` instance
-- Each has its own FastEdge-run process
-- Different ports must be used to avoid conflicts
-
-**Current behavior**:
-- Extension allows multiple sessions
-- User must configure different ports in launch.json
-- Otherwise, second session fails (port in use)
-
-**Best practice**:
-- Use different launch configurations with different ports
-- Or stop first session before starting second
-
----
-
-## Debugging the Debugger
-
-**How to debug the debug adapter itself**:
+### Running Extension in Development
 
 1. Open FastEdge-vscode in VS Code
-2. Set breakpoints in `FastEdgeDebugSession.ts`
-3. Press F5 to launch Extension Development Host
-4. In new window, open FastEdge project
-5. Start debugging FastEdge app
-6. Breakpoints hit in original window
+2. Press F5 to launch Extension Development Host
+3. In new window, use debugger commands
+4. Server output visible in original window console
 
-**Extension runs in Extension Host**:
-- Can debug with VS Code's debugger
-- Console output shows debug adapter messages
-- Can inspect DAP message flow
+### Testing Debugger Server
 
-**Useful for**:
-- Understanding DAP flow
-- Debugging configuration issues
-- Testing error handling
+**Manual testing**:
+```bash
+# In fastedge-debugger repo
+npm start
+
+# In browser
+open http://localhost:5179
+
+# Test API
+curl http://localhost:5179/health
+```
+
+**Extension testing**:
+1. Build extension with bundled debugger: `npm run package`
+2. Install .vsix in VS Code
+3. Test commands: Start Server, Debug Application
+4. Verify webview displays correctly
+5. Test WASM loading and execution
+
+---
+
+## Future Enhancements
+
+### Potential Improvements
+
+1. **Auto-restart on crash** - Automatically restart server if it crashes
+2. **Multiple instances** - Support multiple debugger servers on different ports
+3. **Build integration** - Automatically compile and load WASM when file changes
+4. **launch.json integration** - Pass debug configuration to debugger automatically
+5. **GitHub Actions automation** - Download pre-built debugger bundles from releases
+
+---
+
+## Comparison: Old vs New Architecture
+
+| Aspect | Old (DAP) | New (Webview + Server) |
+|--------|-----------|------------------------|
+| **Protocol** | Debug Adapter Protocol | REST API + WebSocket |
+| **UI** | Debug console (text only) | React webview (visual) |
+| **Execution** | Inline in extension | Separate server process |
+| **Dependencies** | None | Bundled server (1.3MB) |
+| **Flexibility** | Limited by DAP | Full control via API |
+| **Reusability** | Extension-only | Can use server standalone |
+| **External Access** | No | Yes (localhost:5179) |
+| **Real-time Logs** | No | Yes (WebSocket) |
+| **Node.js Required** | No | No (uses VSCode's Node) |
 
 ---
 
 ## Key Takeaways
 
-1. **DAP is the standard** - VS Code debug protocol used by all debuggers
-2. **Three components** - Provider, Factory, Session work together
-3. **Inline adapter** - Runs in extension host for simplicity
-4. **Limited capabilities** - Focus on process launching, not interactive debugging
-5. **FastEdge-run is the runtime** - Adapter orchestrates compilation and execution
-6. **Output events drive UI** - Debug console updated via events
-7. **Error handling is critical** - Graceful failures with clear messages
+1. **Webview-based architecture** - Visual debugging UI instead of text console
+2. **Bundled server** - fastedge-debugger included in extension, zero setup
+3. **Separate process** - Server runs independently, better isolation
+4. **REST API + WebSocket** - Flexible access, real-time logs
+5. **No external dependencies** - Uses VSCode's Node.js, works offline
+6. **Reusable** - Server can be accessed by other tools
+7. **Production-ready** - Tested and working as of February 2026
 
 ---
 
-**Related Documentation**:
-- `EXTENSION_LIFECYCLE.md` - How adapter is registered
-- `CONFIGURATION_SYSTEM.md` - How launch.json is processed
-- `features/DEBUG_SESSION.md` - Implementation details
-- `features/COMPILER_SYSTEM.md` - Compilation logic
+## Related Documentation
+
+**Extension Context**:
+- `BUNDLED_DEBUGGER.md` - Implementation details and build process
+- `EXTENSION_LIFECYCLE.md` - How components are registered
+- `features/COMMANDS.md` - Debugger command implementations
+
+**Coordinator Context**:
+- `/context/VSCODE_DEBUGGER_BUNDLING.md` - Bundling architecture
+- `/context/REPOSITORIES.md` - Repository relationships
+
+**Debugger Repository**:
+- `fastedge-debugger/docs/API.md` - Complete API documentation
+- `fastedge-debugger/context/` - Debugger-specific documentation
 
 ---
 
-**Last Updated**: February 2026
+**Last Updated**: February 11, 2026
+**Architecture Version**: Webview-based (v0.1.14+)
+**Status**: ✅ Production-ready

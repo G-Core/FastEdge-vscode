@@ -38,70 +38,55 @@ The extension follows VS Code's standard extension lifecycle:
 
 ```typescript
 export function activate(context: vscode.ExtensionContext) {
-  // 1. Register debug configuration provider
-  // 2. Register debug adapter factory
-  // 3. Register commands
-  // 4. Display CLI version
+  // 1. Initialize debugger components
+  // 2. Register commands
+  // 3. Display CLI version
+  // 4. Initialize autorun features
 }
 ```
 
 **Key responsibilities:**
 1. Create and register all extension components
 2. Add disposables to `context.subscriptions` for cleanup
-3. Initialize extension state
+3. Initialize debugger server manager and webview provider
 4. Display FastEdge-run CLI version in settings
 
 ---
 
 ## Registration
 
-### 1. Debug Configuration Provider
+### 1. Debugger Components
 
-**File**: `src/BinaryDebugConfigurationProvider.ts`
+**Files**:
+- `src/debugger/DebuggerServerManager.ts` - Manages server lifecycle
+- `src/debugger/DebuggerWebviewProvider.ts` - Provides debugging UI
 
-**Registration**:
+**Initialization** (in `activate()`):
 ```typescript
-const provider = new BinaryDebugConfigurationProvider();
-context.subscriptions.push(
-  vscode.debug.registerDebugConfigurationProvider('fastedge', provider)
+// Initialize debugger components with bundled debugger
+debuggerServerManager = new DebuggerServerManager(context.extensionPath);
+debuggerWebviewProvider = new DebuggerWebviewProvider(
+  context,
+  debuggerServerManager
 );
 ```
 
 **Purpose**:
-- Validates debug configurations before launch
-- Resolves configuration values (e.g., "workspace" entrypoint)
-- Provides default configuration if launch.json missing
-- Ensures required fields are present
+- `DebuggerServerManager` - Manages bundled debugger server process
+- `DebuggerWebviewProvider` - Provides webview panel with debugging UI
+- Both components work together to provide visual debugging
 
-**Key methods**:
-- `resolveDebugConfiguration()` - Called before every debug session
-- Validates `type: "fastedge"` configurations
-- Returns enhanced/validated configuration or undefined (cancel)
+**Key Features**:
+- Server runs on localhost:5179
+- Webview displays React-based UI
+- REST API for programmatic access
+- Real-time logs via WebSocket
 
-### 2. Debug Adapter Factory
+**See**: `DEBUGGER_ARCHITECTURE.md` for complete architecture details
 
-**File**: `src/FastEdgeDebugAdapterDescriptorFactory.ts`
+### 2. Commands
 
-**Registration**:
-```typescript
-const factory = new FastEdgeDebugAdapterDescriptorFactory();
-context.subscriptions.push(
-  vscode.debug.registerDebugAdapterDescriptorFactory('fastedge', factory)
-);
-```
-
-**Purpose**:
-- Creates debug adapter for each debug session
-- Returns inline debug adapter (runs in extension host)
-- Provides `FastEdgeDebugSession` instance
-
-**Key methods**:
-- `createDebugAdapterDescriptor()` - Called when debug session starts
-- Returns `DebugAdapterInlineImplementation` with session instance
-
-### 3. Commands
-
-**File**: `src/commands/index.ts`
+**File**: `src/commands/index.ts` and `src/extension.ts`
 
 **Registered commands**:
 
@@ -112,13 +97,16 @@ context.subscriptions.push(
 | `fastedge.generate-launch-json` | `commands/launchJson.ts` | FastEdge (Generate launch.json) |
 | `fastedge.generate-mcp-json` | `commands/mcpJson.ts` | FastEdge (Generate mcp.json) |
 | `fastedge.setup-codespace-secret` | `commands/codespaceSecrets.ts` | FastEdge (Setup Codespace Secrets) |
+| `fastedge.start-debugger-server` | `extension.ts` | FastEdge: Start Debugger Server |
+| `fastedge.stop-debugger-server` | `extension.ts` | FastEdge: Stop Debugger Server |
+| `fastedge.debug-app` | `extension.ts` | FastEdge: Debug Application |
 
 **Registration pattern**:
 ```typescript
 context.subscriptions.push(
-  vscode.commands.registerCommand('fastedge.run-file', async () => {
-    // Command implementation
-  })
+  vscode.commands.registerCommand('fastedge.run-file', runFile),
+  vscode.commands.registerCommand('fastedge.start-debugger-server', startDebuggerServer),
+  // ... etc
 );
 ```
 
@@ -159,16 +147,22 @@ vscode.workspace.getConfiguration('fastedge').update(
    - For generator commands: Create files, show messages
 4. **Results displayed** to user (debug console, info messages)
 
-### Debug Session Flow
+### Debugger Flow
 
-1. **User starts debugging** (F5, command, etc.)
-2. **Debug configuration provider** validates/resolves config
-3. **Debug adapter factory** creates session instance
-4. **Debug session** handles Debug Adapter Protocol messages
-5. **Compilation** happens (Rust or JS)
-6. **FastEdge-run** launches with WASM binary
-7. **Debug console** displays output
-8. **Session ends** when process exits or user stops
+1. **User starts debugger** (Command: "FastEdge: Debug Application")
+2. **Server check**: Extension checks if debugger server is running
+3. **Start server** (if not running): `debuggerServerManager.start()`
+   - Forks bundled server process
+   - Server listens on localhost:5179
+4. **Show webview**: `debuggerWebviewProvider.show()`
+   - Displays React-based debugging UI
+   - Connects to server REST API
+5. **User loads WASM** through UI (POST /api/load)
+6. **User executes requests** through UI (POST /api/execute)
+7. **Real-time logs** stream via WebSocket
+8. **Session ends** when user closes webview or stops server
+
+**See**: `DEBUGGER_ARCHITECTURE.md` for complete debugger architecture
 
 ### Event Handling
 
@@ -423,4 +417,4 @@ function activate(context: vscode.ExtensionContext) {
 
 ---
 
-**Last Updated**: February 2026
+**Last Updated**: February 11, 2026
