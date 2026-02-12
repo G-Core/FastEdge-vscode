@@ -9,8 +9,8 @@ importers:
   .:
     devDependencies:
       '@gcoredev/fastedge-sdk-js':
-        specifier: 2.2.0-alpha.2
-        version: 2.2.0-alpha.2
+        specifier: 2.1.0
+        version: 2.1.0
       typescript:
         specifier: ^5.9.3
         version: 5.9.3
@@ -237,9 +237,9 @@ packages:
     cpu: [x64]
     os: [win32]
 
-  '@gcoredev/fastedge-sdk-js@2.2.0-alpha.2':
-    resolution: {integrity: sha512-HBSqwL8X8YuheezYP+8e8zvEmnmipmkp+qVOIm7c3xo8c/haxkj86h1Da4X8VpHcD7kGcAwCJSV08HtNRltS6g==}
-    engines: {node: '>=20', pnpm: '>=10'}
+  '@gcoredev/fastedge-sdk-js@2.1.0':
+    resolution: {integrity: sha512-JaFY6v1forjyOyBPj9ED4NZpXDFtmxO1OWmol/AUBvGYbl5uZDVz2rrPhYMu8d1Rs03Hv2Zxz8Wl0X21Gvg4xw==}
+    engines: {node: 18 - 23, npm: ^8 || ^9 || ^10}
     hasBin: true
 
   '@jridgewell/gen-mapping@0.3.13':
@@ -1217,7 +1217,7 @@ snapshots:
   '@esbuild/win32-x64@0.25.12':
     optional: true
 
-  '@gcoredev/fastedge-sdk-js@2.2.0-alpha.2':
+  '@gcoredev/fastedge-sdk-js@2.1.0':
     dependencies:
       '@bytecodealliance/jco': 1.15.4
       '@bytecodealliance/wizer': 10.0.0
