@@ -11,7 +11,10 @@ export class DebuggerServerManager {
   private port: number = 5179;
   private isStarting: boolean = false;
 
-  constructor(private extensionPath: string) {}
+  constructor(
+    private extensionPath: string,
+    private workspacePath?: string
+  ) {}
 
   /**
    * Check if the debugger server is healthy and responding
@@ -72,6 +75,8 @@ export class DebuggerServerManager {
         env: {
           ...process.env,
           PORT: String(this.port),
+          VSCODE_INTEGRATION: "true", // Signal to server that it's running in VSCode
+          WORKSPACE_PATH: this.workspacePath || "", // Workspace path for auto-loading WASM
         },
       });
 
@@ -165,5 +170,27 @@ export class DebuggerServerManager {
    */
   isRunning(): boolean {
     return this.serverProcess !== null && !this.serverProcess.killed;
+  }
+
+  /**
+   * Trigger workspace WASM reload
+   * Called by VSCode extension after F5 rebuild
+   */
+  async reloadWorkspaceWasm(): Promise<void> {
+    try {
+      const response = await fetch(`${this.getUrl()}/api/reload-workspace-wasm`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+      });
+
+      if (!response.ok) {
+        const result = await response.json();
+        console.error("Failed to reload workspace WASM:", result.error || result);
+      }
+    } catch (error) {
+      console.error("Failed to trigger workspace WASM reload:", error);
+    }
   }
 }

@@ -23,6 +23,9 @@ fastedge-cli/
 # VSCode workspace
 .vscode/
 
+# FastEdge build artifacts
+.fastedge/bin/
+
 # VSIX package
 fastedge-*.vsix
 

@@ -1,5 +1,8 @@
 import { spawn } from "child_process";
 import * as os from "os";
+import * as fs from "fs";
+import * as path from "path";
+import * as vscode from "vscode";
 
 import { LogToDebugConsole } from "../types";
 import { rustConfigWasiTarget } from "./rustConfig";
@@ -66,7 +69,35 @@ export function compileRustAndFindBinary(
           message.filenames.length === 1
         ) {
           if (/.*\.wasm$/.test(message.filenames[0])) {
-            return resolve(message.filenames[0]);
+            const cargoWasmPath = message.filenames[0];
+
+            // Copy to .fastedge/bin/debugger.wasm for auto-load support
+            const workspaceFolder = vscode.workspace.workspaceFolders?.[0];
+            if (!workspaceFolder) {
+              // If no workspace folder, just return the cargo output path
+              return resolve(cargoWasmPath);
+            }
+
+            const fastedgeBinDir = path.join(
+              workspaceFolder.uri.fsPath,
+              ".fastedge",
+              "bin"
+            );
+            const standardWasmPath = path.join(fastedgeBinDir, "debugger.wasm");
+
+            // Create directory if it doesn't exist
+            fs.mkdirSync(fastedgeBinDir, { recursive: true });
+
+            // Copy the WASM file
+            try {
+              fs.copyFileSync(cargoWasmPath, standardWasmPath);
+              logDebugConsole(`Copied WASM to: ${standardWasmPath}\n`);
+              return resolve(standardWasmPath);
+            } catch (err) {
+              logDebugConsole(`Warning: Failed to copy WASM to standard location: ${(err as Error).message}\n`);
+              // Fall back to cargo output path
+              return resolve(cargoWasmPath);
+            }
           }
         }
       }

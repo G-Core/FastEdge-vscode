@@ -42,7 +42,8 @@ export function activate(context: vscode.ExtensionContext) {
   initializeTriggerFileHandler(context);
 
   // Initialize debugger components with bundled debugger
-  debuggerServerManager = new DebuggerServerManager(context.extensionPath);
+  const workspacePath = vscode.workspace.workspaceFolders?.[0]?.uri.fsPath;
+  debuggerServerManager = new DebuggerServerManager(context.extensionPath, workspacePath);
   debuggerWebviewProvider = new DebuggerWebviewProvider(
     context,
     debuggerServerManager
