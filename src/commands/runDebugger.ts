@@ -104,9 +104,16 @@ async function buildAndDebug(debugContext: DebugContext): Promise<void> {
         progress.report({ message: "Starting debugger server..." });
         await debuggerServerManager!.start();
 
-        // Step 3: Open debugger webview and load WASM
+        // Step 3: Open debugger webview (auto-load will handle WASM)
+        progress.report({ message: "Opening debugger..." });
+        await debuggerWebviewProvider!.showDebugger();
+
+        // Wait for webview and WebSocket connection to be ready
+        await new Promise((resolve) => setTimeout(resolve, 1000));
+
+        // Step 4: Trigger WASM load from workspace path
         progress.report({ message: "Loading WASM into debugger..." });
-        await debuggerWebviewProvider!.showDebugger(wasmPath);
+        await debuggerServerManager!.reloadWorkspaceWasm();
 
         vscode.window.showInformationMessage(
           `FastEdge app loaded successfully! Debugger running on port ${debuggerServerManager!.getPort()}`

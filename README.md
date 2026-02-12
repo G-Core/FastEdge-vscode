@@ -121,7 +121,7 @@ Both these commands will use the associated `cargo.toml` to configure the target
   This will use VS Codes open Workspace as the cwd, where it will then read the top level `package.json` for the "main" entrypoint.
 
 As the javascript build tool `fastedge-build` requires an output location for you compiled binary.
-This is set by default to your workspace `.vscode/bin/debugger.wasm`
+This is set by default to your workspace `.fastedge/bin/debugger.wasm`
 
 ## Runtime Arguments
 

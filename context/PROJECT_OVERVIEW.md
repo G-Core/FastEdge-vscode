@@ -100,7 +100,7 @@ The extension provides several VS Code commands:
 - Current File mode: Uses active editor file as entrypoint
 - Workspace mode: Uses `package.json` "main" field as entrypoint
 - Runs `fastedge-build <input> <output>`
-- Default output: `.vscode/bin/debugger.wasm`
+- Default output: `.fastedge/bin/debugger.wasm`
 
 ### 5. Runtime Execution
 
