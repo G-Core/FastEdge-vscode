@@ -14,6 +14,9 @@ scripts/**
 .vscodeignore
 tsconfig.json
 package-lock.json
+pnpm-lock.yaml
+.node-version
+eslint.config.mjs
 
 # Exclude build config
 .github
@@ -21,6 +24,9 @@ esbuild/**
 
 # Exclude documentation
 docs/**
+context/**
+DOTENV.md
+claude.md
 
 # Exclude exampleFolder
 exampleFolder/**
