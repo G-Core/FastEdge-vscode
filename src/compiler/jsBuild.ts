@@ -9,13 +9,13 @@ const BINARY_NAME = "debugger.wasm";
 
 const makeBinDirectory = (workspaceFolder: vscode.WorkspaceFolder) =>
   new Promise<string>((resolve, reject) => {
-    const vscodeBinDir = path.join(
+    const fastedgeBinDir = path.join(
       workspaceFolder.uri.fsPath,
-      ".vscode",
+      ".fastedge",
       "bin"
     );
-    fs.mkdir(vscodeBinDir, { recursive: true }, (err) =>
-      err ? reject(err) : resolve(vscodeBinDir)
+    fs.mkdir(fastedgeBinDir, { recursive: true }, (err) =>
+      err ? reject(err) : resolve(fastedgeBinDir)
     );
   });
 

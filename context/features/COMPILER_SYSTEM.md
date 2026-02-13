@@ -268,7 +268,7 @@ fastedge-build <input> <output>
 
 **Example**:
 ```bash
-npx fastedge-build ./src/index.js ./.vscode/bin/debugger.wasm
+npx fastedge-build ./src/index.js ./.fastedge/bin/debugger.wasm
 ```
 
 ### Common Errors
@@ -371,7 +371,7 @@ Binary: /path/to/project/target/wasm32-wasip1/debug/my-fastedge-app.wasm
 **JavaScript**:
 ```
 Building /path/to/src/index.js
-Output: /path/to/.vscode/bin/debugger.wasm
+Output: /path/to/.fastedge/bin/debugger.wasm
 Build complete (3.45s)
 ```
 
@@ -431,7 +431,7 @@ Error: Compilation failed
 **JavaScript**:
 - No persistent cache currently
 - Each build is from scratch
-- `.vscode/bin/` can be gitignored
+- `.fastedge/bin/` can be gitignored
 
 ---
 

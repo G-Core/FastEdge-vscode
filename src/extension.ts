@@ -8,6 +8,7 @@ import {
   setupCodespaceSecret,
   runFile,
   runWorkspace,
+  initializeDebuggerComponents,
 } from "./commands";
 import { initializeTriggerFileHandler } from "./autorun/triggerFileHandler";
 import {
@@ -20,10 +21,10 @@ let debuggerServerManager: DebuggerServerManager | null = null;
 let debuggerWebviewProvider: DebuggerWebviewProvider | null = null;
 
 export function activate(context: vscode.ExtensionContext) {
-  // Read the cliVersion from METADATA.json
+  // Read the cliVersion from METADATA.json (bundled with debugger)
   const metadataJsonPath = path.join(
     context.extensionPath,
-    "fastedge-cli/METADATA.json",
+    "dist/debugger/fastedge-cli/METADATA.json",
   );
   const metadataJson = JSON.parse(readFileSync(metadataJsonPath, "utf8"));
   const cliVersion = metadataJson.fastedge_run_version || "unknown";
@@ -41,10 +42,36 @@ export function activate(context: vscode.ExtensionContext) {
   initializeTriggerFileHandler(context);
 
   // Initialize debugger components with bundled debugger
-  debuggerServerManager = new DebuggerServerManager(context.extensionPath);
+  const workspacePath = vscode.workspace.workspaceFolders?.[0]?.uri.fsPath;
+  debuggerServerManager = new DebuggerServerManager(context.extensionPath, workspacePath);
   debuggerWebviewProvider = new DebuggerWebviewProvider(
     context,
     debuggerServerManager
+  );
+
+  // Initialize debugger components for runFile/runWorkspace
+  initializeDebuggerComponents(debuggerServerManager, debuggerWebviewProvider);
+
+  // Register debug configuration provider so F5 works
+  context.subscriptions.push(
+    vscode.debug.registerDebugConfigurationProvider("fastedge", {
+      resolveDebugConfiguration(
+        folder: vscode.WorkspaceFolder | undefined,
+        config: vscode.DebugConfiguration,
+        token?: vscode.CancellationToken
+      ): vscode.ProviderResult<vscode.DebugConfiguration> {
+        // When F5 is pressed, trigger our build and debug workflow
+        const debugContext = config.debugContext || config.entrypoint || "file";
+        if (debugContext === "workspace") {
+          runWorkspace();
+        } else {
+          runFile();
+        }
+        // Return undefined to cancel the default debug session
+        // since we're handling it ourselves
+        return undefined;
+      },
+    })
   );
 
   context.subscriptions.push(
