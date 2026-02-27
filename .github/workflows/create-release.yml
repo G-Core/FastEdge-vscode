@@ -27,30 +27,20 @@ jobs:
       has_release_tag: ${{ steps.determine-tag.outputs.has_tag }}
 
     steps:
-      - name: Checkout this repository
-        uses: actions/checkout@v6
-
-      - name: Create release tag
+      - name: Validate release tag
         id: determine-tag
         run: |
           if [ -n "${{ github.event.inputs.tag_version }}" ]; then
             TAG_VERSION="${{ github.event.inputs.tag_version }}"
-            if [[ ! "$TAG_VERSION" =~ ^v[0-9]+\.[0-9]+\.[0-9]+(-[0-9]+)?$ ]]; then
-              echo "Invalid tag format: $TAG_VERSION"
-              exit 1
-            fi
-            echo "Creating new release tag: $TAG_VERSION"
-            git tag -a "$TAG_VERSION" -m "Release $TAG_VERSION"
-            git push origin "$TAG_VERSION"
-            echo "has_tag=true" >> $GITHUB_OUTPUT
           else
             TAG_VERSION=${GITHUB_REF#refs/tags/}
-            if [[ ! "$TAG_VERSION" =~ ^v[0-9]+\.[0-9]+\.[0-9]+(-[0-9]+)?$ ]]; then
-              echo "Invalid tag format: $TAG_VERSION"
-              exit 1
-            fi
-            echo "has_tag=true" >> $GITHUB_OUTPUT
           fi
+          if [[ ! "$TAG_VERSION" =~ ^v[0-9]+\.[0-9]+\.[0-9]+(-[0-9]+)?$ ]]; then
+            echo "Invalid tag format: $TAG_VERSION"
+            exit 1
+          fi
+          echo "has_tag=true" >> $GITHUB_OUTPUT
+          echo "Determined release tag: $TAG_VERSION"
 
   # fossa:
   #   uses: ./.github/workflows/fossa.yaml
