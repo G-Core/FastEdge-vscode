@@ -4,7 +4,7 @@ on:
   workflow_call:
     inputs:
       debugger_version:
-        description: "FastEdge-debugger version (e.g., v1.0.0 or 'latest')"
+        description: "Fastedge-debugger version (e.g., v1.0.0 or 'latest')"
         required: false
         type: string
         default: "latest"
@@ -22,7 +22,7 @@ jobs:
         run: |
           if [ "${{ inputs.debugger_version }}" == "latest" ] || [ -z "${{ inputs.debugger_version }}" ]; then
             echo "Fetching latest debugger release version..."
-            LATEST_VERSION=$(curl -s https://api.github.com/repos/godronus/fastedge-debugger/releases/latest | jq -r .tag_name)
+            LATEST_VERSION=$(curl -s https://api.github.com/repos/godronus/fastedge-test/releases/latest | jq -r .tag_name)
             echo "Latest debugger version is $LATEST_VERSION"
             echo "version=$LATEST_VERSION" >> $GITHUB_OUTPUT
           else
@@ -35,18 +35,9 @@ jobs:
           VERSION="${{ steps.determine-version.outputs.version }}"
           echo "Downloading fastedge-debugger version $VERSION"
           curl -L -o fastedge-debugger.zip \
-            https://github.com/godronus/fastedge-debugger/releases/download/$VERSION/fastedge-debugger.zip
+            https://github.com/godronus/fastedge-test/releases/download/$VERSION/fastedge-debugger.zip
           curl -L -o fastedge-debugger.zip.sha256 \
-            https://github.com/godronus/fastedge-debugger/releases/download/$VERSION/fastedge-debugger.zip.sha256
-
-      # NOT NEEDED: The checksum file from the release is already in the format "checksum  filename" which is compatible with sha256sum -c. No need to fix it.
-      # - name: Fix checksum file (strip path if present)
-      #   run: |
-      #     # The checksum file may contain 'release/fastedge-debugger.zip'
-      #     # but we downloaded to 'fastedge-debugger.zip' (no release/ prefix)
-      #     # Strip any path prefix from the checksum file
-      #     sed -i 's|release/||g' fastedge-debugger.zip.sha256
-      #     cat fastedge-debugger.zip.sha256
+            https://github.com/godronus/fastedge-test/releases/download/$VERSION/fastedge-debugger.zip.sha256
 
       - name: Verify checksum
         run: |
