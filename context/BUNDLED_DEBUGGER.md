@@ -158,7 +158,7 @@ The bundled server exposes the same REST API:
 
 | Endpoint | Method | Purpose |
 |----------|--------|---------|
-| `/health` | GET | Health check |
+| `/health` | GET | Health check — returns `{"status":"ok","service":"fastedge-debugger"}` |
 | `/api/load` | POST | Load WASM binary |
 | `/api/execute` | POST | Execute test request |
 | `/api/config` | GET | Get configuration |
@@ -182,11 +182,11 @@ dist/
     │   └── assets/
     │       ├── index-*.css
     │       └── index-*.js
-    ├── fastedge-host/        (utilities)
-    ├── runner/               (utilities)
-    ├── utils/                (utilities)
-    └── websocket/            (utilities)
+    ├── fastedge-cli/         (platform-specific fastedge-run binary)
+    └── fastedge-host/        (WASI host utilities)
 ```
+
+Note: `lib/` (the `@gcoredev/fastedge-test` npm package output) is explicitly **excluded** from the bundle — it is not needed by the VSCode extension.
 
 **Total**: 1.3MB uncompressed, 529KB in .vsix
 

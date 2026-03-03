@@ -78,6 +78,16 @@ jobs:
           unzip -q fastedge-debugger.zip -d debugger-extracted
           ls -lah debugger-extracted/
 
+      - name: Remove lib folder (npm package - not needed in VSCode extension)
+        run: |
+          if [ -d debugger-extracted/dist/lib ]; then
+            echo "Removing dist/lib/ (npm library output, not required by VSCode extension)..."
+            rm -rf debugger-extracted/dist/lib
+            echo "✅ dist/lib/ removed"
+          else
+            echo "ℹ️  dist/lib/ not present, nothing to remove"
+          fi
+
       - name: Verify extracted contents
         run: |
           echo "Verifying debugger structure..."

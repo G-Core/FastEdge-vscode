@@ -17,25 +17,61 @@ export class DebuggerServerManager {
   ) {}
 
   /**
-   * Check if the debugger server is healthy and responding
+   * Check if the debugger server is healthy and responding.
+   * Returns true only if the server is our own fastedge-debugger process.
    */
   async isHealthy(): Promise<boolean> {
     try {
       const response = await fetch(`http://localhost:${this.port}/health`);
       const data = await response.json();
-      return response.ok && data.status === "ok";
+      return response.ok && data.status === "ok" && data.service === "fastedge-debugger";
     } catch {
       return false;
     }
   }
 
   /**
+   * Find a free port starting from the preferred port.
+   * Skips ports occupied by foreign processes; returns immediately if our
+   * own server is already running on a candidate port.
+   */
+  private async resolvePort(): Promise<number> {
+    for (let port = this.port; port < this.port + 10; port++) {
+      try {
+        const response = await fetch(`http://localhost:${port}/health`, {
+          signal: AbortSignal.timeout(500),
+        });
+        const data = await response.json();
+        if (data.status === "ok" && data.service === "fastedge-debugger") {
+          // Our server is already running here — reuse it
+          return port;
+        }
+        // Something else is on this port — try the next one
+        console.log(`Port ${port} is occupied by a foreign process, trying ${port + 1}...`);
+      } catch {
+        // Port is free
+        return port;
+      }
+    }
+    throw new Error("Could not find a free port for the debugger server (tried 10 ports)");
+  }
+
+  /**
    * Start the debugger server if it's not already running
    */
   async start(): Promise<void> {
-    // Check if already running
+    // Resolve which port to use — reuses our server if already running,
+    // or finds a free port if the preferred one is taken by something else
+    const resolvedPort = await this.resolvePort();
+
+    if (resolvedPort !== this.port) {
+      console.log(`Preferred port ${this.port} was taken; using port ${resolvedPort}`);
+      this.port = resolvedPort;
+    }
+
+    // Check if our server is already running on the resolved port
     if (await this.isHealthy()) {
-      console.log("Debugger server is already running");
+      console.log(`Debugger server is already running on port ${this.port}`);
       return;
     }
 
@@ -65,7 +101,7 @@ export class DebuggerServerManager {
         );
       }
 
-      console.log(`Starting bundled debugger server from: ${bundledServerPath}`);
+      console.log(`Starting bundled debugger server from: ${bundledServerPath} on port ${this.port}`);
 
       // Fork the bundled server using VSCode's Node.js runtime
       this.serverProcess = fork(bundledServerPath, [], {

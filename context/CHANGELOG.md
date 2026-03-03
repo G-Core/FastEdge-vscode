@@ -13,6 +13,49 @@ See `SEARCH_GUIDE.md` for more search patterns.
 
 ---
 
+## [2026-03-03] - Debugger Bundling Fixes + Port Hardening
+
+### Overview
+Two categories of fixes: (1) `dist/lib/` was being incorrectly included in the VSCode bundle (bloat from the npm library build), and (2) `DebuggerServerManager` was trusting any process on port 5179, which caused silent failures when a stale or foreign process occupied the port.
+
+### 🎯 What Was Completed
+
+#### 1. Exclude `lib/` from VSCode Bundle
+The `fastedge-test` build script (`pnpm run build`) now runs both `build:debugger` and `build:lib` in parallel, causing `dist/lib/` (the `@gcoredev/fastedge-test` npm package output) to appear in the debugger's dist. This was being swept up by the bundle script and the GitHub Actions workflow.
+
+**Files Modified:**
+- `../scripts/bundle-debugger-for-vscode.sh` — added `lib` to the exclusion list in the catch-all copy loop
+- `.github/workflows/download-debugger.yml` — added "Remove lib folder" step after extraction, before verification
+
+#### 2. DebuggerServerManager: Identity Check + Port Scanning
+
+**Root cause of the webview bug**: A stale `node dist/server.js` process (running from `fastedge-debugger-OLD_LEGACY`) was occupying port 5179. `isHealthy()` returned true, the extension reused it, but that server had wrong `__dirname` paths — serving 404s on the frontend and failing to find the `fastedge-run` CLI.
+
+**Fixes:**
+- `isHealthy()` now validates `data.service === "fastedge-debugger"` — foreign processes fail this check
+- New `resolvePort()` method scans ports 5179–5188 on every `start()` call:
+  - Reuses port immediately if our own server is found
+  - Skips ports occupied by foreign processes (logs a warning)
+  - Returns the first free port found
+- `this.port` is updated to the resolved port before forking, so `getUrl()` and `getPort()` remain accurate
+
+**Files Modified:**
+- `src/debugger/DebuggerServerManager.ts` — `isHealthy()`, new `resolvePort()`, updated `start()`
+
+**Files Modified in fastedge-test (coordinated change):**
+- `server/server.ts` — `/health` now returns `{"status":"ok","service":"fastedge-debugger"}`
+
+### 🧪 Testing
+- Verified webview loads correctly after killing stale server
+- Bundled debugger `dist/debugger/` confirmed to contain: `server.js`, `frontend/`, `fastedge-cli/` — no `lib/`
+
+### 📝 Notes
+- The `lib/` exclusion affects both local dev workflow and the production GitHub Actions CI path
+- Port scanning window is 10 ports (5179–5188); throws a clear error if all are occupied
+- This hardening benefits all users: port 5179 may legitimately be in use by other local services
+
+---
+
 ## [2026-02-11] - Bundled Debugger Implementation
 
 ### Overview
