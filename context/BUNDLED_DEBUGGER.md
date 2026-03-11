@@ -23,7 +23,7 @@ Extension contains bundled debugger (dist/debugger/)
     ↓
 User opens a file in an app folder and runs "FastEdge: Run File"
     ↓
-Extension resolves app root (nearest test-config.json / package.json / Cargo.toml)
+Extension resolves app root (nearest fastedge-config.test.json / package.json / Cargo.toml)
     ↓
 Extension reads <appRoot>/.fastedge/.debug-port (if present) → health-checks
     ↓
@@ -50,7 +50,7 @@ Multiple apps open simultaneously each get their own server on separate ports (5
 - Real-time logs via WebSocket
 
 **3. Extension Integration**
-- `src/utils/resolveAppRoot.ts` - Finds app root from active file (walks up for `test-config.json` → `package.json` → `Cargo.toml`)
+- `src/utils/resolveAppRoot.ts` - Finds app root from active file (walks up for `fastedge-config.test.json` → `package.json` → `Cargo.toml`)
 - `DebuggerServerManager.ts` - Manages server lifecycle **per app root** — one instance per app
 - `extension.ts` - Maintains `Map<appRoot, DebuggerServerManager>` and `Map<appRoot, DebuggerWebviewProvider>`
 - Uses `child_process.fork()` to spawn server
@@ -156,7 +156,7 @@ this.serverProcess = fork(bundledServerPath, [], {
 **4. One server per app root (March 2026)**
 - Before: Single global server on port 5179 shared by all apps
 - After: One server per app folder; port file at `<appRoot>/.fastedge/.debug-port` for discovery
-- Isolation boundary: nearest ancestor dir containing `test-config.json`, `package.json`, or `Cargo.toml`
+- Isolation boundary: nearest ancestor dir containing `fastedge-config.test.json`, `package.json`, or `Cargo.toml`
 - Closing the debug panel stops that app's server and deletes its port file
 
 **6. Wait for WebSocket client before loading WASM (March 2026)**
@@ -171,6 +171,56 @@ this.serverProcess = fork(bundledServerPath, [], {
 **5. Build runs from app root (March 2026)**
 - Before: `jsBuild` and `rustBuild` used `workspaceFolders[0]` as CWD → broke multi-root workspaces
 - After: `resolveAppRoot(activeFilePath)` derives the correct CWD for both build and output paths
+
+---
+
+## Config File Load/Save — Native VSCode Dialogs
+
+### Why browser file APIs fail in the debugger iframe
+
+The debugger UI runs inside an `<iframe>` sandboxed inside a `WebviewPanel`. This double-sandboxed context blocks all browser file dialog APIs:
+- `window.showSaveFilePicker()` → `SecurityError: Cross origin sub frames aren't allowed to show a file picker`
+- `prompt()` → silently ignored (missing `allow-modals` sandbox permission)
+- `<input type="file">` opens at `~` with no way to target a specific directory
+
+### The postMessage bridge
+
+Both load and save delegate to the extension host via a three-hop message chain:
+
+```
+Debugger iframe
+  → window.parent.postMessage({ command })
+    → Outer webview HTML (bridge)
+      → vscode.postMessage → Extension host
+        → vscode.window.showOpenDialog / showSaveDialog
+      ← panel.webview.postMessage(result) ← Extension host
+    ← Outer webview HTML forwards to iframe
+  ← iframe handles result
+```
+
+### Load config (`openFilePicker`)
+
+1. `ConfigButtons.tsx` detects `window !== window.top`, posts `{ command: "openFilePicker" }`
+2. Extension calls `vscode.window.showOpenDialog({ defaultUri: appRoot, filters: { 'JSON Files': ['json'] } })`
+3. Reads selected file, posts `{ command: "filePickerResult", content, fileName }` back
+4. Iframe parses content and loads config into store; auto-loads WASM if `wasm.path` present
+
+### Save config (`openSavePicker`)
+
+1. `ConfigEditorModal.tsx` Strategy 0 detects `window !== window.top`, posts `{ command: "openSavePicker", suggestedName: "fastedge-config.test.json" }`
+2. Extension calls `vscode.window.showSaveDialog({ defaultUri: path.join(appRoot, suggestedName) })`
+3. Posts `{ command: "savePickerResult", filePath }` back
+4. Iframe calls `POST /api/config/save-as` with `{ config, filePath }` — server writes the file
+
+### Why save goes through the server
+
+The iframe has no filesystem write access. The server (`localhost:5179`) does. By getting a path from the native dialog and passing it to `POST /api/config/save-as`, the server writes the file at the correct location. This also means the saved file is immediately available to the server's `GET /api/config` endpoint.
+
+### Relevant files
+
+- `src/debugger/DebuggerWebviewProvider.ts` — `onDidReceiveMessage` handlers + webview HTML bridge
+- `fastedge-debugger/frontend/src/components/common/ConfigButtons/ConfigButtons.tsx` — load path
+- `fastedge-debugger/frontend/src/components/ConfigEditorModal/ConfigEditorModal.tsx` — save Strategy 0
 
 ---
 
@@ -227,8 +277,9 @@ The bundled server exposes the same REST API:
 | `/api/client-count` | GET | Returns `{ count: N }` connected WebSocket clients — used by extension to wait for UI before loading |
 | `/api/load` | POST | Load WASM binary (accepts `wasmPath` or `wasmBase64`) |
 | `/api/execute` | POST | Execute test request |
-| `/api/config` | GET | Get configuration |
-| `/api/config` | POST | Update configuration |
+| `/api/config` | GET | Get configuration (reads `fastedge-config.test.json`) |
+| `/api/config` | POST | Update configuration (writes `fastedge-config.test.json`) |
+| `/api/config/save-as` | POST | Save config to a specified path — used by VSCode save dialog flow |
 | `/api/reload-workspace-wasm` | POST | Trigger UI reload via WebSocket event (used for F5 rebuilds after initial load) |
 | `/` | GET | Serve frontend UI |
 | `ws://` | WebSocket | Real-time logs and state events |

@@ -19,7 +19,7 @@ export function compileRustAndFindBinary(
     if (!appRoot) {
       return reject(
         new Error(
-          "Could not find app root. Ensure your project has a Cargo.toml or test-config.json."
+          "Could not find app root. Ensure your project has a Cargo.toml or fastedge-config.test.json."
         )
       );
     }

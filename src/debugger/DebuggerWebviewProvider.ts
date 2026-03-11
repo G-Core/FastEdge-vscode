@@ -1,5 +1,6 @@
 import * as vscode from "vscode";
 import * as path from "path";
+import { readFile } from "fs/promises";
 import { DebuggerServerManager } from "./DebuggerServerManager";
 
 /**
@@ -43,6 +44,38 @@ export class DebuggerWebviewProvider {
         this.panel.webview.onDidReceiveMessage(async (message) => {
           if (message.command === "openExternal") {
             await vscode.env.openExternal(vscode.Uri.parse(message.url));
+          }
+
+          if (message.command === "openFilePicker") {
+            const appRoot = this.serverManager.getAppRoot();
+            const uris = await vscode.window.showOpenDialog({
+              defaultUri: vscode.Uri.file(appRoot),
+              canSelectMany: false,
+              filters: { "JSON Files": ["json"] },
+              title: "Load FastEdge Config",
+            });
+            if (uris && uris.length > 0) {
+              const content = await readFile(uris[0].fsPath, "utf-8");
+              const fileName = path.basename(uris[0].fsPath);
+              this.panel?.webview.postMessage({ command: "filePickerResult", content, fileName });
+            } else {
+              this.panel?.webview.postMessage({ command: "filePickerResult", canceled: true });
+            }
+          }
+
+          if (message.command === "openSavePicker") {
+            const appRoot = this.serverManager.getAppRoot();
+            const suggestedName = message.suggestedName ?? "fastedge-config.test.json";
+            const uri = await vscode.window.showSaveDialog({
+              defaultUri: vscode.Uri.file(path.join(appRoot, suggestedName)),
+              filters: { "JSON Files": ["json"] },
+              title: "Save FastEdge Config",
+            });
+            if (uri) {
+              this.panel?.webview.postMessage({ command: "savePickerResult", filePath: uri.fsPath });
+            } else {
+              this.panel?.webview.postMessage({ command: "savePickerResult", canceled: true });
+            }
           }
         });
 
@@ -238,10 +271,24 @@ export class DebuggerWebviewProvider {
       }
     }, 5000);
 
-    // Forward openExternal messages from the debugger iframe to the extension host
+    // Forward messages from the debugger iframe to the extension host,
+    // and forward responses from the extension host back to the iframe.
     window.addEventListener('message', function(event) {
       if (event.data && event.data.command === 'openExternal') {
         vscode.postMessage({ command: 'openExternal', url: event.data.url });
+      }
+      if (event.data && event.data.command === 'openFilePicker') {
+        vscode.postMessage({ command: 'openFilePicker' });
+      }
+      if (event.data && event.data.command === 'openSavePicker') {
+        vscode.postMessage({ command: 'openSavePicker', suggestedName: event.data.suggestedName });
+      }
+      // Forward extension host responses back to the iframe
+      if (event.data && event.data.command === 'filePickerResult') {
+        iframe.contentWindow.postMessage(event.data, '*');
+      }
+      if (event.data && event.data.command === 'savePickerResult') {
+        iframe.contentWindow.postMessage(event.data, '*');
       }
     });
   </script>

@@ -46,7 +46,7 @@ export function compileJavascriptBinary(
       const appRoot = resolveAppRoot(activeFilePath);
       if (!appRoot) {
         throw new Error(
-          "Could not find app root. Ensure your project has a package.json or test-config.json."
+          "Could not find app root. Ensure your project has a package.json or fastedge-config.test.json."
         );
       }
 

@@ -271,7 +271,7 @@ function getActiveAppRoot(): string | null {
   const appRoot = resolveAppRoot(activeFile);
   if (!appRoot) {
     vscode.window.showErrorMessage(
-      "Could not find app root. Ensure your project has a package.json, Cargo.toml, or test-config.json."
+      "Could not find app root. Ensure your project has a package.json, Cargo.toml, or fastedge-config.test.json."
     );
     return null;
   }

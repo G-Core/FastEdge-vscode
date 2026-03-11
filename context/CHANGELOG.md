@@ -13,6 +13,48 @@ See `SEARCH_GUIDE.md` for more search patterns.
 
 ---
 
+## [2026-03-11] - Config File Rename + Native Load/Save Dialogs
+
+### Overview
+Updated to use the renamed `fastedge-config.test.json` (previously `test-config.json`) as the app root marker. Implemented native VSCode load and save file dialogs for the debugger's config buttons — previously all dialog strategies failed silently in the sandboxed iframe context.
+
+### Background
+
+The debugger UI runs inside an `<iframe>` embedded in a `WebviewPanel`. This double-sandboxed context blocks the browser's native file APIs (`showSaveFilePicker`, `showOpenDialog`, `prompt`). The load button opened at `~` with no way to target the app root, and the save button produced only console errors.
+
+### Fix
+
+Both load and save detect `window !== window.top` and delegate to the extension host via `postMessage`. The outer webview HTML acts as a bridge, forwarding messages in both directions.
+
+### 🎯 What Was Completed
+
+#### 1. App Root Marker Rename
+- `resolveAppRoot.ts`: marker updated from `test-config.json` → `fastedge-config.test.json`
+- Error messages in `runDebugger.ts`, `extension.ts`, `jsBuild.ts`, `rustBuild.ts` updated
+
+#### 2. Load Config — Native Open Dialog
+- Extension handler: `openFilePicker` → `vscode.window.showOpenDialog({ defaultUri: appRoot })` → reads file → posts `filePickerResult` back
+- Dialog opens at the app's root directory
+
+#### 3. Save Config — Native Save Dialog
+- Extension handler: `openSavePicker` → `vscode.window.showSaveDialog({ defaultUri: appRoot/fastedge-config.test.json })` → posts `savePickerResult` back
+- Frontend calls `POST /api/config/save-as` with the returned path; server writes the file
+- Always suggests `fastedge-config.test.json` so the saved file doubles as the app root marker
+
+#### 4. Webview HTML Bridge
+- Forwards `openFilePicker`, `openSavePicker` from iframe → extension host
+- Forwards `filePickerResult`, `savePickerResult` from extension host → iframe
+
+**Files Modified:**
+- `src/utils/resolveAppRoot.ts` — marker + comment
+- `src/commands/runDebugger.ts` — error message
+- `src/extension.ts` — error message
+- `src/compiler/jsBuild.ts` — error message
+- `src/compiler/rustBuild.ts` — error message
+- `src/debugger/DebuggerWebviewProvider.ts` — `readFile` import, two new `onDidReceiveMessage` handlers, webview HTML message forwarding
+
+---
+
 ## [2026-03-10] - Multi-App Workspace Support
 
 ### Overview
@@ -23,12 +65,12 @@ The original architecture created one global `DebuggerServerManager` from `works
 - **Two VSCode windows** each debugging a different app: config changes in one bled into the other via the shared server state.
 - **Multi-root workspace** (`/my-cdn-app` + `/my-http-app` in one window): the build always ran from the workspace root, so `npx fastedge-build` and `cargo build` couldn't find the correct `node_modules/.bin/fastedge-build` or `Cargo.toml` for child apps. HTTP WASM builds failed entirely.
 
-The isolation boundary is the **app folder** — the nearest ancestor directory containing `test-config.json`, `package.json`, or `Cargo.toml`.
+The isolation boundary is the **app folder** — the nearest ancestor directory containing `fastedge-config.test.json`, `package.json`, or `Cargo.toml`.
 
 ### 🎯 What Was Completed
 
 #### 1. `resolveAppRoot()` utility (`src/utils/resolveAppRoot.ts`) — NEW FILE
-- Walks up from a file path, checking each directory for (in priority order): `test-config.json` → `package.json` → `Cargo.toml`
+- Walks up from a file path, checking each directory for (in priority order): `fastedge-config.test.json` → `package.json` → `Cargo.toml`
 - All three markers checked at each level before moving up (avoids false positives from nested manifests)
 - Returns `null` if no marker found (surfaced as user-visible error)
 - Used by build, server, and panel code as the single source of app identity
@@ -74,7 +116,7 @@ The isolation boundary is the **app folder** — the nearest ancestor directory 
 - Stale port file: detected and cleaned up on next `start()`
 
 ### 📝 Key Design Decisions
-- **App root = nearest manifest ancestor**: `test-config.json` wins over `package.json`/`Cargo.toml` because it is always at the FastEdge app root by convention. Language manifests may exist in parent directories (monorepo root `package.json`, cargo workspace).
+- **App root = nearest manifest ancestor**: `fastedge-config.test.json` wins over `package.json`/`Cargo.toml` because it is always at the FastEdge app root by convention. Language manifests may exist in parent directories (monorepo root `package.json`, cargo workspace).
 - **Port file owned by the server, read by the extension**: server writes it after `httpServer.listen()`, deletes on shutdown. Extension reads it at start time only.
 - **Agents never spawn servers**: if an agent finds no port file for the app it's working in, it should prompt the user to open the debug panel first. (T010/T011 in fastedge-plugin — not yet implemented.)
 
