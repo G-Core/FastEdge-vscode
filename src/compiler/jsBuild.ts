@@ -1,28 +1,24 @@
-import * as vscode from "vscode";
 import { spawn } from "child_process";
 import fs from "fs";
 import path from "path";
 
 import { DebugContext, LogToDebugConsole } from "../types";
+import { resolveAppRoot } from "../utils/resolveAppRoot";
 
 const BINARY_NAME = "debugger.wasm";
 
-const makeBinDirectory = (workspaceFolder: vscode.WorkspaceFolder) =>
+const makeBinDirectory = (appRoot: string) =>
   new Promise<string>((resolve, reject) => {
-    const fastedgeBinDir = path.join(
-      workspaceFolder.uri.fsPath,
-      ".fastedge",
-      "bin"
-    );
+    const fastedgeBinDir = path.join(appRoot, ".fastedge", "bin");
     fs.mkdir(fastedgeBinDir, { recursive: true }, (err) =>
       err ? reject(err) : resolve(fastedgeBinDir)
     );
   });
 
-const getPackageJsonEntryPoint = (workspaceFolder: vscode.WorkspaceFolder) =>
+const getPackageJsonEntryPoint = (appRoot: string) =>
   new Promise<string>((resolve, reject) => {
     fs.readFile(
-      path.join(workspaceFolder.uri.fsPath, "package.json"),
+      path.join(appRoot, "package.json"),
       "utf8",
       (err, data) => {
         if (err) {
@@ -47,24 +43,19 @@ export function compileJavascriptBinary(
   logDebugConsole("Compiling javascript binary...\n");
   return new Promise<string>(async (resolve, reject) => {
     try {
-      const workspaceFolder = vscode.workspace.workspaceFolders?.[0];
-      if (!workspaceFolder) {
+      const appRoot = resolveAppRoot(activeFilePath);
+      if (!appRoot) {
         throw new Error(
-          "No workspace folder found! Please open a workspace folder to compile"
+          "Could not find app root. Ensure your project has a package.json or test-config.json."
         );
       }
 
-      const binPath = await makeBinDirectory(
-        workspaceFolder as vscode.WorkspaceFolder
-      );
+      const binPath = await makeBinDirectory(appRoot);
 
       const jsEntryPoint =
         debugContext === "file"
           ? activeFilePath
-          : path.join(
-              workspaceFolder?.uri.fsPath,
-              await getPackageJsonEntryPoint(workspaceFolder)
-            );
+          : path.join(appRoot, await getPackageJsonEntryPoint(appRoot));
 
       const jsBuild = spawn(
         "npx",
@@ -72,7 +63,7 @@ export function compileJavascriptBinary(
         {
           shell: true,
           stdio: ["ignore", "pipe", "pipe"],
-          cwd: workspaceFolder?.uri.fsPath,
+          cwd: appRoot,
         }
       );
 

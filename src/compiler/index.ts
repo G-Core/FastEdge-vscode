@@ -1,5 +1,4 @@
 import * as vscode from "vscode";
-import path from "node:path";
 
 import { compileJavascriptBinary } from "./jsBuild";
 import { compileRustAndFindBinary } from "./rustBuild";
@@ -31,14 +30,10 @@ async function compileActiveEditorsBinary(
   debugContext: DebugContext = "file",
   logDebugConsole: LogToDebugConsole
 ): Promise<BinaryInfo> {
-  const activeFile =
-    debugContext === "workspace"
-      ? vscode.workspace?.workspaceFolders?.[0].uri.fsPath + path.sep
-      : vscode.window.activeTextEditor?.document.uri.fsPath;
-
+  const activeFile = vscode.window.activeTextEditor?.document.uri.fsPath;
   const activeFileLanguage = getActiveFileLanguage();
+
   if (!activeFile || !activeFileLanguage) {
-    // return an error.. need to have a rust or javascript file selected
     throw new Error(
       "No active file or language detected is incorrect! Only Rust or Javascript files are supported"
     );
@@ -46,20 +41,12 @@ async function compileActiveEditorsBinary(
 
   if (activeFileLanguage === "javascript") {
     return {
-      path: await compileJavascriptBinary(
-        activeFile,
-        debugContext,
-        logDebugConsole
-      ),
+      path: await compileJavascriptBinary(activeFile, debugContext, logDebugConsole),
       lang: activeFileLanguage,
     };
   } else if (activeFileLanguage === "rust") {
-    const activeFilePath = activeFile?.slice(
-      0,
-      activeFile?.lastIndexOf(path.sep)
-    );
     return {
-      path: await compileRustAndFindBinary(activeFilePath, logDebugConsole),
+      path: await compileRustAndFindBinary(activeFile, logDebugConsole),
       lang: activeFileLanguage,
     };
   }

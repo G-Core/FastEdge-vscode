@@ -13,6 +13,88 @@ See `SEARCH_GUIDE.md` for more search patterns.
 
 ---
 
+## [2026-03-10] - Multi-App Workspace Support
+
+### Overview
+Replaced the single shared debugger server model with per-app-root isolation. Each app folder in a workspace now gets its own server, port, and debug panel. Fixes two independent bugs: (1) config/state bleed between apps when multiple VSCode windows or a multi-root workspace are in use, and (2) HTTP WASM build failures in multi-root workspaces because the build was resolving `fastedge-build` from the workspace root instead of the app root.
+
+### Background
+The original architecture created one global `DebuggerServerManager` from `workspaceFolders[0]` at extension activation. This worked for single-app workspaces but broke in two common scenarios:
+- **Two VSCode windows** each debugging a different app: config changes in one bled into the other via the shared server state.
+- **Multi-root workspace** (`/my-cdn-app` + `/my-http-app` in one window): the build always ran from the workspace root, so `npx fastedge-build` and `cargo build` couldn't find the correct `node_modules/.bin/fastedge-build` or `Cargo.toml` for child apps. HTTP WASM builds failed entirely.
+
+The isolation boundary is the **app folder** — the nearest ancestor directory containing `test-config.json`, `package.json`, or `Cargo.toml`.
+
+### 🎯 What Was Completed
+
+#### 1. `resolveAppRoot()` utility (`src/utils/resolveAppRoot.ts`) — NEW FILE
+- Walks up from a file path, checking each directory for (in priority order): `test-config.json` → `package.json` → `Cargo.toml`
+- All three markers checked at each level before moving up (avoids false positives from nested manifests)
+- Returns `null` if no marker found (surfaced as user-visible error)
+- Used by build, server, and panel code as the single source of app identity
+
+#### 2. Build root fix (`src/compiler/jsBuild.ts`, `rustBuild.ts`, `compiler/index.ts`)
+- `compileJavascriptBinary`: replaces `workspaceFolders[0]` with `resolveAppRoot(activeFilePath)` for CWD, bin dir, and `package.json` entry point lookup
+- `compileRustAndFindBinary`: `cwd` for `cargo build` and `.fastedge/bin/` copy destination now use app root
+- `compiler/index.ts`: workspace mode no longer anchors to `workspaceFolders[0]`; always derives root from active file
+
+#### 3. Per-app `DebuggerServerManager` (`src/debugger/DebuggerServerManager.ts`)
+- Constructor now takes `appRoot` instead of `workspacePath`
+- `start()` reads `<appRoot>/.fastedge/.debug-port`, health-checks the port, reuses if healthy or spawns fresh if stale/missing
+- `stop()` sends SIGTERM and deletes the port file
+- Spawns server with `WORKSPACE_PATH: appRoot` (used by server for dotenv and port file)
+- On unexpected process exit: port file is deleted
+
+#### 4. Per-app panel + extension wiring (`src/extension.ts`, `src/commands/runDebugger.ts`)
+- `extension.ts` maintains `Map<appRoot, DebuggerServerManager>` and `Map<appRoot, DebuggerWebviewProvider>`
+- `getOrCreateForAppRoot(appRoot)` lazily creates manager+provider pairs
+- All commands resolve app root from the active file before acting
+- `runDebugger.ts` accepts a factory function (`AppDebuggerFactory`) instead of module-level singletons
+- Panel title shows app name: `"FastEdge Debugger — my-cdn-app"`
+
+#### 5. Panel close = stop server (`src/debugger/DebuggerWebviewProvider.ts`)
+- `panel.onDidDispose` now calls `serverManager.stop()` — closing the panel kills the server and cleans its port file
+- Guard: skips stop if `isRunning()` is false (prevents double-stop when command closes the panel explicitly)
+
+#### 6. Stop command picker (`src/extension.ts`)
+- `FastEdge: Stop Debugger Server` shows a quick-pick listing running apps by name when multiple servers are running
+- Single server: stops immediately without a picker
+- After stop: closes the panel and removes the manager from the map
+
+#### 7. Build terminal auto-close (`src/commands/runDebugger.ts`)
+- On successful build: `setTimeout(() => terminal.dispose(), 3000)` — terminal disappears after 3s
+- On failed build: terminal stays open so the user can read the error
+
+### 🧪 Testing Scenarios Verified
+- Single app, single window: existing behaviour unchanged
+- Two apps in a multi-root workspace: independent servers (5179, 5180), independent panels, no state bleed
+- HTTP WASM build in child app folder: `fastedge-build` resolved from app root ✅
+- Closing panel: server stops, port file deleted
+- Stop command with two running: picker shows both; stopping one leaves the other running
+- Stale port file: detected and cleaned up on next `start()`
+
+### 📝 Key Design Decisions
+- **App root = nearest manifest ancestor**: `test-config.json` wins over `package.json`/`Cargo.toml` because it is always at the FastEdge app root by convention. Language manifests may exist in parent directories (monorepo root `package.json`, cargo workspace).
+- **Port file owned by the server, read by the extension**: server writes it after `httpServer.listen()`, deletes on shutdown. Extension reads it at start time only.
+- **Agents never spawn servers**: if an agent finds no port file for the app it's working in, it should prompt the user to open the debug panel first. (T010/T011 in fastedge-plugin — not yet implemented.)
+
+**Files Modified:**
+- `src/utils/resolveAppRoot.ts` — NEW
+- `src/compiler/jsBuild.ts`
+- `src/compiler/rustBuild.ts`
+- `src/compiler/index.ts`
+- `src/debugger/DebuggerServerManager.ts`
+- `src/debugger/DebuggerWebviewProvider.ts`
+- `src/extension.ts`
+- `src/commands/runDebugger.ts`
+
+**Coordinated change in `fastedge-test`:**
+- `server/server.ts` — port file write/delete (see fastedge-test CHANGELOG 2026-03-10)
+- `server/runner/PortManager.ts` — async OS-level port check
+- `server/runner/HttpWasmRunner.ts` — await allocate
+
+---
+
 ## [2026-03-03] - Debugger Bundling Fixes + Port Hardening
 
 ### Overview

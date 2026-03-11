@@ -3,8 +3,12 @@ import * as vscode from "vscode";
 import * as path from "path";
 import * as fs from "fs";
 
+const PORT_FILE_DIR = ".fastedge";
+const PORT_FILE_NAME = ".debug-port";
+
 /**
- * Manages the lifecycle of the fastedge-debugger server
+ * Manages the lifecycle of the fastedge-debugger server for a specific app root.
+ * Each app folder gets its own server instance and port file.
  */
 export class DebuggerServerManager {
   private serverProcess: ChildProcess | null = null;
@@ -13,8 +17,30 @@ export class DebuggerServerManager {
 
   constructor(
     private extensionPath: string,
-    private workspacePath?: string
+    private appRoot: string
   ) {}
+
+  private get portFilePath(): string {
+    return path.join(this.appRoot, PORT_FILE_DIR, PORT_FILE_NAME);
+  }
+
+  private readPortFile(): number | null {
+    try {
+      const raw = fs.readFileSync(this.portFilePath, "utf8").trim();
+      const port = parseInt(raw, 10);
+      return isNaN(port) ? null : port;
+    } catch {
+      return null;
+    }
+  }
+
+  private deletePortFile(): void {
+    try {
+      fs.unlinkSync(this.portFilePath);
+    } catch {
+      // File may not exist — not an error
+    }
+  }
 
   /**
    * Check if the debugger server is healthy and responding.
@@ -30,21 +56,33 @@ export class DebuggerServerManager {
     }
   }
 
+  private async isHealthyOnPort(port: number): Promise<boolean> {
+    try {
+      const response = await fetch(`http://localhost:${port}/health`, {
+        signal: AbortSignal.timeout(500),
+      });
+      const data = await response.json();
+      return response.ok && data.status === "ok" && data.service === "fastedge-debugger";
+    } catch {
+      return false;
+    }
+  }
+
   /**
    * Find a free port starting from the preferred port.
-   * Skips ports occupied by foreign processes; returns immediately if our
-   * own server is already running on a candidate port.
+   * Skips ports occupied by foreign processes.
    */
   private async resolvePort(): Promise<number> {
-    for (let port = this.port; port < this.port + 10; port++) {
+    for (let port = 5179; port < 5189; port++) {
       try {
         const response = await fetch(`http://localhost:${port}/health`, {
           signal: AbortSignal.timeout(500),
         });
         const data = await response.json();
         if (data.status === "ok" && data.service === "fastedge-debugger") {
-          // Our server is already running here — reuse it
-          return port;
+          // A fastedge server is on this port — skip it (belongs to another app)
+          console.log(`Port ${port} is in use by another fastedge-debugger, trying ${port + 1}...`);
+          continue;
         }
         // Something else is on this port — try the next one
         console.log(`Port ${port} is occupied by a foreign process, trying ${port + 1}...`);
@@ -57,25 +95,26 @@ export class DebuggerServerManager {
   }
 
   /**
-   * Start the debugger server if it's not already running
+   * Start the debugger server for this app root.
+   * Checks the port file first — reuses an existing healthy server if found.
    */
   async start(): Promise<void> {
-    // Resolve which port to use — reuses our server if already running,
-    // or finds a free port if the preferred one is taken by something else
-    const resolvedPort = await this.resolvePort();
-
-    if (resolvedPort !== this.port) {
-      console.log(`Preferred port ${this.port} was taken; using port ${resolvedPort}`);
-      this.port = resolvedPort;
+    // Step 1: Check if a server is already running for this app via port file
+    const filePort = this.readPortFile();
+    if (filePort !== null) {
+      if (await this.isHealthyOnPort(filePort)) {
+        // Existing server is alive — reuse it
+        this.port = filePort;
+        console.log(`Reusing existing debugger server on port ${this.port} for ${this.appRoot}`);
+        return;
+      } else {
+        // Stale port file — clean it up
+        console.log(`Stale port file found for ${this.appRoot}, removing...`);
+        this.deletePortFile();
+      }
     }
 
-    // Check if our server is already running on the resolved port
-    if (await this.isHealthy()) {
-      console.log(`Debugger server is already running on port ${this.port}`);
-      return;
-    }
-
-    // Prevent multiple concurrent starts
+    // Step 2: Concurrent call guard (same manager instance only)
     if (this.isStarting) {
       console.log("Debugger server is already starting");
       await this.waitForHealthy(30000);
@@ -85,7 +124,9 @@ export class DebuggerServerManager {
     this.isStarting = true;
 
     try {
-      // Path to bundled debugger server
+      // Step 3: Find a free port and spawn
+      this.port = await this.resolvePort();
+
       const bundledServerPath = path.join(
         this.extensionPath,
         "dist",
@@ -93,7 +134,6 @@ export class DebuggerServerManager {
         "server.js"
       );
 
-      // Verify bundled server exists
       if (!fs.existsSync(bundledServerPath)) {
         throw new Error(
           `Bundled debugger not found at: ${bundledServerPath}. ` +
@@ -101,22 +141,20 @@ export class DebuggerServerManager {
         );
       }
 
-      console.log(`Starting bundled debugger server from: ${bundledServerPath} on port ${this.port}`);
+      console.log(`Starting debugger server for ${this.appRoot} on port ${this.port}`);
 
-      // Fork the bundled server using VSCode's Node.js runtime
       this.serverProcess = fork(bundledServerPath, [], {
         cwd: path.dirname(bundledServerPath),
-        execPath: process.execPath, // Use VSCode's Node.js
+        execPath: process.execPath,
         stdio: ["ignore", "pipe", "pipe", "ipc"],
         env: {
           ...process.env,
           PORT: String(this.port),
-          VSCODE_INTEGRATION: "true", // Signal to server that it's running in VSCode
-          WORKSPACE_PATH: this.workspacePath || "", // Workspace path for auto-loading WASM
+          VSCODE_INTEGRATION: "true",
+          WORKSPACE_PATH: this.appRoot,
         },
       });
 
-      // Log output for debugging
       this.serverProcess.stdout?.on("data", (data: any) => {
         console.log(`[Debugger Server] ${data.toString()}`);
       });
@@ -135,12 +173,12 @@ export class DebuggerServerManager {
       this.serverProcess.on("exit", (code: number | null, signal: string | null) => {
         console.log(`Debugger server exited with code ${code}, signal ${signal}`);
         this.serverProcess = null;
+        this.deletePortFile();
       });
 
-      // Wait for the server to be ready
       await this.waitForHealthy(30000);
 
-      console.log("Debugger server started successfully");
+      console.log(`Debugger server started on port ${this.port} for ${this.appRoot}`);
     } finally {
       this.isStarting = false;
     }
@@ -151,7 +189,7 @@ export class DebuggerServerManager {
    */
   private async waitForHealthy(timeoutMs: number = 30000): Promise<void> {
     const startTime = Date.now();
-    const checkInterval = 500; // Check every 500ms
+    const checkInterval = 500;
 
     while (Date.now() - startTime < timeoutMs) {
       if (await this.isHealthy()) {
@@ -166,17 +204,18 @@ export class DebuggerServerManager {
   }
 
   /**
-   * Stop the debugger server
+   * Stop the debugger server and clean up its port file
    */
   async stop(): Promise<void> {
     if (this.serverProcess) {
-      console.log("Stopping debugger server...");
+      console.log(`Stopping debugger server for ${this.appRoot}...`);
       this.serverProcess.kill("SIGTERM");
       this.serverProcess = null;
-
-      // Wait a bit for graceful shutdown
+      // Wait a bit for graceful shutdown before cleaning the port file,
+      // as the server's own SIGTERM handler will delete it too
       await new Promise((resolve) => setTimeout(resolve, 1000));
     }
+    this.deletePortFile();
   }
 
   /**
@@ -199,6 +238,13 @@ export class DebuggerServerManager {
    */
   getPort(): number {
     return this.port;
+  }
+
+  /**
+   * Get the app root this manager is scoped to
+   */
+  getAppRoot(): string {
+    return this.appRoot;
   }
 
   /**

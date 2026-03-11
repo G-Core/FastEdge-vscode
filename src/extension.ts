@@ -15,12 +15,38 @@ import {
   DebuggerServerManager,
   DebuggerWebviewProvider,
 } from "./debugger";
+import { resolveAppRoot } from "./utils/resolveAppRoot";
 
-// Global instances
-let debuggerServerManager: DebuggerServerManager | null = null;
-let debuggerWebviewProvider: DebuggerWebviewProvider | null = null;
+// Per-app-root instances — keyed by resolved app root path
+const serverManagers = new Map<string, DebuggerServerManager>();
+const webviewProviders = new Map<string, DebuggerWebviewProvider>();
+
+let extensionContext: vscode.ExtensionContext | null = null;
+
+function getOrCreateForAppRoot(appRoot: string): {
+  manager: DebuggerServerManager;
+  provider: DebuggerWebviewProvider;
+} {
+  if (!extensionContext) {
+    throw new Error("Extension not activated");
+  }
+
+  if (!serverManagers.has(appRoot)) {
+    const manager = new DebuggerServerManager(extensionContext.extensionPath, appRoot);
+    const provider = new DebuggerWebviewProvider(extensionContext, manager);
+    serverManagers.set(appRoot, manager);
+    webviewProviders.set(appRoot, provider);
+  }
+
+  return {
+    manager: serverManagers.get(appRoot)!,
+    provider: webviewProviders.get(appRoot)!,
+  };
+}
 
 export function activate(context: vscode.ExtensionContext) {
+  extensionContext = context;
+
   // Read the cliVersion from METADATA.json (bundled with debugger)
   const metadataJsonPath = path.join(
     context.extensionPath,
@@ -41,16 +67,8 @@ export function activate(context: vscode.ExtensionContext) {
   // Initialize trigger file handler for auto-running commands
   initializeTriggerFileHandler(context);
 
-  // Initialize debugger components with bundled debugger
-  const workspacePath = vscode.workspace.workspaceFolders?.[0]?.uri.fsPath;
-  debuggerServerManager = new DebuggerServerManager(context.extensionPath, workspacePath);
-  debuggerWebviewProvider = new DebuggerWebviewProvider(
-    context,
-    debuggerServerManager
-  );
-
-  // Initialize debugger components for runFile/runWorkspace
-  initializeDebuggerComponents(debuggerServerManager, debuggerWebviewProvider);
+  // Wire up the per-app factory for runFile/runWorkspace
+  initializeDebuggerComponents(getOrCreateForAppRoot);
 
   // Register debug configuration provider so F5 works
   context.subscriptions.push(
@@ -102,15 +120,13 @@ export function activate(context: vscode.ExtensionContext) {
 }
 
 /**
- * Start the debugger server
+ * Start the debugger server for the current active file's app
  */
 async function startDebuggerServer(): Promise<void> {
-  if (!debuggerServerManager) {
-    vscode.window.showErrorMessage(
-      "Debugger not available. Extension may not be installed correctly."
-    );
-    return;
-  }
+  const appRoot = getActiveAppRoot();
+  if (!appRoot) return;
+
+  const { manager } = getOrCreateForAppRoot(appRoot);
 
   try {
     await vscode.window.withProgress(
@@ -120,12 +136,12 @@ async function startDebuggerServer(): Promise<void> {
         cancellable: false,
       },
       async () => {
-        await debuggerServerManager!.start();
+        await manager.start();
       }
     );
 
     vscode.window.showInformationMessage(
-      `FastEdge Debugger server started on port ${debuggerServerManager.getPort()}`
+      `FastEdge Debugger server started on port ${manager.getPort()}`
     );
   } catch (error) {
     vscode.window.showErrorMessage(
@@ -135,17 +151,45 @@ async function startDebuggerServer(): Promise<void> {
 }
 
 /**
- * Stop the debugger server
+ * Stop a debugger server. If multiple are running, shows a picker.
  */
 async function stopDebuggerServer(): Promise<void> {
-  if (!debuggerServerManager) {
-    vscode.window.showWarningMessage("Debugger server is not configured");
+  const running = Array.from(serverManagers.entries()).filter(([, m]) =>
+    m.isRunning()
+  );
+
+  if (running.length === 0) {
+    vscode.window.showWarningMessage("No FastEdge debugger servers are running");
     return;
   }
 
+  let appRoot: string;
+
+  if (running.length === 1) {
+    appRoot = running[0][0];
+  } else {
+    const picked = await vscode.window.showQuickPick(
+      running.map(([root]) => ({
+        label: path.basename(root),
+        description: root,
+        appRoot: root,
+      })),
+      { placeHolder: "Select which debugger server to stop" }
+    );
+    if (!picked) return;
+    appRoot = picked.appRoot;
+  }
+
+  const manager = serverManagers.get(appRoot)!;
+  const provider = webviewProviders.get(appRoot);
   try {
-    await debuggerServerManager.stop();
-    vscode.window.showInformationMessage("FastEdge Debugger server stopped");
+    await manager.stop();
+    provider?.close();
+    serverManagers.delete(appRoot);
+    webviewProviders.delete(appRoot);
+    vscode.window.showInformationMessage(
+      `FastEdge Debugger stopped for ${path.basename(appRoot)}`
+    );
   } catch (error) {
     vscode.window.showErrorMessage(
       `Failed to stop debugger server: ${(error as Error).message}`
@@ -157,22 +201,18 @@ async function stopDebuggerServer(): Promise<void> {
  * Debug the current FastEdge application
  */
 async function debugFastEdgeApp(): Promise<void> {
-  if (!debuggerWebviewProvider) {
-    vscode.window.showErrorMessage(
-      "Debugger not available. Extension may not be installed correctly."
-    );
-    return;
-  }
+  const appRoot = getActiveAppRoot();
+  if (!appRoot) return;
+
+  const { provider } = getOrCreateForAppRoot(appRoot);
 
   try {
-    // Get the active editor
     const editor = vscode.window.activeTextEditor;
     if (!editor) {
       vscode.window.showErrorMessage("No active file to debug");
       return;
     }
 
-    // Check if we should build first
     const shouldBuild = await vscode.window.showQuickPick(
       [
         {
@@ -190,14 +230,13 @@ async function debugFastEdgeApp(): Promise<void> {
     );
 
     if (!shouldBuild) {
-      return; // User cancelled
+      return;
     }
 
     let wasmPath: string | undefined;
 
     if (shouldBuild.build) {
       // TODO: Integrate with existing compiler
-      // For now, prompt for WASM path
       const result = await vscode.window.showOpenDialog({
         canSelectFiles: true,
         canSelectFolders: false,
@@ -211,8 +250,7 @@ async function debugFastEdgeApp(): Promise<void> {
       }
     }
 
-    // Show debugger with optional WASM
-    await debuggerWebviewProvider.showDebugger(wasmPath);
+    await provider.showDebugger(wasmPath);
   } catch (error) {
     vscode.window.showErrorMessage(
       `Failed to start debugging: ${(error as Error).message}`
@@ -220,9 +258,30 @@ async function debugFastEdgeApp(): Promise<void> {
   }
 }
 
-export function deactivate() {
-  // Cleanup debugger server on extension deactivation
-  if (debuggerServerManager) {
-    debuggerServerManager.stop().catch(console.error);
+/**
+ * Get the app root for the currently active file, with user-facing error if none found.
+ */
+function getActiveAppRoot(): string | null {
+  const activeFile = vscode.window.activeTextEditor?.document.uri.fsPath;
+  if (!activeFile) {
+    vscode.window.showErrorMessage("No active file open");
+    return null;
   }
+
+  const appRoot = resolveAppRoot(activeFile);
+  if (!appRoot) {
+    vscode.window.showErrorMessage(
+      "Could not find app root. Ensure your project has a package.json, Cargo.toml, or test-config.json."
+    );
+    return null;
+  }
+  return appRoot;
+}
+
+export function deactivate() {
+  // Stop all per-app debugger servers on extension deactivation
+  const stops = Array.from(serverManagers.values()).map((m) =>
+    m.stop().catch(console.error)
+  );
+  return Promise.all(stops);
 }

@@ -2,10 +2,9 @@ import { spawn } from "child_process";
 import * as os from "os";
 import * as fs from "fs";
 import * as path from "path";
-import * as vscode from "vscode";
-
 import { LogToDebugConsole } from "../types";
 import { rustConfigWasiTarget } from "./rustConfig";
+import { resolveAppRoot } from "../utils/resolveAppRoot";
 
 export function compileRustAndFindBinary(
   activeFilePath: string,
@@ -16,6 +15,15 @@ export function compileRustAndFindBinary(
     const isWindows = os.platform() === "win32";
     const shell = isWindows ? "cmd.exe" : "sh";
 
+    const appRoot = resolveAppRoot(activeFilePath);
+    if (!appRoot) {
+      return reject(
+        new Error(
+          "Could not find app root. Ensure your project has a Cargo.toml or test-config.json."
+        )
+      );
+    }
+
     const target = rustConfigWasiTarget(logDebugConsole, activeFilePath);
     logDebugConsole("wasm build target: " + target + "\n", "stderr");
     const cargoBuild = spawn(
@@ -24,7 +32,7 @@ export function compileRustAndFindBinary(
       {
         shell,
         stdio: ["ignore", "pipe", "pipe"],
-        cwd: activeFilePath,
+        cwd: appRoot,
       }
     );
 
@@ -71,18 +79,8 @@ export function compileRustAndFindBinary(
           if (/.*\.wasm$/.test(message.filenames[0])) {
             const cargoWasmPath = message.filenames[0];
 
-            // Copy to .fastedge/bin/debugger.wasm for auto-load support
-            const workspaceFolder = vscode.workspace.workspaceFolders?.[0];
-            if (!workspaceFolder) {
-              // If no workspace folder, just return the cargo output path
-              return resolve(cargoWasmPath);
-            }
-
-            const fastedgeBinDir = path.join(
-              workspaceFolder.uri.fsPath,
-              ".fastedge",
-              "bin"
-            );
+            // Copy to <appRoot>/.fastedge/bin/debugger.wasm for auto-load support
+            const fastedgeBinDir = path.join(appRoot, ".fastedge", "bin");
             const standardWasmPath = path.join(fastedgeBinDir, "debugger.wasm");
 
             // Create directory if it doesn't exist

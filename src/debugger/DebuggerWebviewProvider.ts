@@ -1,5 +1,5 @@
 import * as vscode from "vscode";
-import * as fs from "fs/promises";
+import * as path from "path";
 import { DebuggerServerManager } from "./DebuggerServerManager";
 
 /**
@@ -25,9 +25,10 @@ export class DebuggerWebviewProvider {
       if (this.panel) {
         this.panel.reveal(vscode.ViewColumn.Two);
       } else {
+        const appName = path.basename(this.serverManager.getAppRoot());
         this.panel = vscode.window.createWebviewPanel(
           "fastedgeDebugger",
-          "FastEdge Debugger",
+          `FastEdge Debugger — ${appName}`,
           vscode.ViewColumn.Two,
           {
             enableScripts: true,
@@ -38,14 +39,28 @@ export class DebuggerWebviewProvider {
         // Set webview content
         this.panel.webview.html = this.getWebviewContent();
 
-        // Handle panel disposal
-        this.panel.onDidDispose(() => {
+        // Handle messages from the webview (forwarded from the debugger iframe)
+        this.panel.webview.onDidReceiveMessage(async (message) => {
+          if (message.command === "openExternal") {
+            await vscode.env.openExternal(vscode.Uri.parse(message.url));
+          }
+        });
+
+        // When the user closes the panel, stop the server for this app
+        this.panel.onDidDispose(async () => {
           this.panel = null;
+          // Only stop if the server is still running — avoids double-stop
+          // when the "Stop Debug Server" command closes the panel explicitly
+          if (this.serverManager.isRunning()) {
+            await this.serverManager.stop();
+          }
         });
       }
 
-      // Load WASM if path provided
+      // Load WASM if path provided — wait for UI WebSocket to connect first
+      // so the wasm_loaded event is not missed
       if (wasmPath) {
+        await this.waitForWebSocketClient();
         await this.loadWasm(wasmPath);
       }
     } catch (error) {
@@ -61,11 +76,8 @@ export class DebuggerWebviewProvider {
    */
   async loadWasm(wasmPath: string): Promise<void> {
     try {
-      // Read WASM file
-      const wasmBuffer = await fs.readFile(wasmPath);
-      const wasmBase64 = wasmBuffer.toString("base64");
-
-      // Load via REST API
+      // Load via REST API using path-based loading — server is local so the
+      // path is always accessible, and avoids the "binary.wasm" placeholder filename
       const response = await fetch(
         `${this.serverManager.getUrl()}/api/load`,
         {
@@ -75,7 +87,7 @@ export class DebuggerWebviewProvider {
             "X-Source": "vscode",
           },
           body: JSON.stringify({
-            wasmBase64,
+            wasmPath,
             dotenvEnabled: true,
           }),
         }
@@ -136,6 +148,25 @@ export class DebuggerWebviewProvider {
   }
 
   /**
+   * Poll until the debugger UI has established its WebSocket connection,
+   * then the wasm_loaded event will be received. Gives up after timeoutMs.
+   */
+  private async waitForWebSocketClient(timeoutMs = 5000): Promise<void> {
+    const start = Date.now();
+    while (Date.now() - start < timeoutMs) {
+      try {
+        const response = await fetch(`${this.serverManager.getUrl()}/api/client-count`);
+        const { count } = await response.json();
+        if (count > 0) return;
+      } catch {
+        // Server may not be ready yet — keep polling
+      }
+      await new Promise(resolve => setTimeout(resolve, 50));
+    }
+    // Timeout — proceed anyway, load is better than no load
+  }
+
+  /**
    * Get the webview HTML content
    */
   private getWebviewContent(): string {
@@ -185,6 +216,7 @@ export class DebuggerWebviewProvider {
   <iframe id="debugger-frame" src="${debuggerUrl}" style="display:none;"></iframe>
 
   <script>
+    const vscode = acquireVsCodeApi();
     const iframe = document.getElementById('debugger-frame');
     const loading = document.getElementById('loading');
 
@@ -205,6 +237,13 @@ export class DebuggerWebviewProvider {
         iframe.src = iframe.src; // Retry
       }
     }, 5000);
+
+    // Forward openExternal messages from the debugger iframe to the extension host
+    window.addEventListener('message', function(event) {
+      if (event.data && event.data.command === 'openExternal') {
+        vscode.postMessage({ command: 'openExternal', url: event.data.url });
+      }
+    });
   </script>
 </body>
 </html>`;

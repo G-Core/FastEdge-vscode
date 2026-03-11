@@ -1,7 +1,7 @@
 # Bundled Debugger Implementation
 
-**Last Updated**: February 11, 2026
-**Version**: 0.1.14
+**Last Updated**: March 11, 2026
+**Version**: 0.1.19+
 **Status**: ✅ Implemented & Packaged
 
 ---
@@ -21,14 +21,20 @@ FastEdge Extension Install
     ↓
 Extension contains bundled debugger (dist/debugger/)
     ↓
-User runs "FastEdge: Start Debugger Server"
+User opens a file in an app folder and runs "FastEdge: Run File"
     ↓
-Extension forks debugger server using VSCode's Node.js
+Extension resolves app root (nearest test-config.json / package.json / Cargo.toml)
     ↓
-Server runs on port 5179
+Extension reads <appRoot>/.fastedge/.debug-port (if present) → health-checks
     ↓
-Webview displays debugger UI
+If healthy: reuse existing server   If missing/stale: fork new server on next free port
+    ↓
+Server writes port to <appRoot>/.fastedge/.debug-port
+    ↓
+Per-app webview panel opens ("FastEdge Debugger — <appName>")
 ```
+
+Multiple apps open simultaneously each get their own server on separate ports (5179, 5180, …) and their own panel.
 
 ### Key Components
 
@@ -44,7 +50,9 @@ Webview displays debugger UI
 - Real-time logs via WebSocket
 
 **3. Extension Integration**
-- `DebuggerServerManager.ts` - Manages server lifecycle
+- `src/utils/resolveAppRoot.ts` - Finds app root from active file (walks up for `test-config.json` → `package.json` → `Cargo.toml`)
+- `DebuggerServerManager.ts` - Manages server lifecycle **per app root** — one instance per app
+- `extension.ts` - Maintains `Map<appRoot, DebuggerServerManager>` and `Map<appRoot, DebuggerWebviewProvider>`
 - Uses `child_process.fork()` to spawn server
 - Uses VSCode's Node.js runtime (`process.execPath`)
 - No external Node.js required
@@ -145,10 +153,67 @@ this.serverProcess = fork(bundledServerPath, [], {
 - Before: Copied node_modules (vsce packaging issues)
 - After: esbuild bundles everything into single server.js
 
-**4. Separate process**
-- Server runs in separate child process
-- Better isolation (server crash doesn't crash extension)
-- Standard HTTP server on port 5179
+**4. One server per app root (March 2026)**
+- Before: Single global server on port 5179 shared by all apps
+- After: One server per app folder; port file at `<appRoot>/.fastedge/.debug-port` for discovery
+- Isolation boundary: nearest ancestor dir containing `test-config.json`, `package.json`, or `Cargo.toml`
+- Closing the debug panel stops that app's server and deletes its port file
+
+**6. Wait for WebSocket client before loading WASM (March 2026)**
+- Before: extension called `POST /api/load` immediately after creating the webview panel → `wasm_loaded` event fired before UI WebSocket connected → UI missed it, stayed blank
+- After: extension polls `GET /api/client-count` until count > 0 before loading
+- See [WASM Loading Flow](#wasm-loading-flow)
+
+**7. Path-based loading in extension (March 2026)**
+- Before: `loadWasm()` read the WASM file into a buffer and sent as base64 → server had no filename, used placeholder `"binary.wasm"` → `wasmPath` in UI store was wrong
+- After: sends `wasmPath` directly; server reads the file and returns `resolvedPath` in the `wasm_loaded` event
+
+**5. Build runs from app root (March 2026)**
+- Before: `jsBuild` and `rustBuild` used `workspaceFolders[0]` as CWD → broke multi-root workspaces
+- After: `resolveAppRoot(activeFilePath)` derives the correct CWD for both build and output paths
+
+---
+
+## WASM Loading Flow
+
+### Why the extension calls /api/load directly
+
+The extension builds the WASM binary and then loads it into the debugger server via `POST /api/load`. It does **not** ask the UI to load it, because the UI runs in a webview iframe and has no filesystem access to the built binary.
+
+### The timing problem and fix
+
+The extension creates the webview panel, then immediately needs to load the WASM. But loading before the UI's WebSocket connects means the `wasm_loaded` event fires before anyone is listening — the UI misses it and stays on "Load a WASM binary to get started."
+
+**Fix**: Before calling `POST /api/load`, the extension polls `GET /api/client-count` until the UI's WebSocket is connected (count > 0), then loads. Polls every 50ms, 5s timeout.
+
+```typescript
+// DebuggerWebviewProvider.ts
+private async waitForWebSocketClient(timeoutMs = 5000): Promise<void> {
+  const start = Date.now();
+  while (Date.now() - start < timeoutMs) {
+    const { count } = await fetch(`${url}/api/client-count`).then(r => r.json());
+    if (count > 0) return;
+    await new Promise(resolve => setTimeout(resolve, 50));
+  }
+  // timeout — proceed anyway (load is better than no load)
+}
+```
+
+Typical wait: under 500ms (iframe load + React mount + WebSocket handshake).
+
+### Path-based loading
+
+`DebuggerWebviewProvider.loadWasm()` sends the file **path** to the server, not the binary content:
+
+```typescript
+body: JSON.stringify({ wasmPath, dotenvEnabled: true })
+```
+
+The server is local, so it reads the file itself. This avoids reading a potentially large WASM binary into the extension process just to POST it back to localhost. It also means the server knows the real filename and absolute path, which are included in the `wasm_loaded` event so the UI can display and re-use the path correctly.
+
+### How the UI updates
+
+The server emits a `wasm_loaded` WebSocket event after every `POST /api/load`. When the event arrives from a non-UI source (source `!== "ui"`), the UI calls `setWasmLoaded(resolvedPath, wasmType, fileSize)` — a store action that sets `wasmPath`/`wasmType`/`fileSize` directly without making another API call.
 
 ---
 
@@ -159,12 +224,14 @@ The bundled server exposes the same REST API:
 | Endpoint | Method | Purpose |
 |----------|--------|---------|
 | `/health` | GET | Health check — returns `{"status":"ok","service":"fastedge-debugger"}` |
-| `/api/load` | POST | Load WASM binary |
+| `/api/client-count` | GET | Returns `{ count: N }` connected WebSocket clients — used by extension to wait for UI before loading |
+| `/api/load` | POST | Load WASM binary (accepts `wasmPath` or `wasmBase64`) |
 | `/api/execute` | POST | Execute test request |
 | `/api/config` | GET | Get configuration |
 | `/api/config` | POST | Update configuration |
+| `/api/reload-workspace-wasm` | POST | Trigger UI reload via WebSocket event (used for F5 rebuilds after initial load) |
 | `/` | GET | Serve frontend UI |
-| `ws://` | WebSocket | Real-time logs |
+| `ws://` | WebSocket | Real-time logs and state events |
 
 Agents and external tools can still access these endpoints normally.
 
@@ -233,9 +300,10 @@ No configuration needed! But these settings are available:
 2. Check extension logs:
    - Open: Help → Toggle Developer Tools → Console
 
-3. Verify port 5179 is available:
+3. Check for the port file — it tells you which port this app's server is on:
    ```bash
-   lsof -i :5179
+   cat <appRoot>/.fastedge/.debug-port
+   lsof -i :<port>
    ```
 
 ### Extension won't install
@@ -270,7 +338,7 @@ Future: GitHub Actions will:
 - Auto-detect WASM files in workspace
 - Better build integration (compile → load)
 - Pass launch.json config to debugger automatically
-- Multi-instance support (multiple debuggers)
+- ~~Multi-instance support (multiple debuggers)~~ ✅ Done March 2026 — per-app servers
 
 ---
 
