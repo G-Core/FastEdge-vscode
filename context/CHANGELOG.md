@@ -13,6 +13,60 @@ See `SEARCH_GUIDE.md` for more search patterns.
 
 ---
 
+## [2026-03-12] - Config Root vs Build Root Split + .debug-port Sidecar
+
+### Overview
+Refactored app root resolution to separate two previously conflated concerns: where the build runs (build root = `package.json` / `Cargo.toml`) and which directory anchors per-app isolation (config root = `fastedge-config.test.json`). Moved `.debug-port` from `.fastedge/.debug-port` to a direct sibling of `fastedge-config.test.json`. For apps with no config file, the file is now auto-created next to the active file rather than at the build root.
+
+### Background
+
+The old `resolveAppRoot()` returned the first directory containing any of `fastedge-config.test.json` / `package.json` / `Cargo.toml`. In workspaces where `fastedge-config.test.json` lives in a subdirectory below `package.json` (e.g. `workspace-1` with per-app subdirs under a shared `package.json`), the build command was running from the wrong directory.
+
+### 🎯 What Was Completed
+
+#### 1. `resolveAppRoot.ts` — split into three exports
+
+- `resolveConfigRoot(startPath)` — walks up to find `fastedge-config.test.json`; returns `null` if not found
+- `resolveBuildRoot(startPath)` — walks up to find `package.json` or `Cargo.toml`
+- `ensureConfigFile(dir)` — writes `{}` to `fastedge-config.test.json` if it doesn't exist (no-op otherwise)
+
+Old `resolveAppRoot()` export removed entirely.
+
+#### 2. Call site updates
+
+- `rustBuild.ts` / `jsBuild.ts` — build `cwd` and `package.json` reads now use `resolveBuildRoot()`; `.fastedge/bin/` WASM output uses `resolveConfigRoot() ?? buildRoot`
+- `runDebugger.ts` / `extension.ts:getActiveAppRoot()` — port anchor uses `resolveConfigRoot()`; falls back to creating config at `path.dirname(activeFile)` (the active file's directory, not the build root)
+
+#### 3. `.debug-port` moved to sidecar
+
+- **Before**: `{configRoot}/.fastedge/.debug-port`
+- **After**: `{configRoot}/.debug-port` (direct sibling of `fastedge-config.test.json`)
+- `writePortFile()` in `fastedge-test/server/server.ts` no longer needs to `mkdirSync` for the port file
+- `PORT_FILE_DIR` constant removed from `DebuggerServerManager.ts`
+
+#### 4. Third-app fallback: config created at active file's directory
+
+When no `fastedge-config.test.json` is found, one is created co-located with the active file (`path.dirname(activeFilePath)`). This makes that directory its own configRoot, giving the app its own `.debug-port` without assuming anything about project structure.
+
+#### 5. Tests added
+
+- `src/utils/resolveAppRoot.test.ts` — 17 vitest tests covering all workspace layouts (workspace-1, workspace-2 variants, Rust/Cargo.toml, null cases, `ensureConfigFile` idempotency)
+- `vitest ^2.1.9` added to devDependencies; `pnpm test` script added
+
+**Files Modified:**
+- `src/utils/resolveAppRoot.ts` — replaced with two functions + helper
+- `src/utils/resolveAppRoot.test.ts` — created
+- `src/commands/runDebugger.ts` — build root / config root split, fallback to active file dir
+- `src/extension.ts` — same split in `getActiveAppRoot()`
+- `src/compiler/jsBuild.ts` — build root for cwd/entrypoint, config root for WASM output
+- `src/compiler/rustBuild.ts` — same pattern
+- `src/debugger/DebuggerServerManager.ts` — port file path updated, `PORT_FILE_DIR` constant removed
+- `fastedge-test/server/server.ts` — port file path updated, `mkdirSync` removed from `writePortFile`
+- `context/BUNDLED_DEBUGGER.md` — updated throughout
+- `package.json` — vitest added
+
+---
+
 ## [2026-03-11] - Config File Rename + Native Load/Save Dialogs
 
 ### Overview

@@ -4,7 +4,7 @@ import * as fs from "fs";
 import * as path from "path";
 import { LogToDebugConsole } from "../types";
 import { rustConfigWasiTarget } from "./rustConfig";
-import { resolveAppRoot } from "../utils/resolveAppRoot";
+import { resolveConfigRoot, resolveBuildRoot } from "../utils/resolveAppRoot";
 
 export function compileRustAndFindBinary(
   activeFilePath: string,
@@ -15,14 +15,20 @@ export function compileRustAndFindBinary(
     const isWindows = os.platform() === "win32";
     const shell = isWindows ? "cmd.exe" : "sh";
 
-    const appRoot = resolveAppRoot(activeFilePath);
-    if (!appRoot) {
+    const buildRoot = resolveBuildRoot(activeFilePath);
+    if (!buildRoot) {
       return reject(
         new Error(
-          "Could not find app root. Ensure your project has a Cargo.toml or fastedge-config.test.json."
+          "Could not find app root. Ensure your project has a Cargo.toml."
         )
       );
     }
+
+    // WASM output goes to the config root (= WORKSPACE_PATH) so the debugger
+    // server can serve it via /api/workspace-wasm. Falls back to build root
+    // when no fastedge-config.test.json exists (should have been created by
+    // the caller, but guard defensively).
+    const configRoot = resolveConfigRoot(activeFilePath) ?? buildRoot;
 
     const target = rustConfigWasiTarget(logDebugConsole, activeFilePath);
     logDebugConsole("wasm build target: " + target + "\n", "stderr");
@@ -32,7 +38,7 @@ export function compileRustAndFindBinary(
       {
         shell,
         stdio: ["ignore", "pipe", "pipe"],
-        cwd: appRoot,
+        cwd: buildRoot,
       }
     );
 
@@ -55,6 +61,7 @@ export function compileRustAndFindBinary(
       }
 
       const lines = stdout.split("\n");
+      logDebugConsole(`[debug] cargo JSON stdout lines: ${lines.filter(l => l).length}\n`);
       for (const line of lines) {
         if (!line) {
           continue;
@@ -70,6 +77,10 @@ export function compileRustAndFindBinary(
           return;
         }
 
+        if (message?.reason === "compiler-artifact") {
+          logDebugConsole(`[debug] artifact: ${JSON.stringify(message.filenames)}\n`);
+        }
+
         if (
           message &&
           message.reason === "compiler-artifact" &&
@@ -79,8 +90,9 @@ export function compileRustAndFindBinary(
           if (/.*\.wasm$/.test(message.filenames[0])) {
             const cargoWasmPath = message.filenames[0];
 
-            // Copy to <appRoot>/.fastedge/bin/debugger.wasm for auto-load support
-            const fastedgeBinDir = path.join(appRoot, ".fastedge", "bin");
+            // Copy to <configRoot>/.fastedge/bin/debugger.wasm for auto-load support.
+            // configRoot = WORKSPACE_PATH so the server can find it via /api/workspace-wasm.
+            const fastedgeBinDir = path.join(configRoot, ".fastedge", "bin");
             const standardWasmPath = path.join(fastedgeBinDir, "debugger.wasm");
 
             // Create directory if it doesn't exist

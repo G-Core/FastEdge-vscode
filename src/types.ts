@@ -1,4 +1,4 @@
-type ExtLanguage = "javascript" | "rust";
+type ExtLanguage = "javascript" | "rust" | "assemblyscript";
 type DebugContext = "file" | "workspace";
 
 type BinaryInfo = {

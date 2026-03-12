@@ -15,7 +15,7 @@ import {
   DebuggerServerManager,
   DebuggerWebviewProvider,
 } from "./debugger";
-import { resolveAppRoot } from "./utils/resolveAppRoot";
+import { resolveConfigRoot, resolveBuildRoot, ensureConfigFile } from "./utils/resolveAppRoot";
 
 // Per-app-root instances — keyed by resolved app root path
 const serverManagers = new Map<string, DebuggerServerManager>();
@@ -268,14 +268,21 @@ function getActiveAppRoot(): string | null {
     return null;
   }
 
-  const appRoot = resolveAppRoot(activeFile);
-  if (!appRoot) {
+  const buildRoot = resolveBuildRoot(activeFile);
+  if (!buildRoot) {
     vscode.window.showErrorMessage(
-      "Could not find app root. Ensure your project has a package.json, Cargo.toml, or fastedge-config.test.json."
+      "Could not find app root. Ensure your project has a package.json or Cargo.toml."
     );
     return null;
   }
-  return appRoot;
+
+  const configRoot = resolveConfigRoot(activeFile);
+  if (!configRoot) {
+    const activeDir = path.dirname(activeFile);
+    ensureConfigFile(activeDir);
+    return activeDir;
+  }
+  return configRoot;
 }
 
 export function deactivate() {

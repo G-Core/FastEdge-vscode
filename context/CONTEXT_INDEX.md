@@ -6,7 +6,7 @@
 
 ## Quick Overview
 
-**FastEdge VSCode Extension** is a VS Code extension that enables debugging and running FastEdge applications (Rust & JavaScript) directly within the editor.
+**FastEdge VSCode Extension** is a VS Code extension that enables debugging and running FastEdge applications (Rust, JavaScript, and AssemblyScript) directly within the editor.
 
 - **Compiles** code to WASM using language-specific build tools
 - **Serves** applications locally on port 8181 using FastEdge-run
@@ -213,7 +213,8 @@ See `SEARCH_GUIDE.md` for more patterns.
 3. **Compiler System** (`src/compiler/`)
    - Rust: Uses `cargo build` with wasm32-wasip1 target
    - JavaScript: Uses `fastedge-build` tool
-   - Locates build output and validates binaries
+   - AssemblyScript: Uses `asc --target release` (CDN/proxy-wasm apps)
+   - All output to `<configRoot>/.fastedge/bin/debugger.wasm`
 
 4. **Commands** (`src/commands/`)
    - Generate launch.json
@@ -232,8 +233,10 @@ See `SEARCH_GUIDE.md` for more patterns.
 - **Debug Adapter Protocol (DAP)**: VS Code's protocol for debuggers
 - **launch.json**: VS Code debug configuration file
 - **dotenv hierarchy**: .env → .env.variables → .env.secrets (see DOTENV.md in root)
-- **WASM**: WebAssembly - compiled output of Rust/JS code
+- **WASM**: WebAssembly - compiled output of Rust/JS/AS code
 - **wasm32-wasip1**: WASI preview 1 target for Rust compilation
+- **AssemblyScript (AS)**: TypeScript-like language compiling to WASM; used for CDN/proxy-wasm apps via `proxy-wasm-sdk-as`
+- **asconfig.json**: AssemblyScript build config; presence at buildRoot is what triggers AS detection
 
 ---
 
@@ -269,4 +272,4 @@ See `SEARCH_GUIDE.md` for more patterns.
 
 ---
 
-**Last Updated**: February 2026
+**Last Updated**: March 2026

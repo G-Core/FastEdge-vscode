@@ -3,7 +3,7 @@ import fs from "fs";
 import path from "path";
 
 import { DebugContext, LogToDebugConsole } from "../types";
-import { resolveAppRoot } from "../utils/resolveAppRoot";
+import { resolveConfigRoot, resolveBuildRoot } from "../utils/resolveAppRoot";
 
 const BINARY_NAME = "debugger.wasm";
 
@@ -43,19 +43,23 @@ export function compileJavascriptBinary(
   logDebugConsole("Compiling javascript binary...\n");
   return new Promise<string>(async (resolve, reject) => {
     try {
-      const appRoot = resolveAppRoot(activeFilePath);
-      if (!appRoot) {
+      const buildRoot = resolveBuildRoot(activeFilePath);
+      if (!buildRoot) {
         throw new Error(
-          "Could not find app root. Ensure your project has a package.json or fastedge-config.test.json."
+          "Could not find app root. Ensure your project has a package.json."
         );
       }
 
-      const binPath = await makeBinDirectory(appRoot);
+      // WASM output goes to configRoot (= WORKSPACE_PATH) so the debugger server
+      // can serve it. Falls back to buildRoot when no fastedge-config.test.json
+      // exists (caller should have created it, but guard defensively).
+      const configRoot = resolveConfigRoot(activeFilePath) ?? buildRoot;
+      const binPath = await makeBinDirectory(configRoot);
 
       const jsEntryPoint =
         debugContext === "file"
           ? activeFilePath
-          : path.join(appRoot, await getPackageJsonEntryPoint(appRoot));
+          : path.join(buildRoot, await getPackageJsonEntryPoint(buildRoot));
 
       const jsBuild = spawn(
         "npx",
@@ -63,7 +67,7 @@ export function compileJavascriptBinary(
         {
           shell: true,
           stdio: ["ignore", "pipe", "pipe"],
-          cwd: appRoot,
+          cwd: buildRoot,
         }
       );
 

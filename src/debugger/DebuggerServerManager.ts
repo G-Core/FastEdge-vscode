@@ -3,7 +3,6 @@ import * as vscode from "vscode";
 import * as path from "path";
 import * as fs from "fs";
 
-const PORT_FILE_DIR = ".fastedge";
 const PORT_FILE_NAME = ".debug-port";
 
 /**
@@ -21,7 +20,7 @@ export class DebuggerServerManager {
   ) {}
 
   private get portFilePath(): string {
-    return path.join(this.appRoot, PORT_FILE_DIR, PORT_FILE_NAME);
+    return path.join(this.appRoot, PORT_FILE_NAME);
   }
 
   private readPortFile(): number | null {

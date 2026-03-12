@@ -1,39 +1,70 @@
 import * as fs from "fs";
 import * as path from "path";
 
-/**
- * Walk up from a file (or directory) path to find the app root.
- *
- * Priority at each directory level (all three are checked before moving up):
- *   1. fastedge-config.test.json  — FastEdge-specific, always at app root
- *   2. package.json      — JS app root
- *   3. Cargo.toml        — Rust app root
- *
- * Returns the first directory where any marker is found, or null if none found.
- */
-export function resolveAppRoot(startPath: string): string | null {
-  let dir: string;
+function startDir(startPath: string): string {
   try {
-    dir = fs.statSync(startPath).isDirectory()
-      ? startPath
-      : path.dirname(startPath);
+    return fs.statSync(startPath).isDirectory() ? startPath : path.dirname(startPath);
   } catch {
-    dir = path.dirname(startPath);
+    return path.dirname(startPath);
   }
+}
 
-  const markers = ["fastedge-config.test.json", "package.json", "Cargo.toml"];
+/**
+ * Walk up from a file (or directory) path to find the per-app config root.
+ *
+ * Returns the first directory containing `fastedge-config.test.json`, or null
+ * if none is found. This is the anchor for per-app identity (.debug-port sidecar,
+ * WORKSPACE_PATH passed to the debugger server).
+ */
+export function resolveConfigRoot(startPath: string): string | null {
+  let dir = startDir(startPath);
 
   while (true) {
-    for (const marker of markers) {
-      if (fs.existsSync(path.join(dir, marker))) {
-        return dir;
-      }
+    if (fs.existsSync(path.join(dir, "fastedge-config.test.json"))) {
+      return dir;
     }
     const parent = path.dirname(dir);
-    if (parent === dir) {
-      // Reached filesystem root without finding a marker
-      return null;
-    }
+    if (parent === dir) return null;
     dir = parent;
+  }
+}
+
+/**
+ * Walk up from a file (or directory) path to find the build root.
+ *
+ * Returns the first directory containing `package.json` or `Cargo.toml`.
+ * This is where build commands (e.g. fastedge-build) must be run.
+ * Returns null only if no build manifest is found up to the filesystem root.
+ */
+export function resolveBuildRoot(startPath: string): string | null {
+  let dir = startDir(startPath);
+
+  while (true) {
+    if (
+      fs.existsSync(path.join(dir, "package.json")) ||
+      fs.existsSync(path.join(dir, "Cargo.toml"))
+    ) {
+      return dir;
+    }
+    const parent = path.dirname(dir);
+    if (parent === dir) return null;
+    dir = parent;
+  }
+}
+
+/**
+ * Ensure a minimal `fastedge-config.test.json` exists in the given directory.
+ *
+ * Used when no config file is found during root resolution (the "third-app" case —
+ * a project with only a package.json / Cargo.toml and no per-app config yet).
+ * Writing `{}` creates the anchor that isolates this app's debug port from others
+ * in the same workspace without making any assumptions about app configuration.
+ *
+ * No-op if the file already exists.
+ */
+export function ensureConfigFile(dir: string): void {
+  const configPath = path.join(dir, "fastedge-config.test.json");
+  if (!fs.existsSync(configPath)) {
+    fs.writeFileSync(configPath, "{}", "utf8");
   }
 }

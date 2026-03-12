@@ -1,7 +1,8 @@
 import * as vscode from "vscode";
+import * as path from "path";
 import { DebuggerServerManager, DebuggerWebviewProvider } from "../debugger";
 import { compileActiveEditorsBinary } from "../compiler";
-import { resolveAppRoot } from "../utils/resolveAppRoot";
+import { resolveConfigRoot, resolveBuildRoot, ensureConfigFile } from "../utils/resolveAppRoot";
 import { DebugContext } from "../types";
 
 type AppDebuggerFactory = (appRoot: string) => {
@@ -68,15 +69,26 @@ async function buildAndDebug(debugContext: DebugContext): Promise<void> {
   }
 
   const activeFilePath = activeEditor.document.uri.fsPath;
-  const appRoot = resolveAppRoot(activeFilePath);
-  if (!appRoot) {
+  const buildRoot = resolveBuildRoot(activeFilePath);
+  if (!buildRoot) {
     vscode.window.showErrorMessage(
-      "Could not find app root. Ensure your project has a package.json, Cargo.toml, or fastedge-config.test.json.",
+      "Could not find app root. Ensure your project has a package.json or Cargo.toml.",
     );
     return;
   }
 
-  const { manager, provider } = debuggerFactory(appRoot);
+  // Resolve per-app identity anchor. If no fastedge-config.test.json exists yet,
+  // create a minimal one co-located with the active file so that the entrypoint
+  // directory becomes its own configRoot. This gives each app isolation without
+  // requiring the user to have pre-created a config file.
+  let portAnchor = resolveConfigRoot(activeFilePath);
+  if (!portAnchor) {
+    const activeDir = path.dirname(activeFilePath);
+    ensureConfigFile(activeDir);
+    portAnchor = activeDir;
+  }
+
+  const { manager, provider } = debuggerFactory(portAnchor);
 
   try {
     await vscode.window.withProgress(

@@ -1,6 +1,6 @@
 # Bundled Debugger Implementation
 
-**Last Updated**: March 11, 2026
+**Last Updated**: March 12, 2026
 **Version**: 0.1.19+
 **Status**: ✅ Implemented & Packaged
 
@@ -23,13 +23,13 @@ Extension contains bundled debugger (dist/debugger/)
     ↓
 User opens a file in an app folder and runs "FastEdge: Run File"
     ↓
-Extension resolves app root (nearest fastedge-config.test.json / package.json / Cargo.toml)
+Extension resolves config root (nearest fastedge-config.test.json) and build root (nearest package.json / Cargo.toml)
     ↓
-Extension reads <appRoot>/.fastedge/.debug-port (if present) → health-checks
+Extension reads <configRoot>/.debug-port (if present) → health-checks
     ↓
 If healthy: reuse existing server   If missing/stale: fork new server on next free port
     ↓
-Server writes port to <appRoot>/.fastedge/.debug-port
+Server writes port to <configRoot>/.debug-port
     ↓
 Per-app webview panel opens ("FastEdge Debugger — <appName>")
 ```
@@ -50,7 +50,7 @@ Multiple apps open simultaneously each get their own server on separate ports (5
 - Real-time logs via WebSocket
 
 **3. Extension Integration**
-- `src/utils/resolveAppRoot.ts` - Finds app root from active file (walks up for `fastedge-config.test.json` → `package.json` → `Cargo.toml`)
+- `src/utils/resolveAppRoot.ts` - Two functions: `resolveConfigRoot()` (finds `fastedge-config.test.json`) and `resolveBuildRoot()` (finds `package.json` / `Cargo.toml`). `ensureConfigFile()` creates a minimal `{}` config when none exists (third-app case).
 - `DebuggerServerManager.ts` - Manages server lifecycle **per app root** — one instance per app
 - `extension.ts` - Maintains `Map<appRoot, DebuggerServerManager>` and `Map<appRoot, DebuggerWebviewProvider>`
 - Uses `child_process.fork()` to spawn server
@@ -155,9 +155,16 @@ this.serverProcess = fork(bundledServerPath, [], {
 
 **4. One server per app root (March 2026)**
 - Before: Single global server on port 5179 shared by all apps
-- After: One server per app folder; port file at `<appRoot>/.fastedge/.debug-port` for discovery
-- Isolation boundary: nearest ancestor dir containing `fastedge-config.test.json`, `package.json`, or `Cargo.toml`
+- After: One server per app folder; port file at `<configRoot>/.debug-port` for discovery
+- Isolation boundary: nearest ancestor dir containing `fastedge-config.test.json` (`configRoot`)
+- If no config file exists, a minimal `{}` one is auto-created **co-located with the active file** on first run — making that directory its own configRoot
 - Closing the debug panel stops that app's server and deletes its port file
+
+**8. Config root vs build root split (March 2026)**
+- Before: Single `resolveAppRoot()` used for both build CWD and per-app identity — `fastedge-config.test.json` could override the build root incorrectly
+- After: `resolveConfigRoot()` finds the per-app anchor; `resolveBuildRoot()` finds where build commands run
+- Example — workspace-1: `first-app/fastedge-config.test.json` → configRoot = `first-app/`; `package.json` at workspace root → buildRoot = `workspace-1/`
+- WASM output (`.fastedge/bin/debugger.wasm`) is written to `configRoot` so the server can find it via `WORKSPACE_PATH`
 
 **6. Wait for WebSocket client before loading WASM (March 2026)**
 - Before: extension called `POST /api/load` immediately after creating the webview panel → `wasm_loaded` event fired before UI WebSocket connected → UI missed it, stayed blank
@@ -353,9 +360,10 @@ No configuration needed! But these settings are available:
 
 3. Check for the port file — it tells you which port this app's server is on:
    ```bash
-   cat <appRoot>/.fastedge/.debug-port
+   cat <configRoot>/.debug-port   # e.g. cat first-app/.debug-port
    lsof -i :<port>
    ```
+   `configRoot` is the directory containing `fastedge-config.test.json` for the app you're debugging.
 
 ### Extension won't install
 
