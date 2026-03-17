@@ -62,11 +62,7 @@
       },
       {
         "command": "fastedge.run-workspace",
-        "title": "Debug: FastEdge App (Workspace)"
-      },
-      {
-        "command": "fastedge.generate-launch-json",
-        "title": "FastEdge (Generate launch.json)"
+        "title": "Debug: FastEdge App (Package Entry)"
       },
       {
         "command": "fastedge.generate-mcp-json",
@@ -75,18 +71,6 @@
       {
         "command": "fastedge.setup-codespace-secret",
         "title": "FastEdge (Setup Codespace Secrets)"
-      },
-      {
-        "command": "fastedge.start-debugger-server",
-        "title": "FastEdge: Start Debugger Server"
-      },
-      {
-        "command": "fastedge.stop-debugger-server",
-        "title": "FastEdge: Stop Debugger Server"
-      },
-      {
-        "command": "fastedge.debug-app",
-        "title": "FastEdge: Debug Application"
       }
     ],
     "debuggers": [
@@ -101,79 +85,11 @@
         "configurationAttributes": {
           "launch": {
             "properties": {
-              "args": {
-                "type": "array",
-                "description": "Arguments to pass to the executable",
-                "items": {
-                  "type": "string"
-                }
-              },
-              "binary": {
-                "type": "string",
-                "description": "Wasm binary path, typically populated automatically"
-              },
-              "cliPath": {
-                "type": "string",
-                "description": "Path to the FastEdge CLI, typically populated automatically",
-                "default": ""
-              },
-              "dotenv": {
-                "oneOf": [
-                  {
-                    "type": "string",
-                    "description": "Path to the folder containing .env files to load environment variables"
-                  },
-                  {
-                    "type": "boolean",
-                    "description": "Enable dotenv support (true will use the active debugger location)"
-                  }
-                ],
-                "default": true
-              },
               "entrypoint": {
                 "type": "string",
-                "description": "Entrypoint for building the app. (\"file\" or \"workspace\" are valid options)",
+                "description": "Entrypoint for building the app. \"file\" builds the active editor file; \"package\" builds the package.json main field (JS only).",
+                "enum": ["file", "package"],
                 "default": "file"
-              },
-              "env": {
-                "type": "object",
-                "description": "Environment variables",
-                "default": {}
-              },
-              "geoIpHeaders": {
-                "type": "boolean",
-                "description": "Add sample GeoIP headers",
-                "default": false
-              },
-              "headers": {
-                "type": "object",
-                "description": "Extra request headers",
-                "default": {}
-              },
-              "memoryLimit": {
-                "type": "number",
-                "description": "Memory limit in bytes",
-                "default": 10000000
-              },
-              "port": {
-                "type": "number",
-                "description": "Port to listen for incoming requests",
-                "default": 8181
-              },
-              "responseHeaders": {
-                "type": "object",
-                "description": "Response headers will be added to all responses",
-                "default": {}
-              },
-              "secrets": {
-                "type": "object",
-                "description": "Secret variables",
-                "default": {}
-              },
-              "traceLogging": {
-                "type": "boolean",
-                "description": "Trace logging",
-                "default": false
               }
             }
           }
@@ -211,8 +127,6 @@
     "vitest": "^2.1.9"
   },
   "dependencies": {
-    "@vscode/debugadapter": "^1.68.0",
-    "@vscode/debugprotocol": "^1.68.0",
     "toml": "^3.0.0",
     "tree-kill": "^1.2.2"
   }

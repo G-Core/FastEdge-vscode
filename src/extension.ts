@@ -3,7 +3,6 @@ import path from "path";
 import { readFileSync } from "fs";
 
 import {
-  createLaunchJson,
   createMCPJson,
   setupCodespaceSecret,
   runFile,
@@ -15,7 +14,6 @@ import {
   DebuggerServerManager,
   DebuggerWebviewProvider,
 } from "./debugger";
-import { resolveConfigRoot, resolveBuildRoot, ensureConfigFile } from "./utils/resolveAppRoot";
 
 // Per-app-root instances — keyed by resolved app root path
 const serverManagers = new Map<string, DebuggerServerManager>();
@@ -80,7 +78,7 @@ export function activate(context: vscode.ExtensionContext) {
       ): vscode.ProviderResult<vscode.DebugConfiguration> {
         // When F5 is pressed, trigger our build and debug workflow
         const debugContext = config.debugContext || config.entrypoint || "file";
-        if (debugContext === "workspace") {
+        if (debugContext === "workspace" || debugContext === "package") {
           runWorkspace();
         } else {
           runFile();
@@ -95,194 +93,13 @@ export function activate(context: vscode.ExtensionContext) {
   context.subscriptions.push(
     vscode.commands.registerCommand("fastedge.run-file", runFile),
     vscode.commands.registerCommand("fastedge.run-workspace", runWorkspace),
-    vscode.commands.registerCommand(
-      "fastedge.generate-launch-json",
-      createLaunchJson,
-    ),
     vscode.commands.registerCommand("fastedge.generate-mcp-json", () =>
       createMCPJson(context),
     ),
     vscode.commands.registerCommand("fastedge.setup-codespace-secret", () =>
       setupCodespaceSecret(context),
     ),
-
-    // Debugger commands
-    vscode.commands.registerCommand(
-      "fastedge.start-debugger-server",
-      startDebuggerServer
-    ),
-    vscode.commands.registerCommand(
-      "fastedge.stop-debugger-server",
-      stopDebuggerServer
-    ),
-    vscode.commands.registerCommand("fastedge.debug-app", debugFastEdgeApp),
   );
-}
-
-/**
- * Start the debugger server for the current active file's app
- */
-async function startDebuggerServer(): Promise<void> {
-  const appRoot = getActiveAppRoot();
-  if (!appRoot) return;
-
-  const { manager } = getOrCreateForAppRoot(appRoot);
-
-  try {
-    await vscode.window.withProgress(
-      {
-        location: vscode.ProgressLocation.Notification,
-        title: "Starting FastEdge Debugger Server...",
-        cancellable: false,
-      },
-      async () => {
-        await manager.start();
-      }
-    );
-
-    vscode.window.showInformationMessage(
-      `FastEdge Debugger server started on port ${manager.getPort()}`
-    );
-  } catch (error) {
-    vscode.window.showErrorMessage(
-      `Failed to start debugger server: ${(error as Error).message}`
-    );
-  }
-}
-
-/**
- * Stop a debugger server. If multiple are running, shows a picker.
- */
-async function stopDebuggerServer(): Promise<void> {
-  const running = Array.from(serverManagers.entries()).filter(([, m]) =>
-    m.isRunning()
-  );
-
-  if (running.length === 0) {
-    vscode.window.showWarningMessage("No FastEdge debugger servers are running");
-    return;
-  }
-
-  let appRoot: string;
-
-  if (running.length === 1) {
-    appRoot = running[0][0];
-  } else {
-    const picked = await vscode.window.showQuickPick(
-      running.map(([root]) => ({
-        label: path.basename(root),
-        description: root,
-        appRoot: root,
-      })),
-      { placeHolder: "Select which debugger server to stop" }
-    );
-    if (!picked) return;
-    appRoot = picked.appRoot;
-  }
-
-  const manager = serverManagers.get(appRoot)!;
-  const provider = webviewProviders.get(appRoot);
-  try {
-    await manager.stop();
-    provider?.close();
-    serverManagers.delete(appRoot);
-    webviewProviders.delete(appRoot);
-    vscode.window.showInformationMessage(
-      `FastEdge Debugger stopped for ${path.basename(appRoot)}`
-    );
-  } catch (error) {
-    vscode.window.showErrorMessage(
-      `Failed to stop debugger server: ${(error as Error).message}`
-    );
-  }
-}
-
-/**
- * Debug the current FastEdge application
- */
-async function debugFastEdgeApp(): Promise<void> {
-  const appRoot = getActiveAppRoot();
-  if (!appRoot) return;
-
-  const { provider } = getOrCreateForAppRoot(appRoot);
-
-  try {
-    const editor = vscode.window.activeTextEditor;
-    if (!editor) {
-      vscode.window.showErrorMessage("No active file to debug");
-      return;
-    }
-
-    const shouldBuild = await vscode.window.showQuickPick(
-      [
-        {
-          label: "Build and Debug",
-          description: "Compile to WASM and load into debugger",
-          build: true,
-        },
-        {
-          label: "Debug Only",
-          description: "Open debugger without building",
-          build: false,
-        },
-      ],
-      { placeHolder: "Choose debug mode" }
-    );
-
-    if (!shouldBuild) {
-      return;
-    }
-
-    let wasmPath: string | undefined;
-
-    if (shouldBuild.build) {
-      // TODO: Integrate with existing compiler
-      const result = await vscode.window.showOpenDialog({
-        canSelectFiles: true,
-        canSelectFolders: false,
-        canSelectMany: false,
-        filters: { "WebAssembly": ["wasm"] },
-        title: "Select WASM file to debug",
-      });
-
-      if (result && result[0]) {
-        wasmPath = result[0].fsPath;
-      }
-    }
-
-    await provider.showDebugger(wasmPath);
-  } catch (error) {
-    vscode.window.showErrorMessage(
-      `Failed to start debugging: ${(error as Error).message}`
-    );
-  }
-}
-
-/**
- * Get the app root for the currently active file, with user-facing error if none found.
- */
-function getActiveAppRoot(): string | null {
-  const activeFile = vscode.window.activeTextEditor?.document.uri.fsPath;
-  if (!activeFile) {
-    vscode.window.showErrorMessage("No active file open");
-    return null;
-  }
-
-  const buildRoot = resolveBuildRoot(activeFile);
-  if (!buildRoot) {
-    vscode.window.showErrorMessage(
-      "Could not find app root. Ensure your project has a package.json or Cargo.toml."
-    );
-    return null;
-  }
-
-  const configRoot = resolveConfigRoot(activeFile);
-  if (!configRoot) {
-    const activeDir = path.dirname(activeFile);
-    ensureConfigFile(activeDir);
-    return activeDir;
-  }
-  return configRoot;
 }
 
 export function deactivate() {
