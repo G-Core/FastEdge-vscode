@@ -13,6 +13,28 @@ See `SEARCH_GUIDE.md` for more search patterns.
 
 ---
 
+## [2026-03-17] - Debugger webview: openFolderPicker for dotenvPath
+
+### Overview
+Added `openFolderPicker` webview message handler in `DebuggerWebviewProvider.ts` to support the new `.env directory` picker in the debugger UI. When the user clicks "Browse…" in the `ServerPropertiesPanel`, the webview posts `openFolderPicker` — the extension intercepts it and opens a native OS folder dialog, then returns the selected path back to the webview via `folderPickerResult`.
+
+### 🎯 What Was Completed
+
+- Added `openFolderPicker` handler in `DebuggerWebviewProvider.ts` alongside the existing `openFilePicker` / `openSavePicker` handlers
+- Uses `vscode.window.showOpenDialog({ canSelectFolders: true, canSelectFiles: false, canSelectMany: false, defaultUri: appRoot })`
+- On selection: posts `{ command: 'folderPickerResult', folderPath: uris[0].fsPath }` back to webview
+- On cancel: posts `{ command: 'folderPickerResult', canceled: true }`
+
+**Files Modified:**
+- `src/debugger/DebuggerWebviewProvider.ts`
+
+### 📝 Notes
+- This is the VSCode side of the dotenvPath feature implemented in fastedge-test. The full feature spans both repos.
+- The extension's own dotenv auto-discovery system (`src/dotenv/index.ts`, documented in `context/features/DOTENV_SYSTEM.md`) is a separate mechanism — it always-on discovers `.env` files from `configRoot`. The folder picker here controls the *debugger server's* `dotenvPath`, not the extension's discovery system.
+- When no path is selected, the debugger server falls back to `WORKSPACE_PATH` (set as an env var when the server process is spawned) — workspace root is always the correct default for extension users.
+
+---
+
 ## [2026-03-17] - Command Cleanup + Rename
 
 ### Overview

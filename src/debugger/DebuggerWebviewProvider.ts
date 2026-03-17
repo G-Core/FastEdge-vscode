@@ -63,6 +63,22 @@ export class DebuggerWebviewProvider {
             }
           }
 
+          if (message.command === "openFolderPicker") {
+            const appRoot = this.serverManager.getAppRoot();
+            const uris = await vscode.window.showOpenDialog({
+              defaultUri: vscode.Uri.file(appRoot),
+              canSelectMany: false,
+              canSelectFiles: false,
+              canSelectFolders: true,
+              title: "Select .env files directory",
+            });
+            if (uris && uris.length > 0) {
+              this.panel?.webview.postMessage({ command: "folderPickerResult", folderPath: uris[0].fsPath });
+            } else {
+              this.panel?.webview.postMessage({ command: "folderPickerResult", canceled: true });
+            }
+          }
+
           if (message.command === "openSavePicker") {
             const appRoot = this.serverManager.getAppRoot();
             const suggestedName = message.suggestedName ?? "fastedge-config.test.json";
