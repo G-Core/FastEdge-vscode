@@ -290,22 +290,14 @@ npm run package
 
 ## Extension Commands
 
-The extension provides these commands for debugger control:
+The two debug commands trigger the full build → server start → webview flow:
 
 | Command | ID | Purpose |
 |---------|-----|---------|
-| FastEdge: Start Debugger Server | `fastedge.start-debugger-server` | Manually start server |
-| FastEdge: Stop Debugger Server | `fastedge.stop-debugger-server` | Stop running server |
-| FastEdge: Debug Application | `fastedge.debug-app` | Open debugger UI (auto-starts server) |
+| Debug: FastEdge App (Current File) | `fastedge.run-file` | Build active file → start per-app server → open webview |
+| Debug: FastEdge App (Package Entry) | `fastedge.run-workspace` | Build `package.json` main → start per-app server → open webview |
 
-**Registration** (in `src/extension.ts`):
-```typescript
-context.subscriptions.push(
-  vscode.commands.registerCommand("fastedge.start-debugger-server", startDebuggerServer),
-  vscode.commands.registerCommand("fastedge.stop-debugger-server", stopDebuggerServer),
-  vscode.commands.registerCommand("fastedge.debug-app", debugFastEdgeApp),
-);
-```
+Server start/stop is automatic — servers start when a debug command runs and stop when the webview panel is closed. There are no manual start/stop commands.
 
 ---
 
@@ -414,7 +406,7 @@ curl http://localhost:5179/health
 1. **Auto-restart on crash** - Automatically restart server if it crashes
 2. **Multiple instances** - Support multiple debugger servers on different ports
 3. **Build integration** - Automatically compile and load WASM when file changes
-4. **launch.json integration** - Pass debug configuration to debugger automatically
+4. **Agent REST API access** - Agents reading `.debug-port` to hit the REST API directly (tracked in fastedge-plugin)
 5. **GitHub Actions automation** - Download pre-built debugger bundles from releases
 
 ---

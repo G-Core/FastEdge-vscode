@@ -7,8 +7,8 @@ This document describes how the extension discovers, loads, and processes dotenv
 ## Overview
 
 The dotenv system allows developers to:
-- Store configuration outside `launch.json`
-- Separate concerns (env vars, secrets, headers)
+- Store env vars, secrets, and headers outside `fastedge-config.test.json`
+- Separate concerns (env vars, secrets, headers) into distinct files
 - Use `.gitignore` for sensitive data
 - Support large configuration sets
 - Share configurations across team
@@ -90,11 +90,11 @@ Access-Control-Allow-Origin=*
 
 ## Configuration Hierarchy
 
-**Priority order** (highest to lowest):
+Dotenv files are loaded by the bundled debugger server and merged in order. There is no external switch to enable/disable them — files are auto-discovered from the `configRoot` directory on every server start.
+
+**Load order** (later files override earlier for same keys):
 
 ```
-launch.json
-  ↓
 .env
   ↓
 .env.variables
@@ -106,59 +106,17 @@ launch.json
 .env.rsp_headers
 ```
 
-**Higher priority overrides lower priority**
-
-**Example**:
-
-**.env.variables**:
-```bash
-API_URL=https://staging.api.example.com
-DEBUG=true
-```
-
-**launch.json**:
-```json
-{
-  "env": {
-    "API_URL": "https://dev.api.example.com"
-  }
-}
-```
-
-**Result**:
-```json
-{
-  "API_URL": "https://dev.api.example.com",  // from launch.json
-  "DEBUG": "true"                            // from .env.variables
-}
-```
+Runtime config in `fastedge-config.test.json` (edited in the debugger UI) takes precedence over anything in dotenv files for the same keys.
 
 ---
 
 ## Discovery Process
 
-### Enabling Dotenv
-
-**In launch.json**:
-```json
-{
-  "dotenv": true,  // Auto-discover
-  // OR
-  "dotenv": "./config",  // Specific directory
-  // OR
-  "dotenv": false  // Disabled
-}
-```
-
-**Default**: `true` (auto-discover)
-
 ### Auto-Discovery
 
-**When `dotenv: true`**:
+**Always on** — no configuration required:
 
-1. **Start location**: Build/debug location
-   - For `entrypoint: "file"`: Current file directory
-   - For `entrypoint: "workspace"`: Workspace root
+1. **Start location**: `configRoot` (directory containing `fastedge-config.test.json`)
 
 2. **Walk up directory tree**:
 ```typescript
@@ -180,22 +138,6 @@ while (currentDir !== workspaceRoot) {
 - Supports nested project structures
 - Allows repo-level configs
 - Flexible placement
-
-### Specific Path
-
-**When `dotenv: "./config"`**:
-
-1. **Resolve path**:
-```typescript
-const dotenvPath = path.resolve(workspaceRoot, config.dotenv);
-```
-
-2. **Load files from that directory only**:
-   - No walking up
-   - Must contain dotenv files
-   - Error if directory doesn't exist
-
-**Relative paths**: Always relative to workspace root
 
 ### File Detection
 
@@ -348,14 +290,6 @@ config.headers = { ...config.headers, ...parseHeaders('.env.req_headers') };
 config.responseHeaders = { ...config.responseHeaders, ...parseHeaders('.env.rsp_headers') };
 ```
 
-2. **Merge with launch.json**:
-```typescript
-finalConfig.env = { ...dotenvConfig.env, ...launchConfig.env };
-finalConfig.secrets = { ...dotenvConfig.secrets, ...launchConfig.secrets };
-finalConfig.headers = { ...dotenvConfig.headers, ...launchConfig.headers };
-finalConfig.responseHeaders = { ...dotenvConfig.responseHeaders, ...launchConfig.responseHeaders };
-```
-
 **Objects are merged** - not replaced
 
 ### Merge Example
@@ -372,14 +306,11 @@ TIMEOUT=30
 API_KEY=staging-key
 ```
 
-**launch.json**:
+**fastedge-config.test.json** (set in debugger UI):
 ```json
 {
   "env": {
     "API_URL": "https://dev.api.example.com"
-  },
-  "secrets": {
-    "DB_PASSWORD": "dev-password"
   }
 }
 ```
@@ -388,13 +319,12 @@ API_KEY=staging-key
 ```json
 {
   "env": {
-    "API_URL": "https://dev.api.example.com",  // launch.json wins
+    "API_URL": "https://dev.api.example.com",  // fastedge-config.test.json wins
     "DEBUG": "true",                           // from dotenv
     "TIMEOUT": "30"                            // from dotenv
   },
   "secrets": {
-    "API_KEY": "staging-key",                  // from dotenv
-    "DB_PASSWORD": "dev-password"              // from launch.json
+    "API_KEY": "staging-key"                   // from dotenv
   }
 }
 ```
@@ -548,53 +478,29 @@ my-project/
 ├── config/
 │   ├── .env.variables
 │   └── .env.secrets
+├── fastedge-config.test.json
 └── src/
     └── index.js
 ```
 
-**launch.json**:
-```json
-{
-  "dotenv": "./config"
-}
-```
-
 **Discovery**:
-- Resolves `./config` relative to workspace
-- Loads files from that directory
-- No walking up
+- Server starts from `configRoot` (directory with `fastedge-config.test.json`)
+- Walks up, finds `config/` is not at or above `configRoot` — so place dotenv files at `configRoot` level or above for auto-discovery
+
+**Note**: Per-directory dotenv path override (old `"dotenv": "./config"` launch.json option) no longer exists. Place dotenv files where auto-discovery will find them.
 
 ### Scenario 4: Multiple Environments
 
 **Structure**:
 ```
 my-project/
-├── .env.dev
-├── .env.staging
-├── .env.production
+├── .env.variables
+├── .env.secrets
 └── src/
     └── index.js
 ```
 
-**launch.json**:
-```json
-{
-  "configurations": [
-    {
-      "name": "Development",
-      "dotenv": "./.env.dev"
-    },
-    {
-      "name": "Staging",
-      "dotenv": "./.env.staging"
-    }
-  ]
-}
-```
-
-**Use**:
-- Select configuration from debug dropdown
-- Each uses different dotenv file
+**Note**: The old launch.json multi-configuration approach (separate named configs with different `dotenv` paths) no longer applies. Switch dotenv files manually or use different `fastedge-config.test.json` files in separate directories if you need per-environment isolation.
 
 ---
 
@@ -649,13 +555,12 @@ try {
 
 ## Key Takeaways
 
-1. **Flexible configuration** - Multiple file types, auto-discovery
-2. **Hierarchy** - launch.json > dotenv > defaults
-3. **Security** - Gitignore sensitive files
-4. **Multiple environments** - Different configs per debug configuration
-5. **Merge behavior** - Objects merged, not replaced
-6. **FastEdge-run integration** - Translates to CLI arguments
-7. **Error handling** - Graceful degradation
+1. **Always on** - Auto-discovered from `configRoot`, no configuration required
+2. **Hierarchy** - `fastedge-config.test.json` > dotenv files (later specialized files override `.env` for same keys)
+3. **Security** - Gitignore sensitive files (`.env.secrets`, etc.)
+4. **Merge behavior** - Objects merged, not replaced
+5. **FastEdge-run integration** - Translates to CLI arguments
+6. **Error handling** - Graceful degradation (missing files skipped, parse errors logged)
 
 ---
 
@@ -666,4 +571,4 @@ try {
 
 ---
 
-**Last Updated**: February 2026
+**Last Updated**: March 2026

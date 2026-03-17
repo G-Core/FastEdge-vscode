@@ -58,31 +58,26 @@ export function activate(context: vscode.ExtensionContext) {
 ### 1. Debugger Components
 
 **Files**:
-- `src/debugger/DebuggerServerManager.ts` - Manages server lifecycle
-- `src/debugger/DebuggerWebviewProvider.ts` - Provides debugging UI
+- `src/debugger/DebuggerServerManager.ts` - Per-app server lifecycle
+- `src/debugger/DebuggerWebviewProvider.ts` - Webview panel with debugger UI
 
 **Initialization** (in `activate()`):
+
+Extension maintains lazy per-app maps rather than a global singleton:
 ```typescript
-// Initialize debugger components with bundled debugger
-debuggerServerManager = new DebuggerServerManager(context.extensionPath);
-debuggerWebviewProvider = new DebuggerWebviewProvider(
-  context,
-  debuggerServerManager
-);
+const serverManagers = new Map<string, DebuggerServerManager>();
+const webviewProviders = new Map<string, DebuggerWebviewProvider>();
+
+function getOrCreateForAppRoot(appRoot: string) { ... }
 ```
 
-**Purpose**:
-- `DebuggerServerManager` - Manages bundled debugger server process
-- `DebuggerWebviewProvider` - Provides webview panel with debugging UI
-- Both components work together to provide visual debugging
-
 **Key Features**:
-- Server runs on localhost:5179
-- Webview displays React-based UI
-- REST API for programmatic access
-- Real-time logs via WebSocket
+- Per-app isolation — each `configRoot` gets its own server + panel
+- Server port range 5179–5188 with identity check (`service === "fastedge-debugger"`)
+- Server forked using `process.execPath` (VSCode's bundled Node, no external Node needed)
+- Closing a panel stops its server and removes it from the map
 
-**See**: `DEBUGGER_ARCHITECTURE.md` for complete architecture details
+**See**: `BUNDLED_DEBUGGER.md` for complete architecture details
 
 ### 2. Commands
 
@@ -93,19 +88,15 @@ debuggerWebviewProvider = new DebuggerWebviewProvider(
 | Command ID | Implementation | User-Facing Name |
 |------------|----------------|------------------|
 | `fastedge.run-file` | `commands/runDebugger.ts` | Debug: FastEdge App (Current File) |
-| `fastedge.run-workspace` | `commands/runDebugger.ts` | Debug: FastEdge App (Workspace) |
-| `fastedge.generate-launch-json` | `commands/launchJson.ts` | FastEdge (Generate launch.json) |
+| `fastedge.run-workspace` | `commands/runDebugger.ts` | Debug: FastEdge App (Package Entry) |
 | `fastedge.generate-mcp-json` | `commands/mcpJson.ts` | FastEdge (Generate mcp.json) |
 | `fastedge.setup-codespace-secret` | `commands/codespaceSecrets.ts` | FastEdge (Setup Codespace Secrets) |
-| `fastedge.start-debugger-server` | `extension.ts` | FastEdge: Start Debugger Server |
-| `fastedge.stop-debugger-server` | `extension.ts` | FastEdge: Stop Debugger Server |
-| `fastedge.debug-app` | `extension.ts` | FastEdge: Debug Application |
 
 **Registration pattern**:
 ```typescript
 context.subscriptions.push(
   vscode.commands.registerCommand('fastedge.run-file', runFile),
-  vscode.commands.registerCommand('fastedge.start-debugger-server', startDebuggerServer),
+  vscode.commands.registerCommand('fastedge.run-workspace', runWorkspace),
   // ... etc
 );
 ```
@@ -143,24 +134,21 @@ vscode.workspace.getConfiguration('fastedge').update(
 1. **User triggers command** (palette, keybinding, F5)
 2. **VS Code routes to registered handler**
 3. **Command executes**:
-   - For debug commands: Start debug session via `vscode.debug.startDebugging()`
+   - For debug commands: Resolve app root → build WASM → start/reuse server → open webview
    - For generator commands: Create files, show messages
-4. **Results displayed** to user (debug console, info messages)
+4. **Results displayed** to user (webview panel, info/error messages)
 
 ### Debugger Flow
 
-1. **User starts debugger** (Command: "FastEdge: Debug Application")
-2. **Server check**: Extension checks if debugger server is running
-3. **Start server** (if not running): `debuggerServerManager.start()`
-   - Forks bundled server process
-   - Server listens on localhost:5179
-4. **Show webview**: `debuggerWebviewProvider.show()`
-   - Displays React-based debugging UI
-   - Connects to server REST API
-5. **User loads WASM** through UI (POST /api/load)
-6. **User executes requests** through UI (POST /api/execute)
-7. **Real-time logs** stream via WebSocket
-8. **Session ends** when user closes webview or stops server
+1. **User triggers debug command** (F5, `run-file`, or `run-workspace`)
+2. **App root resolved** from active file via `resolveConfigRoot()` / `resolveBuildRoot()`
+3. **Per-app manager lookup**: `Map<appRoot, DebuggerServerManager>` — creates lazily if not present
+4. **Build**: Compiler runs (Rust/JS/AS), output to `{configRoot}/.fastedge/bin/debugger.wasm`
+5. **Server start**: `debuggerServerManager.start()` forks bundled `dist/debugger/server.js` using `process.execPath`
+6. **Port resolved**: `resolvePort()` scans 5179–5188, reuses own server or picks free port
+7. **Webview opened**: Panel titled `"FastEdge Debugger — {appName}"` loads debugger UI in iframe
+8. **WASM auto-loaded** into debugger via REST API
+9. **Session ends** when user closes the panel — `onDidDispose` calls `serverManager.stop()`
 
 **See**: `DEBUGGER_ARCHITECTURE.md` for complete debugger architecture
 
@@ -272,9 +260,9 @@ function activate(context: vscode.ExtensionContext) {
 ```
 
 **Key points**:
-- `type: "fastedge"` - Used in launch.json configurations
+- `type: "fastedge"` - Registers the F5 debug provider; enables `.vscode/launch.json` with `"type": "fastedge"`
+- The only useful launch.json property is `"entrypoint": "file"` or `"package"` — all other config attributes were removed in [2026-03-17]
 - Supported languages: rust, javascript
-- Configuration attributes define available launch.json properties
 
 ### Commands Contribution
 
@@ -319,22 +307,17 @@ function activate(context: vscode.ExtensionContext) {
 
 **Order matters during activation**:
 
-1. ✅ **Create providers first**
-   - Debug configuration provider
-   - Debug adapter factory
+1. ✅ **Register debug configuration provider**
+   - Handles F5 `"entrypoint"` routing
+   - Must be registered before first F5 press
 
-2. ✅ **Register providers with VS Code**
-   - Must be registered before first use
-   - Add to context.subscriptions
+2. ✅ **Register commands**
+   - `run-file`, `run-workspace`, `generate-mcp-json`, `setup-codespace-secret`
 
-3. ✅ **Register commands**
-   - After providers (commands may trigger debug sessions)
+3. ✅ **Initialize async operations**
+   - CLI version detection (runs in background, updates `fastedge.cliVersion` setting)
 
-4. ✅ **Initialize async operations**
-   - CLI version detection (can run in background)
-   - File watchers (if needed)
-
-**Current implementation follows this order**
+Per-app `DebuggerServerManager` / `DebuggerWebviewProvider` instances are created lazily on first debug command for each `appRoot` — not during activation.
 
 ---
 
@@ -361,25 +344,21 @@ function activate(context: vscode.ExtensionContext) {
 - Don't crash extension
 - User can retry
 
-**Debug session errors**:
-- Handled in `FastEdgeDebugSession`
-- Sent to debug console
-- Session terminates cleanly
+**Debugger server errors**:
+- Startup failures surfaced via `vscode.window.showErrorMessage()`
+- Server crashes detected on process exit; port file deleted automatically
+- Port exhaustion (all 5179–5188 occupied) throws clear error
 
 ---
 
 ## Multi-Root Workspaces
 
 **Current behavior**:
-- Extension supports multi-root workspaces
-- Each folder can have its own launch.json
-- Debug sessions are scoped to specific folder
-- Commands operate on active workspace folder
-
-**No special handling needed**:
-- VS Code handles multi-root routing automatically
-- Debug configurations are per-folder
-- Commands use `vscode.workspace.workspaceFolders`
+- Each app folder gets its own isolated server + webview panel
+- App root resolved from the active file — not from `workspaceFolders[0]`
+- Build CWD uses `resolveBuildRoot()` to find the nearest `package.json` / `Cargo.toml`
+- Config isolation uses `resolveConfigRoot()` to find the nearest `fastedge-config.test.json`
+- Two apps can debug simultaneously on different ports (5179, 5180, etc.)
 
 ---
 
@@ -391,11 +370,10 @@ function activate(context: vscode.ExtensionContext) {
 - Access to full Node.js APIs
 - Isolated from VS Code UI for stability
 
-**Debug adapter runs inline**:
-- Same process as extension
-- No separate debug adapter process
-- Faster communication (no IPC overhead)
-- Simpler deployment (no separate binary)
+**Debugger server runs as a child process**:
+- Forked from Extension Host using `process.execPath` (VSCode's Node)
+- Separate process for isolation; crash doesn't affect extension
+- Communicates via REST + WebSocket on localhost
 
 ---
 
@@ -411,10 +389,10 @@ function activate(context: vscode.ExtensionContext) {
 ---
 
 **Related Documentation**:
-- `DEBUGGER_ARCHITECTURE.md` - How debug adapter works
-- `CONFIGURATION_SYSTEM.md` - How settings are managed
+- `BUNDLED_DEBUGGER.md` - Bundled server architecture, per-app isolation
+- `CONFIGURATION_SYSTEM.md` - Config files and app root resolution
 - `features/COMMANDS.md` - Individual command implementations
 
 ---
 
-**Last Updated**: February 11, 2026
+**Last Updated**: March 2026

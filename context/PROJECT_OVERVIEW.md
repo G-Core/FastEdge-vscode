@@ -7,9 +7,9 @@ The **FastEdge VSCode Extension** is a development tool that enables developers 
 ### Key Value Proposition
 
 - **Integrated Debugging**: Use VS Code's native debug interface (F5) to run FastEdge apps
-- **Multi-Language Support**: Build and debug Rust and JavaScript applications
+- **Multi-Language Support**: Build and debug Rust, JavaScript, and AssemblyScript applications
 - **Local Development**: Test edge applications locally before deployment
-- **Configuration Management**: Flexible configuration via launch.json and dotenv files
+- **Bundled Debugger**: Zero-setup — debugger server and UI are bundled with the extension
 - **MCP Integration**: Generate Model Context Protocol server configurations
 
 ---
@@ -32,28 +32,25 @@ The **FastEdge VSCode Extension** is a development tool that enables developers 
 
 ## Core Capabilities
 
-### 1. Debug Interface Integration
+### 1. Debug Interface
 
-The extension registers as a VS Code debugger with type `"fastedge"`:
+The extension registers as a VS Code debugger with type `"fastedge"`. F5 triggers a build → bundled server start → webview panel open flow.
 
+The only launch.json field the extension uses is `"entrypoint"`:
 ```json
 {
-  "version": "0.2.0",
-  "configurations": [
-    {
-      "type": "fastedge",
-      "request": "launch",
-      "name": "FastEdge App"
-    }
-  ]
+  "type": "fastedge",
+  "request": "launch",
+  "name": "FastEdge App",
+  "entrypoint": "file"
 }
 ```
 
 **Key Features:**
 - F5 to launch debug session
 - Automatic compilation before running
-- Serves application on localhost:8181
-- Integration with VS Code Debug Console
+- Per-app isolated debugger server (port range 5179–5188)
+- Webview-based debugger UI (no DAP, no launch.json config fields)
 
 ### 2. Commands
 
@@ -61,32 +58,20 @@ The extension provides several VS Code commands:
 
 | Command | Purpose |
 |---------|---------|
-| `FastEdge (Generate launch.json)` | Creates `.vscode/launch.json` with default config |
+| `Debug: FastEdge App (Current File)` | Builds active file → starts server → opens debugger panel |
+| `Debug: FastEdge App (Package Entry)` | Builds `package.json` main entry (JS only) → opens debugger panel |
 | `FastEdge (Generate mcp.json)` | Adds FastEdge MCP server to workspace |
-| `Debug: FastEdge App (Current File)` | Runs current file as entrypoint |
-| `Debug: FastEdge App (Workspace)` | Runs workspace project |
 | `FastEdge (Setup Codespace Secrets)` | Configures GitHub Codespaces secrets |
 
 ### 3. Configuration System
 
-**Three levels of configuration:**
+Runtime config is managed in two places:
 
-1. **launch.json** (highest priority)
-   - Debug-specific settings
-   - Port, memory limits
-   - Direct env vars, secrets, headers
+1. **fastedge-config.test.json** — env vars, secrets, headers, port, memory limits. Loaded/saved via the debugger UI using native VSCode file dialogs. Also serves as the per-app root marker for server isolation.
 
-2. **.env files** (middle priority)
-   - Dotenv file hierarchy
-   - Can specify path or use auto-discovery
-   - Supports .env, .env.variables, .env.secrets, etc.
+2. **Dotenv files** (`.env`, `.env.variables`, `.env.secrets`, `.env.req_headers`, `.env.rsp_headers`) — auto-discovered from the app's config root directory.
 
-3. **Default settings** (lowest priority)
-   - Port: 8181
-   - Memory limit: 10MB
-   - No additional headers
-
-**See**: `DOTENV.md` in root for detailed dotenv documentation
+**See**: `architecture/CONFIGURATION_SYSTEM.md` for full details.
 
 ### 4. Compilation System
 
@@ -105,15 +90,12 @@ The extension provides several VS Code commands:
 ### 5. Runtime Execution
 
 Once compiled, the extension:
-1. Locates the bundled `fastedge-run` CLI
-2. Collects configuration from all sources
-3. Launches FastEdge-run with:
-   - WASM binary path
-   - Environment variables
-   - Secrets
-   - Request/response headers
-   - Port and memory limits
-4. Serves application on localhost:8181
+1. Starts (or reuses) the per-app bundled debugger server
+2. Auto-loads the compiled WASM into the debugger via REST API
+3. Opens a webview panel with the debugger UI
+4. User executes requests and views logs in the UI
+
+The debugger server internally uses the bundled `fastedge-run` CLI with configuration from `fastedge-config.test.json` and any discovered dotenv files.
 
 **FastEdge-run**: Application runner based on [FastEdge-lib](https://github.com/G-Core/FastEdge-lib)
 
@@ -125,13 +107,11 @@ Once compiled, the extension:
 - **Language**: TypeScript
 - **Platform**: VS Code Extension API (v1.106.0+)
 - **Node**: 20-24.x.x
-- **Debug Protocol**: VS Code Debug Adapter Protocol
+- **Debugger**: Bundled Node server + webview UI (no DAP)
 - **Build Tool**: esbuild (for extension bundling)
 - **Package Manager**: pnpm
 
 ### Key Dependencies
-- `@vscode/debugadapter` - Debug Adapter Protocol implementation
-- `@vscode/debugprotocol` - DAP type definitions
 - `toml` - Parsing Cargo.toml files
 - `tree-kill` - Process management
 
@@ -148,9 +128,6 @@ Once compiled, the extension:
 FastEdge-vscode/
 ├── src/                                    # TypeScript source
 │   ├── extension.ts                        # Extension entry point
-│   ├── FastEdgeDebugSession.ts             # Debug Adapter implementation
-│   ├── BinaryDebugConfigurationProvider.ts # Config provider
-│   ├── FastEdgeDebugAdapterDescriptorFactory.ts
 │   ├── types.ts                            # Shared type definitions
 │   │
 │   ├── compiler/                           # Compilation logic
@@ -159,11 +136,19 @@ FastEdge-vscode/
 │   │   ├── rustConfig.ts                   # Cargo.toml parsing
 │   │   └── jsBuild.ts                      # JavaScript compilation
 │   │
+│   ├── debugger/                           # Bundled debugger integration
+│   │   ├── DebuggerServerManager.ts        # Per-app server lifecycle
+│   │   ├── DebuggerWebviewProvider.ts      # Webview panel with debugger UI
+│   │   └── index.ts
+│   │
+│   ├── utils/
+│   │   ├── resolveAppRoot.ts               # resolveConfigRoot / resolveBuildRoot
+│   │   └── resolveAppRoot.test.ts
+│   │
 │   ├── commands/                           # VS Code commands
 │   │   ├── index.ts                        # Command registration
-│   │   ├── launchJson.ts                   # Generate launch.json
 │   │   ├── mcpJson.ts                      # Generate mcp.json
-│   │   ├── runDebugger.ts                  # Run debugger commands
+│   │   ├── runDebugger.ts                  # run-file / run-workspace
 │   │   └── codespaceSecrets.ts             # Codespaces integration
 │   │
 │   ├── dotenv/                             # Dotenv handling
@@ -174,7 +159,9 @@ FastEdge-vscode/
 │       └── triggerFileHandler.ts
 │
 ├── fastedge-cli/                           # Bundled FastEdge-run binary
-├── dist/                                   # Compiled extension (esbuild output)
+├── dist/
+│   ├── extension.js                        # Compiled extension
+│   └── debugger/                           # Bundled debugger (server.js + frontend)
 ├── esbuild/                                # Build scripts
 ├── exampleFolder/                          # Example projects (Rust & JS)
 ├── images/                                 # Extension icons
@@ -195,58 +182,45 @@ FastEdge-vscode/
 ### Extension Activation
 1. VS Code loads extension on `onStartupFinished`
 2. Extension registers:
-   - Debug configuration provider
-   - Debug adapter factory
-   - Commands (palette and internal)
-3. Extension displays CLI version in settings
+   - Debug configuration provider (F5 `"entrypoint"` routing)
+   - Commands (`run-file`, `run-workspace`, `generate-mcp-json`, `setup-codespace-secret`)
+3. Extension displays bundled CLI version in settings
+4. Per-app server/webview instances created lazily on first debug command
 
 ### Debug Session Flow
-1. User presses F5 or runs command
-2. `BinaryDebugConfigurationProvider` validates/enhances configuration
-3. `FastEdgeDebugAdapterDescriptorFactory` creates debug adapter
-4. `FastEdgeDebugSession` receives launch request
-5. Compilation:
-   - Rust: `cargo build` with wasm32-wasip1 target
-   - JS: `fastedge-build` with entrypoint
-6. Configuration collection:
-   - Merge launch.json settings
-   - Load dotenv files (if enabled)
-   - Apply defaults
-7. FastEdge-run execution:
-   - Launch with WASM binary + config
-   - Serve on configured port (default 8181)
-8. Debug Console displays output
-9. User can access app at localhost:8181
+1. User presses F5 or runs `Debug: FastEdge App (Current File / Package Entry)`
+2. App roots resolved: `resolveConfigRoot()` + `resolveBuildRoot()` from active file
+3. Compilation:
+   - Rust: `cargo build --target wasm32-wasip1` from `buildRoot`
+   - JS: `fastedge-build` from `buildRoot`, output to `{configRoot}/.fastedge/bin/debugger.wasm`
+   - AS: `asc --target release` with proxy-wasm support
+4. Per-app `DebuggerServerManager` started (or reused) for `configRoot`
+5. WASM auto-loaded into debugger via REST API
+6. Webview panel opened showing debugger UI
+7. User executes requests and views logs
+8. Closing panel → server stops, port file deleted
 
 ### Command Execution
 1. User invokes command via palette or keybinding
 2. Command handler executes:
-   - `launchJson.ts` → Creates `.vscode/launch.json`
-   - `mcpJson.ts` → Adds MCP server config to `.claude/mcp.json`
-   - `runDebugger.ts` → Triggers debug session programmatically
+   - `mcpJson.ts` → Adds MCP server config to `.mcp.json`
+   - `runDebugger.ts` → Triggers debug flow (build + server + webview)
    - `codespaceSecrets.ts` → Configures GitHub Codespaces
 
 ---
 
 ## Configuration Options
 
-### Launch.json Properties
+### launch.json
 
-| Property | Type | Default | Description |
-|----------|------|---------|-------------|
-| `binary` | string | auto | WASM binary path (usually auto-detected) |
-| `cliPath` | string | auto | Path to FastEdge-run CLI |
-| `dotenv` | boolean\|string | true | Enable dotenv or specify path |
-| `entrypoint` | string | "file" | "file" or "workspace" |
-| `env` | object | {} | Environment variables |
-| `secrets` | object | {} | Secret variables |
-| `headers` | object | {} | Request headers |
-| `responseHeaders` | object | {} | Response headers |
-| `port` | number | 8181 | Port to listen on |
-| `memoryLimit` | number | 10000000 | Memory limit in bytes |
-| `geoIpHeaders` | boolean | false | Add sample GeoIP headers |
-| `traceLogging` | boolean | false | Enable trace logging |
-| `args` | string[] | [] | Additional CLI arguments |
+Only the `"entrypoint"` field is used:
+
+| Value | Behaviour |
+|-------|-----------|
+| `"file"` | Build the active editor file |
+| `"package"` | Build from `package.json` `"main"` field (JS only) |
+
+All other properties (`port`, `env`, `secrets`, `headers`, etc.) are ignored — configure those in the debugger UI via `fastedge-config.test.json`.
 
 ### Extension Settings
 
@@ -324,15 +298,14 @@ pnpm run package        # Creates .vsix file
 ### 1. Developing a New FastEdge App
 1. Create project (Rust or JS)
 2. Install FastEdge VSCode extension
-3. Run command: `FastEdge (Generate launch.json)`
-4. Press F5 to start debugging
+3. Open a source file and press F5 (or run `Debug: FastEdge App (Current File)`)
+4. Extension compiles to WASM, starts debugger server, opens debugger panel
 5. Make changes, F5 to rebuild/rerun
 
 ### 2. Using Dotenv for Configuration
-1. Create `.env` file in project root
-2. Add variables with prefixes (FASTEDGE_VAR_ENV_, etc.)
-3. In launch.json, set `"dotenv": true`
-4. Press F5 - dotenv variables are loaded automatically
+1. Create `.env` file in project root (or `.env.variables`, `.env.secrets`, etc.)
+2. Add variables with prefixes (`FASTEDGE_VAR_ENV_`, `FASTEDGE_VAR_SECRET_`, etc.) or use specialized files without prefixes
+3. Press F5 — dotenv files are auto-discovered from the app's config root
 
 ### 3. Setting Up MCP Server
 1. Run command: `FastEdge (Generate mcp.json)`
@@ -352,18 +325,16 @@ pnpm run package        # Creates .vsix file
 
 **Fully Implemented:**
 - ✅ Rust compilation and debugging
-- ✅ JavaScript compilation and debugging
-- ✅ Debug Adapter Protocol integration
-- ✅ Launch.json generation
-- ✅ Dotenv file support with hierarchy
+- ✅ JavaScript/AssemblyScript compilation and debugging
+- ✅ Bundled debugger server (per-app isolation, auto start/stop)
+- ✅ Webview-based debugger UI
 - ✅ MCP server configuration generation
 - ✅ GitHub Codespaces integration
 - ✅ Command palette commands
-- ✅ Automatic FastEdge-run CLI bundling
 
 **Planned/Future:**
 - See GitHub issues for roadmap items
 
 ---
 
-**Last Updated**: February 2026
+**Last Updated**: March 2026

@@ -12,9 +12,9 @@
 - **Serves** applications locally on port 8181 using FastEdge-run
 - **Integrates** with VS Code's debug interface (F5 to run)
 - **Supports** dotenv files for configuration (env vars, secrets, headers)
-- **Provides** commands for generating launch.json and MCP server configs
+- **Provides** commands for generating MCP server configs and Codespace setup
 
-**Tech Stack**: TypeScript, VS Code Extension API, Debug Adapter Protocol, esbuild
+**Tech Stack**: TypeScript, VS Code Extension API, bundled Node server + webview UI, esbuild
 
 ---
 
@@ -51,7 +51,6 @@ Use this tree to find relevant documentation for your task:
 
 **Task: Fix dotenv loading bug**
 → Read: `features/DOTENV_SYSTEM.md`
-→ Read: `architecture/CONFIGURATION_SYSTEM.md`
 → Grep: `CHANGELOG.md` for "dotenv"
 
 **Task: Fix debugger connection issue**
@@ -61,9 +60,9 @@ Use this tree to find relevant documentation for your task:
 
 ### Configuration & Integration
 
-**Task: Modify launch.json generation**
-→ Read: `features/LAUNCH_CONFIG.md`
-→ Read: `architecture/CONFIGURATION_SYSTEM.md`
+**Task: Understand F5 / entrypoint configuration**
+→ Read: `features/COMMANDS.md` (run-file / run-workspace section)
+→ Read: `architecture/CONFIGURATION_SYSTEM.md` (F5 section)
 
 **Task: Update MCP server integration**
 → Read: `features/MCP_INTEGRATION.md`
@@ -71,7 +70,7 @@ Use this tree to find relevant documentation for your task:
 
 **Task: Add new configuration option**
 → Read: `architecture/CONFIGURATION_SYSTEM.md`
-→ Read: `features/LAUNCH_CONFIG.md`
+→ Read: `BUNDLED_DEBUGGER.md` (fastedge-config.test.json section)
 
 ### Understanding the System
 
@@ -115,9 +114,9 @@ Use this tree to find relevant documentation for your task:
 
 | Document | Focus | Read When |
 |----------|-------|-----------|
-| **EXTENSION_LIFECYCLE.md** | Activation, registration, disposal | Adding commands, changing startup |
-| **DEBUGGER_ARCHITECTURE.md** | Debug Adapter Protocol, sessions | Modifying debug functionality |
-| **CONFIGURATION_SYSTEM.md** | launch.json, settings, workspace | Changing configuration options |
+| **EXTENSION_LIFECYCLE.md** | Activation, registration, per-app maps | Adding commands, changing startup |
+| **DEBUGGER_ARCHITECTURE.md** | Bundled server, webview, REST API | Modifying debug functionality |
+| **CONFIGURATION_SYSTEM.md** | fastedge-config.test.json, app root resolution | Changing configuration options |
 | **BUILD_SYSTEM.md** | esbuild, packaging, deployment | Build/packaging changes |
 
 ### Features (Read specific feature when needed)
@@ -142,6 +141,14 @@ Use this tree to find relevant documentation for your task:
 | **DEBUGGING_GUIDE.md** | Debugging the debugger | Troubleshooting extension issues |
 | **PACKAGING_GUIDE.md** | Creating .vsix, publishing | Releasing the extension |
 | **VS_CODE_API_PATTERNS.md** | Common VS Code API usage | Using VS Code APIs |
+
+### Archived (Legacy reference only — do NOT use for current development)
+
+| Document | Focus | Read When |
+|----------|-------|-----------|
+| **archived/README.md** | What's in this folder and why | Orientation to legacy content |
+| **archived/ARCHIVED_CHANGE_LOG.md** | Pre-Feb 2026 CHANGELOG entries | Researching historical changes |
+| **archived/ARCHIVED_CONFIGURATION_SYSTEM.md** | DAP-era three-tier config hierarchy | Understanding why config was redesigned |
 
 ---
 
@@ -205,10 +212,10 @@ See `SEARCH_GUIDE.md` for more patterns.
    - Registers commands and debug providers
    - Manages extension lifecycle
 
-2. **Debug Adapter** (`src/FastEdgeDebugSession.ts`)
-   - Implements VS Code Debug Adapter Protocol
-   - Manages debug sessions
-   - Handles launch/attach requests
+2. **Debugger** (`src/debugger/`)
+   - `DebuggerServerManager` — forks bundled `dist/debugger/server.js`, manages port + lifecycle
+   - `DebuggerWebviewProvider` — creates webview panel, bridges iframe↔extension messages
+   - Per-app instances keyed by `configRoot`
 
 3. **Compiler System** (`src/compiler/`)
    - Rust: Uses `cargo build` with wasm32-wasip1 target
@@ -217,21 +224,21 @@ See `SEARCH_GUIDE.md` for more patterns.
    - All output to `<configRoot>/.fastedge/bin/debugger.wasm`
 
 4. **Commands** (`src/commands/`)
-   - Generate launch.json
    - Generate mcp.json
-   - Run debugger (file or workspace)
+   - Run debugger (current file or package entry)
    - Setup Codespace secrets
 
-5. **Configuration** (`src/dotenv/`, `BinaryDebugConfigurationProvider.ts`)
-   - Dotenv file hierarchy
-   - Launch.json validation
-   - Runtime configuration merging
+5. **Configuration** (`src/dotenv/`, `src/utils/resolveAppRoot.ts`)
+   - Dotenv file auto-discovery from `configRoot`
+   - `fastedge-config.test.json` as app root marker + runtime config store
+   - `resolveConfigRoot()` / `resolveBuildRoot()` for per-app isolation
 
 ### Key Terms
 
 - **FastEdge-run**: Bundled CLI that runs WASM binaries locally
-- **Debug Adapter Protocol (DAP)**: VS Code's protocol for debuggers
-- **launch.json**: VS Code debug configuration file
+- **fastedge-config.test.json**: Per-app config file; also the `configRoot` anchor for server isolation
+- **configRoot**: Directory containing `fastedge-config.test.json` — anchors per-app server + port file
+- **buildRoot**: Directory containing `package.json` or `Cargo.toml` — anchors build CWD
 - **dotenv hierarchy**: .env → .env.variables → .env.secrets (see DOTENV.md in root)
 - **WASM**: WebAssembly - compiled output of Rust/JS/AS code
 - **wasm32-wasip1**: WASI preview 1 target for Rust compilation

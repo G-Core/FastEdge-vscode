@@ -319,16 +319,10 @@ Note: `lib/` (the `@gcoredev/fastedge-test` npm package output) is explicitly **
 
 ## Commands
 
-The extension provides these commands for debugger control:
+The extension provides two debug commands. Servers are started and stopped automatically — no manual server control needed.
 
-**Start/Stop Server:**
-- `FastEdge: Start Debugger Server` - Manually start server
-- `FastEdge: Stop Debugger Server` - Stop running server
-
-**Debug Application:**
-- `FastEdge: Debug Application` - Open debugger with optional WASM
-- `Debug: FastEdge App (Current File)` - Build and debug current file
-- `Debug: FastEdge App (Workspace)` - Build and debug workspace
+- `Debug: FastEdge App (Current File)` — Build active file → start server → open debugger panel
+- `Debug: FastEdge App (Package Entry)` — Build `package.json` main entry (JS only) → start server → open debugger panel
 
 ---
 
@@ -396,7 +390,7 @@ Future: GitHub Actions will:
 
 - Auto-detect WASM files in workspace
 - Better build integration (compile → load)
-- Pass launch.json config to debugger automatically
+- ~~Pass launch.json config to debugger~~ — N/A; runtime config now lives in `fastedge-config.test.json`
 - ~~Multi-instance support (multiple debuggers)~~ ✅ Done March 2026 — per-app servers
 
 ---
