@@ -263,7 +263,7 @@ Typical wait: under 500ms (iframe load + React mount + WebSocket handshake).
 `DebuggerWebviewProvider.loadWasm()` sends the file **path** to the server, not the binary content:
 
 ```typescript
-body: JSON.stringify({ wasmPath, dotenvEnabled: true })
+body: JSON.stringify({ wasmPath, dotenv: { enabled: true } })
 ```
 
 The server is local, so it reads the file itself. This avoids reading a potentially large WASM binary into the extension process just to POST it back to localhost. It also means the server knows the real filename and absolute path, which are included in the `wasm_loaded` event so the UI can display and re-use the path correctly.

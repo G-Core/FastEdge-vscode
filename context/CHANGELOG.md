@@ -13,6 +13,34 @@ See `SEARCH_GUIDE.md` for more search patterns.
 
 ---
 
+## [2026-03-18] - DotenvPanel: show resolved app root as default path label
+
+### Overview
+The dotenv path default display was showing `"workspace root (default)"` — a misleading label, since the actual default is the app root (resolved via `resolveConfigRoot`: nearest `fastedge-config.test.json`, or `package.json`/`Cargo.toml`). Now the panel requests the real path from the extension on mount and displays it when no custom path is set.
+
+### 🎯 What Was Completed
+
+- Added `getAppRoot` / `appRootResult` message round-trip
+  - `DotenvPanel` sends `getAppRoot` on mount (VSCode mode only)
+  - Extension host handles it and responds with `this.serverManager.getAppRoot()`
+  - Webview wrapper script forwards both directions (same pattern as folder/file pickers)
+- Default display now shows the actual resolved path (dimmed italic `.defaultPath` style), falling back to `"app root (default)"` while awaiting the response
+- All `"workspace root"` references updated to `"app root"` (label, tooltip, placeholder)
+- Fixed vertical alignment: `.pathRow` changed from `align-items: center` to `align-items: baseline` (label is 13px, path value is 12px — different sizes caused subtle misalignment)
+- Added `.defaultPath` CSS class (color `#707070`) to visually distinguish default from user-set path
+
+**Files Modified:**
+- `src/debugger/DebuggerWebviewProvider.ts` — `getAppRoot` message handler + wrapper script forwarding
+- *(fastedge-test)* `frontend/src/components/common/DotenvPanel/DotenvPanel.tsx`
+- *(fastedge-test)* `frontend/src/components/common/DotenvPanel/DotenvPanel.module.css`
+
+### 📝 Notes
+- The message pattern is the same three-layer chain as other pickers: iframe → wrapper script → extension host → wrapper script → iframe. Both outbound (`getAppRoot`) and inbound (`appRootResult`) forwarding were added to the wrapper script.
+- `resolvedRoot` state in `DotenvPanel` is populated once on mount and never changes — the app root is stable for the lifetime of the webview panel.
+- The `WORKSPACE_PATH` env var fallback in the server still applies when `dotenvPath` is null at runtime — this change only affects the UI label.
+
+---
+
 ## [2026-03-18] - Fix: openFolderPicker/folderPickerResult missing from webview wrapper script
 
 ### Overview

@@ -63,6 +63,13 @@ export class DebuggerWebviewProvider {
             }
           }
 
+          if (message.command === "getAppRoot") {
+            this.panel?.webview.postMessage({
+              command: "appRootResult",
+              appRoot: this.serverManager.getAppRoot(),
+            });
+          }
+
           if (message.command === "openFolderPicker") {
             const appRoot = this.serverManager.getAppRoot();
             const uris = await vscode.window.showOpenDialog({
@@ -137,7 +144,7 @@ export class DebuggerWebviewProvider {
           },
           body: JSON.stringify({
             wasmPath,
-            dotenvEnabled: true,
+            dotenv: { enabled: true },
           }),
         }
       );
@@ -296,6 +303,9 @@ export class DebuggerWebviewProvider {
       if (event.data && event.data.command === 'openFilePicker') {
         vscode.postMessage({ command: 'openFilePicker' });
       }
+      if (event.data && event.data.command === 'getAppRoot') {
+        vscode.postMessage({ command: 'getAppRoot' });
+      }
       if (event.data && event.data.command === 'openFolderPicker') {
         vscode.postMessage({ command: 'openFolderPicker' });
       }
@@ -304,6 +314,9 @@ export class DebuggerWebviewProvider {
       }
       // Forward extension host responses back to the iframe
       if (event.data && event.data.command === 'filePickerResult') {
+        iframe.contentWindow.postMessage(event.data, '*');
+      }
+      if (event.data && event.data.command === 'appRootResult') {
         iframe.contentWindow.postMessage(event.data, '*');
       }
       if (event.data && event.data.command === 'folderPickerResult') {

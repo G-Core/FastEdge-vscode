@@ -169,7 +169,7 @@ webview.html = getWebviewContent(frontendPath, serverUrl);
    POST http://localhost:5179/api/load
    {
      "wasmBase64": "...",
-     "dotenvEnabled": true
+     "dotenv": { "enabled": true }
    }
    ```
    - Binary auto-detected as HTTP-WASM or Proxy-WASM
@@ -237,7 +237,7 @@ const wasmBase64 = wasmBuffer.toString('base64');
 await fetch('http://localhost:5179/api/load', {
   method: 'POST',
   headers: { 'Content-Type': 'application/json' },
-  body: JSON.stringify({ wasmBase64, dotenvEnabled: true })
+  body: JSON.stringify({ wasmBase64, dotenv: { enabled: true } })
 });
 
 // Execute request
