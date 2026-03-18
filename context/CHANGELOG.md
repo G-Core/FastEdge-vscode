@@ -13,10 +13,30 @@ See `SEARCH_GUIDE.md` for more search patterns.
 
 ---
 
+## [2026-03-18] - Fix: openFolderPicker/folderPickerResult missing from webview wrapper script
+
+### Overview
+The Browse button in the `DotenvPanel` was silently broken despite the extension-side handler existing. Root cause: the webview HTML wrapper script (the bridge between the React iframe and the extension host) was not forwarding `openFolderPicker` outbound or `folderPickerResult` inbound.
+
+### 🎯 What Was Completed
+
+- Added `openFolderPicker` forwarding in the wrapper script: `window.addEventListener('message')` → `vscode.postMessage({ command: 'openFolderPicker' })`
+- Added `folderPickerResult` forwarding back to iframe: extension host response → `iframe.contentWindow.postMessage(event.data, '*')`
+- Mirrors the existing `openFilePicker`/`filePickerResult` and `openSavePicker`/`savePickerResult` pairs
+
+**Files Modified:**
+- `src/debugger/DebuggerWebviewProvider.ts`
+
+### 📝 Notes
+- The webview uses a three-layer message chain: React app (iframe) → wrapper script HTML (holds `vscodeApi`) → extension host. Every new command needs BOTH a forwarding rule in the wrapper script AND a handler in `onDidReceiveMessage`. The March 17 work added only the extension handler — the wrapper bridge was missing.
+- Pattern for adding future commands: add outbound forwarding (`vscode.postMessage`) + inbound forwarding (`iframe.contentWindow.postMessage`) in the wrapper script alongside the existing pairs.
+
+---
+
 ## [2026-03-17] - Debugger webview: openFolderPicker for dotenvPath
 
 ### Overview
-Added `openFolderPicker` webview message handler in `DebuggerWebviewProvider.ts` to support the new `.env directory` picker in the debugger UI. When the user clicks "Browse…" in the `ServerPropertiesPanel`, the webview posts `openFolderPicker` — the extension intercepts it and opens a native OS folder dialog, then returns the selected path back to the webview via `folderPickerResult`.
+Added `openFolderPicker` webview message handler in `DebuggerWebviewProvider.ts` to support the new `.env directory` picker in the debugger UI. When the user clicks "Browse…" in the `DotenvPanel`, the webview posts `openFolderPicker` — the extension intercepts it and opens a native OS folder dialog, then returns the selected path back to the webview via `folderPickerResult`.
 
 ### 🎯 What Was Completed
 
@@ -29,6 +49,7 @@ Added `openFolderPicker` webview message handler in `DebuggerWebviewProvider.ts`
 - `src/debugger/DebuggerWebviewProvider.ts`
 
 ### 📝 Notes
+- **⚠️ Wrapper script bridge was missing — Browse button was broken until the March 18 fix above.**
 - This is the VSCode side of the dotenvPath feature implemented in fastedge-test. The full feature spans both repos.
 - The extension's own dotenv auto-discovery system (`src/dotenv/index.ts`, documented in `context/features/DOTENV_SYSTEM.md`) is a separate mechanism — it always-on discovers `.env` files from `configRoot`. The folder picker here controls the *debugger server's* `dotenvPath`, not the extension's discovery system.
 - When no path is selected, the debugger server falls back to `WORKSPACE_PATH` (set as an env var when the server process is spawned) — workspace root is always the correct default for extension users.

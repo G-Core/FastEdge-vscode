@@ -296,11 +296,17 @@ export class DebuggerWebviewProvider {
       if (event.data && event.data.command === 'openFilePicker') {
         vscode.postMessage({ command: 'openFilePicker' });
       }
+      if (event.data && event.data.command === 'openFolderPicker') {
+        vscode.postMessage({ command: 'openFolderPicker' });
+      }
       if (event.data && event.data.command === 'openSavePicker') {
         vscode.postMessage({ command: 'openSavePicker', suggestedName: event.data.suggestedName });
       }
       // Forward extension host responses back to the iframe
       if (event.data && event.data.command === 'filePickerResult') {
+        iframe.contentWindow.postMessage(event.data, '*');
+      }
+      if (event.data && event.data.command === 'folderPickerResult') {
         iframe.contentWindow.postMessage(event.data, '*');
       }
       if (event.data && event.data.command === 'savePickerResult') {
