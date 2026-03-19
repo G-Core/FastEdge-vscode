@@ -4,6 +4,7 @@ import { readFileSync } from "fs";
 
 import {
   createMCPJson,
+  initWorkspace,
   setupCodespaceSecret,
   runFile,
   runWorkspace,
@@ -93,6 +94,7 @@ export function activate(context: vscode.ExtensionContext) {
   context.subscriptions.push(
     vscode.commands.registerCommand("fastedge.run-file", runFile),
     vscode.commands.registerCommand("fastedge.run-workspace", runWorkspace),
+    vscode.commands.registerCommand("fastedge.init-workspace", initWorkspace),
     vscode.commands.registerCommand("fastedge.generate-mcp-json", () =>
       createMCPJson(context),
     ),
