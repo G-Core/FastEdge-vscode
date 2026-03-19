@@ -1,4 +1,5 @@
 import * as vscode from "vscode";
+import * as jsonc from "jsonc-parser";
 
 const LAUNCH_CONFIG = {
   type: "fastedge",
@@ -25,15 +26,42 @@ async function initWorkspace() {
   };
 
   let fileExists = false;
+  let rawText: string | undefined;
+
   try {
     const fileData = await vscode.workspace.fs.readFile(launchJsonUri);
-    launchJson = JSON.parse(Buffer.from(fileData).toString("utf8"));
+    rawText = Buffer.from(fileData).toString("utf8");
     fileExists = true;
-  } catch {
+  } catch (error: any) {
+    const code = error?.code || error?.name;
+    if (code !== "FileNotFound" && code !== "ENOENT") {
+      vscode.window.showErrorMessage(
+        `Failed to read launch.json: ${error?.message || error}`,
+      );
+      return;
+    }
     /* launch.json doesn't exist yet — we'll create it */
   }
 
-  const existing = launchJson.configurations?.find((c) => c.type === "fastedge");
+  if (fileExists && rawText !== undefined) {
+    const errors: jsonc.ParseError[] = [];
+    const parsed = jsonc.parse(rawText, errors, { allowTrailingComma: true });
+    if (errors.length > 0 || parsed === undefined || typeof parsed !== "object") {
+      vscode.window.showErrorMessage(
+        "Your existing .vscode/launch.json contains invalid JSON. Please fix it manually; the FastEdge configuration was not added.",
+      );
+      const doc = await vscode.workspace.openTextDocument(launchJsonUri);
+      await vscode.window.showTextDocument(doc);
+      return;
+    }
+    launchJson = parsed as typeof launchJson;
+  }
+
+  if (!Array.isArray(launchJson.configurations)) {
+    launchJson.configurations = [];
+  }
+
+  const existing = launchJson.configurations.find((c) => c.type === "fastedge");
   if (existing) {
     const open = await vscode.window.showInformationMessage(
       "This workspace already has a FastEdge launch configuration.",
@@ -45,13 +73,12 @@ async function initWorkspace() {
     }
     return;
   }
-
-  if (!Array.isArray(launchJson.configurations)) {
-    launchJson.configurations = [];
-  }
   launchJson.configurations.push(LAUNCH_CONFIG);
 
   try {
+    await vscode.workspace.fs.createDirectory(
+      vscode.Uri.joinPath(workspaceFolder.uri, ".vscode"),
+    );
     await vscode.workspace.fs.writeFile(
       launchJsonUri,
       Buffer.from(JSON.stringify(launchJson, null, 2) + "\n"),

@@ -12,7 +12,7 @@ The extension ships as three platform-specific VSIX packages — one binary bund
 
 Platform detection in TypeScript: use `os.platform()` or `process.platform`. Both return `"linux"` / `"darwin"` / `"win32"`.
 
-**Dev workflow** (`pnpm run bundle:debugger`, `bundle-debugger-for-vscode.sh`) is **Linux/macOS only**. Windows developer support is not a current requirement.
+**Dev workflow**: the debugger is no longer built locally. Download a pre-built `fastedge-debugger.zip` from a fastedge-test release and unzip it into `dist/debugger/`, then run `pnpm run build` to build the extension. Windows developer support is not a current requirement.
 
 ---
 
@@ -125,7 +125,7 @@ Pipeline flow (see `.github/workflows/`):
 
 ## Known Limitations
 
-- **`bundle-debugger-for-vscode.sh`**: Unix shell script — Windows developers cannot use the local bundling workflow. Run on Linux/macOS, or use the CI artifacts.
+- **Local debugger bundling removed**: `bundle:debugger` / `bundle-debugger-for-vscode.sh` no longer exist. The debugger is sourced from pre-built fastedge-test releases in CI, or downloaded manually for local testing.
 - **CI build host**: All extension packaging runs on `ubuntu-latest` regardless of target platform. This is intentional (`vsce` handles cross-packaging), but means the CI never validates native build-tool behavior on macOS or Windows.
 - **Windows Docker Desktop**: `--user` flag is omitted from the generated MCP Docker command. If Docker Desktop for Windows adds support, update `mcpJson.ts:getPlatformDockerCommand()`.
 
