@@ -22,8 +22,6 @@
     "check-types": "tsc --noEmit",
     "build:dev": "node esbuild/build-ext.js --watch",
     "build": "npm run check-types && node esbuild/build-ext.js --prod",
-    "_comment_bundling": "Local dev: bundle:debugger uses coordinator script. CI: downloads release artifact directly.",
-    "bundle:debugger": "cd .. && ./scripts/bundle-debugger-for-vscode.sh",
     "package": "vsce package --no-dependencies",
     "lint": "eslint src --ext ts",
     "test": "vitest run src/**/*.test.ts"
@@ -65,6 +63,10 @@
         "title": "Debug: FastEdge App (Package Entry)"
       },
       {
+        "command": "fastedge.init-workspace",
+        "title": "FastEdge: Initialize workspace (create launch.json)"
+      },
+      {
         "command": "fastedge.generate-mcp-json",
         "title": "FastEdge (Generate mcp.json)"
       },
@@ -88,7 +90,10 @@
               "entrypoint": {
                 "type": "string",
                 "description": "Entrypoint for building the app. \"file\" builds the active editor file; \"package\" builds the package.json main field (JS only).",
-                "enum": ["file", "package"],
+                "enum": [
+                  "file",
+                  "package"
+                ],
                 "default": "file"
               }
             }

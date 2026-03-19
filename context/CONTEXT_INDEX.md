@@ -53,6 +53,11 @@ Use this tree to find relevant documentation for your task:
 → Read: `features/DOTENV_SYSTEM.md`
 → Grep: `CHANGELOG.md` for "dotenv"
 
+**Task: Fix platform-specific issue (Windows/macOS/Linux)**
+→ Read: `features/CROSS_PLATFORM.md`
+→ Read: `features/COMPILER_SYSTEM.md` (if compilation-related)
+→ Grep: `CHANGELOG.md` for "win32" or "darwin" or "platform"
+
 **Task: Fix debugger connection issue**
 → Read: `features/DEBUG_SESSION.md`
 → Read: `architecture/DEBUGGER_ARCHITECTURE.md`
@@ -127,6 +132,7 @@ Use this tree to find relevant documentation for your task:
 | **COMPILER_SYSTEM.md** | Rust & JS compilation | Fixing/modifying compilation |
 | **COMMANDS.md** | VS Code command implementations | Adding/modifying commands |
 | **DOTENV_SYSTEM.md** | Dotenv file handling | Dotenv loading issues |
+| **CROSS_PLATFORM.md** | Linux/macOS/Windows support, CI matrix, spawn rules | Any platform-specific work or new process spawning |
 | **LAUNCH_CONFIG.md** | Launch.json generation | Launch config changes |
 | **MCP_INTEGRATION.md** | MCP server configuration | MCP feature work |
 | **AUTORUN_SYSTEM.md** | File watching, auto-trigger | Auto-run functionality |

@@ -44,9 +44,10 @@ function findDotenvLocation(
   const workspaceFolder = vscode.workspace.workspaceFolders?.[0];
   const activeFile =
     debugContext === "workspace"
-      ? vscode.workspace?.workspaceFolders?.[0].uri.fsPath +
-        path.sep +
-        "index.js" // Does not matter what this filename is.. used solely for the directory structure.
+      ? path.join(
+          workspaceFolder!.uri.fsPath,
+          "index.js" // Does not matter what this filename is.. used solely for the directory structure.
+        )
       : vscode.window.activeTextEditor?.document.uri.fsPath;
 
   if (!activeFile || !workspaceFolder) {
