@@ -46,7 +46,13 @@ async function initWorkspace() {
   if (fileExists && rawText !== undefined) {
     const errors: jsonc.ParseError[] = [];
     const parsed = jsonc.parse(rawText, errors, { allowTrailingComma: true });
-    if (errors.length > 0 || parsed === undefined || typeof parsed !== "object") {
+    if (
+      errors.length > 0 ||
+      parsed === null ||
+      parsed === undefined ||
+      typeof parsed !== "object" ||
+      Array.isArray(parsed)
+    ) {
       vscode.window.showErrorMessage(
         "Your existing .vscode/launch.json contains invalid JSON. Please fix it manually; the FastEdge configuration was not added.",
       );
@@ -54,11 +60,10 @@ async function initWorkspace() {
       await vscode.window.showTextDocument(doc);
       return;
     }
-    launchJson = parsed as typeof launchJson;
-  }
-
-  if (!Array.isArray(launchJson.configurations)) {
-    launchJson.configurations = [];
+    launchJson = {
+      version: typeof parsed.version === "string" ? parsed.version : "0.2.0",
+      configurations: Array.isArray(parsed.configurations) ? parsed.configurations : [],
+    };
   }
 
   const existing = launchJson.configurations.find((c) => c.type === "fastedge");
@@ -73,16 +78,28 @@ async function initWorkspace() {
     }
     return;
   }
-  launchJson.configurations.push(LAUNCH_CONFIG);
+
+  let outputText: string;
+  if (fileExists && rawText !== undefined) {
+    // Targeted edit: append to the configurations array in the original text,
+    // preserving any existing comments and formatting.
+    const edits = jsonc.modify(
+      rawText,
+      ["configurations", -1],
+      LAUNCH_CONFIG,
+      { formattingOptions: { tabSize: 2, insertSpaces: true } },
+    );
+    outputText = jsonc.applyEdits(rawText, edits);
+  } else {
+    outputText =
+      JSON.stringify({ version: "0.2.0", configurations: [LAUNCH_CONFIG] }, null, 2) + "\n";
+  }
 
   try {
     await vscode.workspace.fs.createDirectory(
       vscode.Uri.joinPath(workspaceFolder.uri, ".vscode"),
     );
-    await vscode.workspace.fs.writeFile(
-      launchJsonUri,
-      Buffer.from(JSON.stringify(launchJson, null, 2) + "\n"),
-    );
+    await vscode.workspace.fs.writeFile(launchJsonUri, Buffer.from(outputText));
   } catch (error: any) {
     vscode.window.showErrorMessage(
       `Failed to write launch.json: ${error?.message || error}`,
