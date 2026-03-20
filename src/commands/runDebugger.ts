@@ -156,18 +156,32 @@ function runWorkspace() {
  * Triggered from the explorer context menu on .wasm files.
  * Skips the build step — uses the file as-is.
  */
-async function loadWasmInDebugger(uri: vscode.Uri): Promise<void> {
+async function loadWasmInDebugger(uri?: vscode.Uri): Promise<void> {
   if (!debuggerFactory) {
     vscode.window.showErrorMessage("Debugger not available. Extension may not be initialized correctly.");
     return;
   }
 
+  if (!uri) {
+    const picked = await vscode.window.showOpenDialog({
+      canSelectMany: false,
+      filters: { "WebAssembly Binary": ["wasm"] },
+      openLabel: "Load WASM",
+      title: "Select a compiled WASM binary",
+    });
+    if (!picked || picked.length === 0) {
+      return;
+    }
+    uri = picked[0];
+  }
+
   const wasmPath = uri.fsPath;
   const wasmDir = path.dirname(wasmPath);
-  let appRoot = resolveConfigRoot(wasmPath) ?? wasmDir;
-  if (!resolveConfigRoot(wasmPath)) {
+  const configRoot = resolveConfigRoot(wasmPath);
+  if (!configRoot) {
     ensureConfigFile(wasmDir);
   }
+  const appRoot = configRoot ?? wasmDir;
 
   const { provider } = debuggerFactory(appRoot);
 
@@ -183,10 +197,23 @@ async function loadWasmInDebugger(uri: vscode.Uri): Promise<void> {
  * Triggered from the explorer context menu on *test.json files.
  * Opens the debugger if not already open, then sends the config content.
  */
-async function loadConfigInDebugger(uri: vscode.Uri): Promise<void> {
+async function loadConfigInDebugger(uri?: vscode.Uri): Promise<void> {
   if (!debuggerFactory) {
     vscode.window.showErrorMessage("Debugger not available. Extension may not be initialized correctly.");
     return;
+  }
+
+  if (!uri) {
+    const picked = await vscode.window.showOpenDialog({
+      canSelectMany: false,
+      filters: { "FastEdge Test Config": ["json"] },
+      openLabel: "Load Config",
+      title: "Select a FastEdge test config file (*test.json)",
+    });
+    if (!picked || picked.length === 0) {
+      return;
+    }
+    uri = picked[0];
   }
 
   const configPath = uri.fsPath;

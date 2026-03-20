@@ -338,7 +338,10 @@ export class DebuggerWebviewProvider {
    */
   async sendConfig(content: string, fileName: string): Promise<void> {
     await this.waitForWebSocketClient();
-    this.panel?.webview.postMessage({ command: "filePickerResult", content, fileName });
+    if (!this.panel) {
+      throw new Error("Debugger panel was closed before the config could be sent.");
+    }
+    this.panel.webview.postMessage({ command: "filePickerResult", content, fileName });
   }
 
   /**
