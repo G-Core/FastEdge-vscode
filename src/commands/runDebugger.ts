@@ -1,5 +1,6 @@
 import * as vscode from "vscode";
 import * as path from "path";
+import { readFile } from "fs/promises";
 import { DebuggerServerManager, DebuggerWebviewProvider } from "../debugger";
 import { compileActiveEditorsBinary } from "../compiler";
 import { resolveConfigRoot, resolveBuildRoot, ensureConfigFile } from "../utils/resolveAppRoot";
@@ -150,4 +151,59 @@ function runWorkspace() {
   return buildAndDebug("workspace");
 }
 
-export { runFile, runWorkspace };
+/**
+ * Load a pre-built WASM binary directly into the debugger.
+ * Triggered from the explorer context menu on .wasm files.
+ * Skips the build step — uses the file as-is.
+ */
+async function loadWasmInDebugger(uri: vscode.Uri): Promise<void> {
+  if (!debuggerFactory) {
+    vscode.window.showErrorMessage("Debugger not available. Extension may not be initialized correctly.");
+    return;
+  }
+
+  const wasmPath = uri.fsPath;
+  const wasmDir = path.dirname(wasmPath);
+  let appRoot = resolveConfigRoot(wasmPath) ?? wasmDir;
+  if (!resolveConfigRoot(wasmPath)) {
+    ensureConfigFile(wasmDir);
+  }
+
+  const { provider } = debuggerFactory(appRoot);
+
+  try {
+    await provider.showDebugger(wasmPath);
+  } catch (error) {
+    vscode.window.showErrorMessage(`Failed to load WASM: ${(error as Error).message}`);
+  }
+}
+
+/**
+ * Load a fastedge test config JSON file into the running debugger.
+ * Triggered from the explorer context menu on *test.json files.
+ * Opens the debugger if not already open, then sends the config content.
+ */
+async function loadConfigInDebugger(uri: vscode.Uri): Promise<void> {
+  if (!debuggerFactory) {
+    vscode.window.showErrorMessage("Debugger not available. Extension may not be initialized correctly.");
+    return;
+  }
+
+  const configPath = uri.fsPath;
+  const appRoot = path.dirname(configPath);
+
+  const { provider } = debuggerFactory(appRoot);
+
+  try {
+    // Start server and open panel (no WASM yet)
+    await provider.showDebugger();
+
+    // Read config and send to the React app via the existing filePickerResult path
+    const content = await readFile(configPath, "utf-8");
+    await provider.sendConfig(content, path.basename(configPath));
+  } catch (error) {
+    vscode.window.showErrorMessage(`Failed to load config: ${(error as Error).message}`);
+  }
+}
+
+export { runFile, runWorkspace, loadWasmInDebugger, loadConfigInDebugger };

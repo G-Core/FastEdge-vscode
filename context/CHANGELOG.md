@@ -13,6 +13,29 @@ See `SEARCH_GUIDE.md` for more search patterns.
 
 ---
 
+## [2026-03-20] - Explorer context menu commands for loading WASM and config files
+
+### Overview
+Added two right-click context menu commands in the VSCode file explorer as the supported alternative to drag-and-drop (which cannot work in VSCode webviews — VSCode intercepts all file drag events at the application level before the webview sees them).
+
+### 🎯 What Was Completed
+
+- **FastEdge: Load in Debugger** on `.wasm` files — resolves app root from the file's directory, starts the server, loads the binary directly (no build step)
+- **FastEdge: Load Config in Debugger** on `*test.json` files — starts the debugger for that app's directory, reads the JSON file, sends via the existing `filePickerResult` message path that `ConfigButtons` already handles (auto-loads WASM if `wasm.path` is in the config)
+- Added `provider.sendConfig(content, fileName)` to `DebuggerWebviewProvider` — waits for WebSocket client before posting, avoiding the timing race that affects WASM loads
+
+**Files Modified:**
+- `package.json` — `contributes.commands` (2 new entries) + `contributes.menus.explorer/context`
+- `src/commands/runDebugger.ts` — `loadWasmInDebugger()`, `loadConfigInDebugger()` (exported)
+- `src/debugger/DebuggerWebviewProvider.ts` — `sendConfig()` public method
+- `src/extension.ts` — registered both new commands
+
+### 📝 Notes
+- Drag-and-drop was investigated thoroughly and is fundamentally unsupported in VSCode webviews. See `context/BUNDLED_DEBUGGER.md` → "Drag-and-Drop Limitation" for the full investigation summary.
+- The `*test.json` when-clause (`resourceFilename =~ /test\\.json$/`) surfaces the command on `fastedge-config.test.json` and any other `*test.json` files.
+
+---
+
 ## [2026-03-18] - DotenvPanel: show resolved app root as default path label
 
 ### Overview

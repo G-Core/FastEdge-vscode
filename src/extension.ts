@@ -8,6 +8,8 @@ import {
   setupCodespaceSecret,
   runFile,
   runWorkspace,
+  loadWasmInDebugger,
+  loadConfigInDebugger,
   initializeDebuggerComponents,
 } from "./commands";
 import { initializeTriggerFileHandler } from "./autorun/triggerFileHandler";
@@ -100,6 +102,12 @@ export function activate(context: vscode.ExtensionContext) {
     ),
     vscode.commands.registerCommand("fastedge.setup-codespace-secret", () =>
       setupCodespaceSecret(context),
+    ),
+    vscode.commands.registerCommand("fastedge.debug-load-wasm", (uri: vscode.Uri) =>
+      loadWasmInDebugger(uri),
+    ),
+    vscode.commands.registerCommand("fastedge.debug-load-config", (uri: vscode.Uri) =>
+      loadConfigInDebugger(uri),
     ),
   );
 }

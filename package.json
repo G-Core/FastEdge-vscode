@@ -73,8 +73,32 @@
       {
         "command": "fastedge.setup-codespace-secret",
         "title": "FastEdge (Setup Codespace Secrets)"
+      },
+      {
+        "command": "fastedge.debug-load-wasm",
+        "title": "FastEdge: Load in Debugger",
+        "category": "FastEdge"
+      },
+      {
+        "command": "fastedge.debug-load-config",
+        "title": "FastEdge: Load Config in Debugger",
+        "category": "FastEdge"
       }
     ],
+    "menus": {
+      "explorer/context": [
+        {
+          "command": "fastedge.debug-load-wasm",
+          "when": "resourceExtname == .wasm",
+          "group": "fastedge@1"
+        },
+        {
+          "command": "fastedge.debug-load-config",
+          "when": "resourceFilename =~ /test\\.json$/",
+          "group": "fastedge@2"
+        }
+      ]
+    },
     "debuggers": [
       {
         "type": "fastedge",
