@@ -17,6 +17,7 @@
   "activationEvents": [
     "onStartupFinished"
   ],
+  "extensionKind": ["workspace"],
   "main": "./dist/extension.js",
   "scripts": {
     "check-types": "tsc --noEmit",
