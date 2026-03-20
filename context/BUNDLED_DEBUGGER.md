@@ -319,10 +319,48 @@ Note: `lib/` (the `@gcoredev/fastedge-test` npm package output) is explicitly **
 
 ## Commands
 
-The extension provides two debug commands. Servers are started and stopped automatically — no manual server control needed.
+The extension provides debug commands and explorer context menu commands. Servers are started and stopped automatically — no manual server control needed.
+
+### Debug commands (F5 / command palette)
 
 - `Debug: FastEdge App (Current File)` — Build active file → start server → open debugger panel
 - `Debug: FastEdge App (Package Entry)` — Build `package.json` main entry (JS only) → start server → open debugger panel
+
+### Explorer context menu commands
+
+Right-click files in the VSCode file explorer to load them directly into the debugger without a build step:
+
+- **FastEdge: Load in Debugger** — appears on `.wasm` files. Resolves app root from the file's directory, starts the server, and loads the binary directly (skips compile step). Useful for loading pre-built WASM binaries.
+- **FastEdge: Load Config in Debugger** — appears on `*test.json` files (e.g. `fastedge-config.test.json`). Opens the debugger for that app, then sends the config content via the existing `filePickerResult` message path that `ConfigButtons` already handles. Auto-loads WASM if `wasm.path` is set in the config.
+
+**Implementation**: `src/commands/runDebugger.ts` — `loadWasmInDebugger()` and `loadConfigInDebugger()`. The config command uses `provider.sendConfig()` which waits for the React app's WebSocket to connect (same `waitForWebSocketClient` poll) before posting the message, avoiding the timing problem that affects initial WASM loads.
+
+---
+
+## Drag-and-Drop Limitation
+
+**Drag-and-drop of files onto the debugger webview panel is not supported in VSCode.**
+
+### Why it cannot work
+
+VSCode intercepts all file drag events at the application level before the webview's HTML document ever receives them. When a file is dragged over any editor area (including webview panels), VSCode shows a "Hold Shift to drop into editor" indicator and handles the drop itself. The webview renderer never fires `dragenter`, `dragover`, or `drop` events — even with capture-phase listeners on `document`.
+
+This is by design in VSCode's Electron shell and cannot be bypassed from a webview or extension.
+
+### Investigation summary (March 2026)
+
+Several approaches were tried and confirmed not to work:
+- `document.addEventListener('dragenter', ..., true)` (capture phase) — never fires
+- Full-screen transparent overlay `<div>` above the iframe — never receives events
+- `dataTransfer` interception in the outer webview shell — outer shell also never sees drag events
+
+### Standalone mode (fastedge-test direct)
+
+When the debugger frontend is accessed directly in a browser (not via the VSCode webview), drag-and-drop **does work**. The `DragDropZone` component in the React app handles `.wasm` and `.json` drops natively.
+
+### Workaround for VSCode users
+
+Use the explorer context menu commands described above. Right-clicking is one action and is arguably more discoverable than drag-and-drop.
 
 ---
 

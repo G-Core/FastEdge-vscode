@@ -332,6 +332,19 @@ export class DebuggerWebviewProvider {
   }
 
   /**
+   * Send a config file's content to the debugger UI.
+   * Posts a filePickerResult message, which ConfigButtons already handles.
+   * Waits for the React app to connect via WebSocket before posting.
+   */
+  async sendConfig(content: string, fileName: string): Promise<void> {
+    await this.waitForWebSocketClient();
+    if (!this.panel) {
+      throw new Error("Debugger panel was closed before the config could be sent.");
+    }
+    this.panel.webview.postMessage({ command: "filePickerResult", content, fileName });
+  }
+
+  /**
    * Close the debugger webview
    */
   close(): void {

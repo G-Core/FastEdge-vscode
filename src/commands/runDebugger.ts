@@ -1,5 +1,6 @@
 import * as vscode from "vscode";
 import * as path from "path";
+import { readFile } from "fs/promises";
 import { DebuggerServerManager, DebuggerWebviewProvider } from "../debugger";
 import { compileActiveEditorsBinary } from "../compiler";
 import { resolveConfigRoot, resolveBuildRoot, ensureConfigFile } from "../utils/resolveAppRoot";
@@ -150,4 +151,86 @@ function runWorkspace() {
   return buildAndDebug("workspace");
 }
 
-export { runFile, runWorkspace };
+/**
+ * Load a pre-built WASM binary directly into the debugger.
+ * Triggered from the explorer context menu on .wasm files.
+ * Skips the build step — uses the file as-is.
+ */
+async function loadWasmInDebugger(uri?: vscode.Uri): Promise<void> {
+  if (!debuggerFactory) {
+    vscode.window.showErrorMessage("Debugger not available. Extension may not be initialized correctly.");
+    return;
+  }
+
+  if (!uri) {
+    const picked = await vscode.window.showOpenDialog({
+      canSelectMany: false,
+      filters: { "WebAssembly Binary": ["wasm"] },
+      openLabel: "Load WASM",
+      title: "Select a compiled WASM binary",
+    });
+    if (!picked || picked.length === 0) {
+      return;
+    }
+    uri = picked[0];
+  }
+
+  const wasmPath = uri.fsPath;
+  const wasmDir = path.dirname(wasmPath);
+  const configRoot = resolveConfigRoot(wasmPath);
+  if (!configRoot) {
+    ensureConfigFile(wasmDir);
+  }
+  const appRoot = configRoot ?? wasmDir;
+
+  const { provider } = debuggerFactory(appRoot);
+
+  try {
+    await provider.showDebugger(wasmPath);
+  } catch (error) {
+    vscode.window.showErrorMessage(`Failed to load WASM: ${(error as Error).message}`);
+  }
+}
+
+/**
+ * Load a fastedge test config JSON file into the running debugger.
+ * Triggered from the explorer context menu on *test.json files.
+ * Opens the debugger if not already open, then sends the config content.
+ */
+async function loadConfigInDebugger(uri?: vscode.Uri): Promise<void> {
+  if (!debuggerFactory) {
+    vscode.window.showErrorMessage("Debugger not available. Extension may not be initialized correctly.");
+    return;
+  }
+
+  if (!uri) {
+    const picked = await vscode.window.showOpenDialog({
+      canSelectMany: false,
+      filters: { "FastEdge Test Config": ["json"] },
+      openLabel: "Load Config",
+      title: "Select a FastEdge test config file (*test.json)",
+    });
+    if (!picked || picked.length === 0) {
+      return;
+    }
+    uri = picked[0];
+  }
+
+  const configPath = uri.fsPath;
+  const appRoot = path.dirname(configPath);
+
+  const { provider } = debuggerFactory(appRoot);
+
+  try {
+    // Start server and open panel (no WASM yet)
+    await provider.showDebugger();
+
+    // Read config and send to the React app via the existing filePickerResult path
+    const content = await readFile(configPath, "utf-8");
+    await provider.sendConfig(content, path.basename(configPath));
+  } catch (error) {
+    vscode.window.showErrorMessage(`Failed to load config: ${(error as Error).message}`);
+  }
+}
+
+export { runFile, runWorkspace, loadWasmInDebugger, loadConfigInDebugger };
