@@ -37,8 +37,15 @@ export class DebuggerWebviewProvider {
           }
         );
 
+        // Resolve the debugger URL for the webview — in remote environments
+        // (e.g. GitHub Codespaces), localhost is not accessible from the browser,
+        // so asExternalUri converts it to a forwarded URL.
+        const localUri = vscode.Uri.parse(this.serverManager.getUrl());
+        const externalUri = await vscode.env.asExternalUri(localUri);
+        const debuggerUrl = externalUri.toString();
+
         // Set webview content
-        this.panel.webview.html = this.getWebviewContent();
+        this.panel.webview.html = this.getWebviewContent(debuggerUrl);
 
         // Handle messages from the webview (forwarded from the debugger iframe)
         this.panel.webview.onDidReceiveMessage(async (message) => {
@@ -225,8 +232,7 @@ export class DebuggerWebviewProvider {
   /**
    * Get the webview HTML content
    */
-  private getWebviewContent(): string {
-    const debuggerUrl = this.serverManager.getUrl();
+  private getWebviewContent(debuggerUrl: string): string {
 
     return `<!DOCTYPE html>
 <html lang="en">
