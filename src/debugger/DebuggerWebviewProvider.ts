@@ -8,6 +8,7 @@ import { DebuggerServerManager } from "./DebuggerServerManager";
  */
 export class DebuggerWebviewProvider {
   private panel: vscode.WebviewPanel | null = null;
+  private currentDebuggerUrl: string | null = null;
 
   constructor(
     private context: vscode.ExtensionContext,
@@ -22,8 +23,20 @@ export class DebuggerWebviewProvider {
       // Ensure debugger server is running
       await this.serverManager.start();
 
+      // Resolve the debugger URL for the webview — in remote environments
+      // (e.g. GitHub Codespaces), localhost is not accessible from the browser,
+      // so asExternalUri converts it to a forwarded URL.
+      const localUri = vscode.Uri.parse(this.serverManager.getUrl());
+      const externalUri = await vscode.env.asExternalUri(localUri);
+      const debuggerUrl = externalUri.toString();
+
       // Create or reveal webview panel
       if (this.panel) {
+        // If the server restarted on a different port, refresh the webview
+        if (this.currentDebuggerUrl !== debuggerUrl) {
+          this.currentDebuggerUrl = debuggerUrl;
+          this.panel.webview.html = this.getWebviewContent(debuggerUrl);
+        }
         this.panel.reveal(vscode.ViewColumn.Two);
       } else {
         const appName = path.basename(this.serverManager.getAppRoot());
@@ -37,8 +50,10 @@ export class DebuggerWebviewProvider {
           }
         );
 
+        this.currentDebuggerUrl = debuggerUrl;
+
         // Set webview content
-        this.panel.webview.html = this.getWebviewContent();
+        this.panel.webview.html = this.getWebviewContent(debuggerUrl);
 
         // Handle messages from the webview (forwarded from the debugger iframe)
         this.panel.webview.onDidReceiveMessage(async (message) => {
@@ -105,6 +120,7 @@ export class DebuggerWebviewProvider {
         // When the user closes the panel, stop the server for this app
         this.panel.onDidDispose(async () => {
           this.panel = null;
+          this.currentDebuggerUrl = null;
           // Only stop if the server is still running — avoids double-stop
           // when the "Stop Debug Server" command closes the panel explicitly
           if (this.serverManager.isRunning()) {
@@ -225,8 +241,7 @@ export class DebuggerWebviewProvider {
   /**
    * Get the webview HTML content
    */
-  private getWebviewContent(): string {
-    const debuggerUrl = this.serverManager.getUrl();
+  private getWebviewContent(debuggerUrl: string): string {
 
     return `<!DOCTYPE html>
 <html lang="en">
