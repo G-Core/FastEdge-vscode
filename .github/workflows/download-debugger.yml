@@ -12,8 +12,7 @@ on:
 jobs:
   # Job 1: Download debugger ONCE
   download-debugger:
-    # runs-on: [self-hosted, ubuntu-22-04, regular]
-    runs-on: ubuntu-latest
+    runs-on: [self-hosted, ubuntu-22-04, regular]
     outputs:
       version: ${{ steps.determine-version.outputs.version }}
     steps:
@@ -22,7 +21,7 @@ jobs:
         run: |
           if [ "${{ inputs.debugger_version }}" == "latest" ] || [ -z "${{ inputs.debugger_version }}" ]; then
             echo "Fetching latest debugger release version..."
-            LATEST_VERSION=$(curl -s https://api.github.com/repos/godronus/fastedge-test/releases/latest | jq -r .tag_name)
+            LATEST_VERSION=$(curl -s https://api.github.com/repos/G-Core/fastedge-test/releases/latest | jq -r .tag_name)
             echo "Latest debugger version is $LATEST_VERSION"
             echo "version=$LATEST_VERSION" >> $GITHUB_OUTPUT
           else
@@ -35,9 +34,9 @@ jobs:
           VERSION="${{ steps.determine-version.outputs.version }}"
           echo "Downloading fastedge-debugger version $VERSION"
           curl -L -o fastedge-debugger.zip \
-            https://github.com/godronus/fastedge-test/releases/download/$VERSION/fastedge-debugger.zip
+            https://github.com/G-Core/fastedge-test/releases/download/$VERSION/fastedge-debugger.zip
           curl -L -o fastedge-debugger.zip.sha256 \
-            https://github.com/godronus/fastedge-test/releases/download/$VERSION/fastedge-debugger.zip.sha256
+            https://github.com/G-Core/fastedge-test/releases/download/$VERSION/fastedge-debugger.zip.sha256
 
       - name: Verify checksum
         run: |
@@ -52,8 +51,7 @@ jobs:
 
   # Job 2: Filter for each platform (parallel matrix job)
   filter-for-platforms:
-    # runs-on: [self-hosted, ubuntu-22-04, regular]
-    runs-on: ubuntu-latest
+    runs-on: [self-hosted, ubuntu-22-04, regular]
     needs: download-debugger
     strategy:
       matrix:
