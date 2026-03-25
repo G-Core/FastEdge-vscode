@@ -24,8 +24,7 @@ permissions:
 
 jobs:
   build_extension:
-    # runs-on: [self-hosted, ubuntu-22-04, regular]
-    runs-on: ubuntu-latest
+    runs-on: [self-hosted, ubuntu-22-04, regular]
 
     steps:
       - name: Checkout this repository
@@ -101,15 +100,15 @@ jobs:
             ${{ env.ASSET }}
             ${{ env.ASSET_SUM }}
 
-      # - name: Import Personal Access Token
-      #   uses: hashicorp/vault-action@v3
-      #   id: secrets
-      #   with:
-      #     url: https://puppet-vault.gc.onl
-      #     token: ${{ secrets.VAULT_TOKEN }}
-      #     secrets: |
-      #       secret/project_fastedge/vscode_marketplace publish_token | PUBLISH_TOKEN ;
+      - name: Import Personal Access Token
+        uses: hashicorp/vault-action@v3
+        id: secrets
+        with:
+          url: https://puppet-vault.gc.onl
+          token: ${{ secrets.VAULT_TOKEN }}
+          secrets: |
+            secret/project_fastedge/vscode_marketplace publish_token | PUBLISH_TOKEN ;
 
-      # - name: Publish extension to VS Marketplace
-      #   run: |
-      #     pnpm exec vsce publish --no-dependencies --target ${{ inputs.os_target }} --pat ${{ steps.secrets.outputs.PUBLISH_TOKEN }}
+      - name: Publish extension to VS Marketplace
+        run: |
+          pnpm exec vsce publish --no-dependencies --target ${{ inputs.os_target }} --pat ${{ steps.secrets.outputs.PUBLISH_TOKEN }}
