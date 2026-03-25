@@ -1,4 +1,4 @@
-import { fork, ChildProcess } from "child_process";
+import { fork, execFile, ChildProcess } from "child_process";
 import * as vscode from "vscode";
 import * as path from "path";
 import * as fs from "fs";
@@ -47,7 +47,9 @@ export class DebuggerServerManager {
    */
   async isHealthy(): Promise<boolean> {
     try {
-      const response = await fetch(`http://localhost:${this.port}/health`);
+      const response = await fetch(`http://localhost:${this.port}/health`, {
+        signal: AbortSignal.timeout(500),
+      });
       const data = await response.json();
       return response.ok && data.status === "ok" && data.service === "fastedge-debugger";
     } catch {
@@ -73,22 +75,26 @@ export class DebuggerServerManager {
    */
   private async resolvePort(): Promise<number> {
     for (let port = 5179; port < 5189; port++) {
+      let response: Response;
       try {
-        const response = await fetch(`http://localhost:${port}/health`, {
+        response = await fetch(`http://localhost:${port}/health`, {
           signal: AbortSignal.timeout(500),
         });
+      } catch {
+        // Connection refused or timeout — port is free
+        return port;
+      }
+      // If fetch succeeded, something is listening — figure out what
+      try {
         const data = await response.json();
         if (data.status === "ok" && data.service === "fastedge-debugger") {
-          // A fastedge server is on this port — skip it (belongs to another app)
           console.log(`Port ${port} is in use by another fastedge-debugger, trying ${port + 1}...`);
           continue;
         }
-        // Something else is on this port — try the next one
-        console.log(`Port ${port} is occupied by a foreign process, trying ${port + 1}...`);
       } catch {
-        // Port is free
-        return port;
+        // JSON parse failed but a process is listening — port is occupied
       }
+      console.log(`Port ${port} is occupied by a foreign process, trying ${port + 1}...`);
     }
     throw new Error("Could not find a free port for the debugger server (tried 10 ports)");
   }
@@ -207,12 +213,24 @@ export class DebuggerServerManager {
    */
   async stop(): Promise<void> {
     if (this.serverProcess) {
-      console.log(`Stopping debugger server for ${this.appRoot}...`);
-      this.serverProcess.kill("SIGTERM");
+      const proc = this.serverProcess;
       this.serverProcess = null;
-      // Wait a bit for graceful shutdown before cleaning the port file,
-      // as the server's own SIGTERM handler will delete it too
-      await new Promise((resolve) => setTimeout(resolve, 1000));
+      console.log(`Stopping debugger server for ${this.appRoot}...`);
+      proc.kill("SIGINT");
+      // Wait for graceful shutdown before cleaning the port file,
+      // as the server's own signal handler will delete it too
+      const exited = await new Promise<boolean>((resolve) => {
+        const timer = setTimeout(() => resolve(false), 2000);
+        proc.once("exit", () => { clearTimeout(timer); resolve(true); });
+      });
+      if (!exited && proc.pid) {
+        console.log(`Debugger server did not exit in time, force-killing pid ${proc.pid}`);
+        if (process.platform === "win32") {
+          try { execFile("taskkill", ["/F", "/T", "/PID", String(proc.pid)]); } catch { /* best effort */ }
+        } else {
+          try { proc.kill("SIGKILL"); } catch { /* already dead */ }
+        }
+      }
     }
     this.deletePortFile();
   }

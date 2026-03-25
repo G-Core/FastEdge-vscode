@@ -227,7 +227,9 @@ export class DebuggerWebviewProvider {
     const start = Date.now();
     while (Date.now() - start < timeoutMs) {
       try {
-        const response = await fetch(`${this.serverManager.getUrl()}/api/client-count`);
+        const response = await fetch(`${this.serverManager.getUrl()}/api/client-count`, {
+          signal: AbortSignal.timeout(2000),
+        });
         const { count } = await response.json();
         if (count > 0) return;
       } catch {
@@ -290,7 +292,6 @@ export class DebuggerWebviewProvider {
     const vscode = acquireVsCodeApi();
     const iframe = document.getElementById('debugger-frame');
     const loading = document.getElementById('loading');
-
     // Show iframe when loaded
     iframe.onload = function() {
       loading.style.display = 'none';

@@ -26,7 +26,7 @@ esbuild/**
 docs/**
 context/**
 DOTENV.md
-claude.md
+CLAUDE.md
 
 # Exclude exampleFolder
 exampleFolder/**
