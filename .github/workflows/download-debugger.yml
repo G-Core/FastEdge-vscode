@@ -72,6 +72,7 @@ jobs:
       - name: Extract debugger
         run: |
           echo "Extracting debugger for ${{ matrix.os_target }}..."
+          rm -rf debugger-extracted
           mkdir -p debugger-extracted
           unzip -q fastedge-debugger.zip -d debugger-extracted
           ls -lah debugger-extracted/
