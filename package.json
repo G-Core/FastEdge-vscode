@@ -1,7 +1,7 @@
 {
   "name": "fastedge",
   "displayName": "FastEdge Launcher",
-  "version": "0.1.12",
+  "version": "0.1.28",
   "publisher": "g-corelabssa",
   "description": "Launcher for FastEdge apps",
   "icon": "images/fastedge.png",
@@ -17,14 +17,17 @@
   "activationEvents": [
     "onStartupFinished"
   ],
+  "extensionKind": [
+    "workspace"
+  ],
   "main": "./dist/extension.js",
   "scripts": {
     "check-types": "tsc --noEmit",
     "build:dev": "node esbuild/build-ext.js --watch",
     "build": "npm run check-types && node esbuild/build-ext.js --prod",
-    "copy-files": "./scripts/copy-files.sh",
     "package": "vsce package --no-dependencies",
-    "lint": "eslint src --ext ts"
+    "lint": "eslint src --ext ts",
+    "test": "vitest run src/**/*.test.ts"
   },
   "pnpm": {
     "onlyBuiltDependencies": [
@@ -60,11 +63,11 @@
       },
       {
         "command": "fastedge.run-workspace",
-        "title": "Debug: FastEdge App (Workspace)"
+        "title": "Debug: FastEdge App (Package Entry)"
       },
       {
-        "command": "fastedge.generate-launch-json",
-        "title": "FastEdge (Generate launch.json)"
+        "command": "fastedge.init-workspace",
+        "title": "FastEdge: Initialize workspace (create launch.json)"
       },
       {
         "command": "fastedge.generate-mcp-json",
@@ -73,8 +76,32 @@
       {
         "command": "fastedge.setup-codespace-secret",
         "title": "FastEdge (Setup Codespace Secrets)"
+      },
+      {
+        "command": "fastedge.debug-load-wasm",
+        "title": "FastEdge: Load in Debugger",
+        "category": "FastEdge"
+      },
+      {
+        "command": "fastedge.debug-load-config",
+        "title": "FastEdge: Load Config in Debugger",
+        "category": "FastEdge"
       }
     ],
+    "menus": {
+      "explorer/context": [
+        {
+          "command": "fastedge.debug-load-wasm",
+          "when": "resourceExtname == .wasm",
+          "group": "fastedge@1"
+        },
+        {
+          "command": "fastedge.debug-load-config",
+          "when": "resourceFilename =~ /test\\.json$/",
+          "group": "fastedge@2"
+        }
+      ]
+    },
     "debuggers": [
       {
         "type": "fastedge",
@@ -87,79 +114,14 @@
         "configurationAttributes": {
           "launch": {
             "properties": {
-              "args": {
-                "type": "array",
-                "description": "Arguments to pass to the executable",
-                "items": {
-                  "type": "string"
-                }
-              },
-              "binary": {
-                "type": "string",
-                "description": "Wasm binary path, typically populated automatically"
-              },
-              "cliPath": {
-                "type": "string",
-                "description": "Path to the FastEdge CLI, typically populated automatically",
-                "default": ""
-              },
-              "dotenv": {
-                "oneOf": [
-                  {
-                    "type": "string",
-                    "description": "Path to the folder containing .env files to load environment variables"
-                  },
-                  {
-                    "type": "boolean",
-                    "description": "Enable dotenv support (true will use the active debugger location)"
-                  }
-                ],
-                "default": true
-              },
               "entrypoint": {
                 "type": "string",
-                "description": "Entrypoint for building the app. (\"file\" or \"workspace\" are valid options)",
+                "description": "Entrypoint for building the app. \"file\" builds the active editor file; \"package\" builds the package.json main field (JS only).",
+                "enum": [
+                  "file",
+                  "package"
+                ],
                 "default": "file"
-              },
-              "env": {
-                "type": "object",
-                "description": "Environment variables",
-                "default": {}
-              },
-              "geoIpHeaders": {
-                "type": "boolean",
-                "description": "Add sample GeoIP headers",
-                "default": false
-              },
-              "headers": {
-                "type": "object",
-                "description": "Extra request headers",
-                "default": {}
-              },
-              "memoryLimit": {
-                "type": "number",
-                "description": "Memory limit in bytes",
-                "default": 10000000
-              },
-              "port": {
-                "type": "number",
-                "description": "Port to listen for incoming requests",
-                "default": 8181
-              },
-              "responseHeaders": {
-                "type": "object",
-                "description": "Response headers will be added to all responses",
-                "default": {}
-              },
-              "secrets": {
-                "type": "object",
-                "description": "Secret variables",
-                "default": {}
-              },
-              "traceLogging": {
-                "type": "boolean",
-                "description": "Trace logging",
-                "default": false
               }
             }
           }
@@ -193,11 +155,11 @@
     "@vscode/vsce": "^3.7.0",
     "esbuild": "^0.27.0",
     "eslint": "^9.39.1",
-    "typescript": "^5.9.3"
+    "typescript": "^5.9.3",
+    "vitest": "^2.1.9"
   },
   "dependencies": {
-    "@vscode/debugadapter": "^1.68.0",
-    "@vscode/debugprotocol": "^1.68.0",
+    "jsonc-parser": "^3.3.1",
     "toml": "^3.0.0",
     "tree-kill": "^1.2.2"
   }

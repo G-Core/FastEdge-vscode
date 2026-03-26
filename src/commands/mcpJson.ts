@@ -38,7 +38,7 @@ function getPlatformDockerCommand(): { command: string; args: string[] } {
       command: "bash",
       args: [
         "-c",
-        "docker run --rm -i -v ${workspaceFolder}:/workspace -e WORKSPACE_ROOT=/workspace -e FASTEDGE_API_KEY=$FASTEDGE_API_KEY -e FASTEDGE_API_URL=$FASTEDGE_API_URL ghcr.io/g-core/fastedge-mcp-server:latest",
+        'docker run --rm -i -v "${workspaceFolder}:/workspace" -e "WORKSPACE_ROOT=/workspace" -e "FASTEDGE_API_KEY=$FASTEDGE_API_KEY" -e "FASTEDGE_API_URL=$FASTEDGE_API_URL" ghcr.io/g-core/fastedge-mcp-server:latest',
       ],
     };
   }

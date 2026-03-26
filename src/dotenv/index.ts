@@ -6,7 +6,7 @@ import { DebugContext } from "../types";
 
 function findNearestDotenvFolder(
   stopDir: string,
-  startDir: string
+  startDir: string,
 ): string | null {
   // Walks up the tree from activeFile location to find the nearest .env file
   // stops when it reaches the Workspace root. i.e. --dotenv will be set as "false"
@@ -39,14 +39,17 @@ function validateDotenvPath(dotenvPath: string): string | null {
 }
 
 function findDotenvLocation(
-  debugContext: DebugContext = "file"
+  debugContext: DebugContext = "file",
 ): string | null {
   const workspaceFolder = vscode.workspace.workspaceFolders?.[0];
   const activeFile =
     debugContext === "workspace"
-      ? vscode.workspace?.workspaceFolders?.[0].uri.fsPath +
-        path.sep +
-        "index.js" // Does not matter what this filename is.. used solely for the directory structure.
+      ? workspaceFolder
+        ? path.join(
+            workspaceFolder.uri.fsPath,
+            "index.js", // Does not matter what this filename is.. used solely for the directory structure.
+          )
+        : undefined
       : vscode.window.activeTextEditor?.document.uri.fsPath;
 
   if (!activeFile || !workspaceFolder) {
@@ -54,7 +57,7 @@ function findDotenvLocation(
   }
   const dotEnvLocation = findNearestDotenvFolder(
     workspaceFolder.uri.fsPath,
-    path.dirname(activeFile)
+    path.dirname(activeFile),
   );
   return dotEnvLocation;
 }

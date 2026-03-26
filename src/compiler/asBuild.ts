@@ -2,10 +2,11 @@ import { spawn } from "child_process";
 import fs from "fs";
 import path from "path";
 
-import { DebugContext, LogToDebugConsole } from "../types";
+import { LogToDebugConsole } from "../types";
 import { resolveConfigRoot, resolveBuildRoot } from "../utils/resolveAppRoot";
 
 const BINARY_NAME = "debugger.wasm";
+const AS_ENTRY_POINT = path.join("assembly", "index.ts");
 
 const makeBinDirectory = (appRoot: string) =>
   new Promise<string>((resolve, reject) => {
@@ -15,32 +16,11 @@ const makeBinDirectory = (appRoot: string) =>
     );
   });
 
-const getPackageJsonEntryPoint = (appRoot: string) =>
-  new Promise<string>((resolve, reject) => {
-    fs.readFile(
-      path.join(appRoot, "package.json"),
-      "utf8",
-      (err, data) => {
-        if (err) {
-          reject(err);
-        } else {
-          try {
-            const packageJson = JSON.parse(data);
-            resolve(packageJson.main ?? "");
-          } catch (err) {
-            reject(err);
-          }
-        }
-      }
-    );
-  });
-
-export function compileJavascriptBinary(
+export function compileAssemblyScriptBinary(
   activeFilePath: string,
-  debugContext: DebugContext,
   logDebugConsole: LogToDebugConsole
 ) {
-  logDebugConsole("Compiling javascript binary...\n");
+  logDebugConsole("Compiling AssemblyScript binary...\n");
   return new Promise<string>(async (resolve, reject) => {
     try {
       const buildRoot = resolveBuildRoot(activeFilePath);
@@ -50,20 +30,24 @@ export function compileJavascriptBinary(
         );
       }
 
+      if (!fs.existsSync(path.join(buildRoot, "asconfig.json"))) {
+        throw new Error(
+          "asconfig.json not found. Ensure this is an AssemblyScript project."
+        );
+      }
+
       // WASM output goes to configRoot (= WORKSPACE_PATH) so the debugger server
       // can serve it. Falls back to buildRoot when no fastedge-config.test.json
       // exists (caller should have created it, but guard defensively).
       const configRoot = resolveConfigRoot(activeFilePath) ?? buildRoot;
       const binPath = await makeBinDirectory(configRoot);
+      const outFile = path.join(binPath, BINARY_NAME);
 
-      const jsEntryPoint =
-        debugContext === "file"
-          ? activeFilePath
-          : path.join(buildRoot, await getPackageJsonEntryPoint(buildRoot));
-
-      const jsBuild = spawn(
+      // Use --target release to pick up optimisation settings from asconfig.json,
+      // but override --outFile to route output to the standard debugger location.
+      const asBuild = spawn(
         "npx",
-        ["fastedge-build", jsEntryPoint, `${binPath}/${BINARY_NAME}`],
+        ["asc", AS_ENTRY_POINT, "--target", "release", "--outFile", outFile],
         {
           shell: true,
           stdio: ["ignore", "pipe", "pipe"],
@@ -71,24 +55,22 @@ export function compileJavascriptBinary(
         }
       );
 
-      let stdout = "";
       let stderr = "";
 
-      jsBuild.stdout?.on("data", (data: Buffer) => {
+      asBuild.stdout?.on("data", (data: Buffer) => {
         logDebugConsole(data.toString());
-        stdout += data;
       });
 
-      jsBuild.stderr?.on("data", (data: Buffer) => {
+      asBuild.stderr?.on("data", (data: Buffer) => {
         stderr += data;
       });
 
-      jsBuild.on("close", (code: number) => {
+      asBuild.on("close", (code: number) => {
         if (code !== 0) {
-          reject(new Error(`build exited with code ${code}: ${stderr}`));
+          reject(new Error(`asc build exited with code ${code}: ${stderr}`));
           return;
         }
-        resolve(`${binPath}/${BINARY_NAME}`);
+        resolve(outFile);
       });
     } catch (err) {
       reject(err);

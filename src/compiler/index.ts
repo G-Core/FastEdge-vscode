@@ -1,8 +1,11 @@
+import * as fs from "fs";
+import * as path from "path";
 import * as vscode from "vscode";
-import path from "node:path";
 
+import { compileAssemblyScriptBinary } from "./asBuild";
 import { compileJavascriptBinary } from "./jsBuild";
 import { compileRustAndFindBinary } from "./rustBuild";
+import { resolveBuildRoot } from "../utils/resolveAppRoot";
 
 import {
   BinaryInfo,
@@ -11,7 +14,7 @@ import {
   LogToDebugConsole,
 } from "../types";
 
-function getActiveFileLanguage(): ExtLanguage | null {
+function getActiveFileLanguage(activeFile: string): ExtLanguage | null {
   const languageId = vscode.window.activeTextEditor?.document.languageId ?? "";
   const javascriptLanguageIds = [
     "javascript",
@@ -20,6 +23,12 @@ function getActiveFileLanguage(): ExtLanguage | null {
     "typescriptreact",
   ];
   if (javascriptLanguageIds.includes(languageId)) {
+    // AssemblyScript files are reported as "typescript" by VSCode.
+    // Distinguish by checking for asconfig.json at the build root.
+    const buildRoot = resolveBuildRoot(activeFile);
+    if (buildRoot && fs.existsSync(path.join(buildRoot, "asconfig.json"))) {
+      return "assemblyscript";
+    }
     return "javascript";
   } else if (languageId === "rust") {
     return "rust";
@@ -31,40 +40,40 @@ async function compileActiveEditorsBinary(
   debugContext: DebugContext = "file",
   logDebugConsole: LogToDebugConsole
 ): Promise<BinaryInfo> {
-  const activeFile =
-    debugContext === "workspace"
-      ? vscode.workspace?.workspaceFolders?.[0].uri.fsPath + path.sep
-      : vscode.window.activeTextEditor?.document.uri.fsPath;
+  const activeFile = vscode.window.activeTextEditor?.document.uri.fsPath;
 
-  const activeFileLanguage = getActiveFileLanguage();
-  if (!activeFile || !activeFileLanguage) {
-    // return an error.. need to have a rust or javascript file selected
+  if (!activeFile) {
     throw new Error(
-      "No active file or language detected is incorrect! Only Rust or Javascript files are supported"
+      "No active file detected. Only Rust, JavaScript, or AssemblyScript files are supported."
+    );
+  }
+
+  const activeFileLanguage = getActiveFileLanguage(activeFile);
+
+  if (!activeFileLanguage) {
+    throw new Error(
+      "Language not supported. Only Rust, JavaScript, or AssemblyScript files are supported."
     );
   }
 
   if (activeFileLanguage === "javascript") {
     return {
-      path: await compileJavascriptBinary(
-        activeFile,
-        debugContext,
-        logDebugConsole
-      ),
+      path: await compileJavascriptBinary(activeFile, debugContext, logDebugConsole),
       lang: activeFileLanguage,
     };
   } else if (activeFileLanguage === "rust") {
-    const activeFilePath = activeFile?.slice(
-      0,
-      activeFile?.lastIndexOf(path.sep)
-    );
     return {
-      path: await compileRustAndFindBinary(activeFilePath, logDebugConsole),
+      path: await compileRustAndFindBinary(activeFile, logDebugConsole),
+      lang: activeFileLanguage,
+    };
+  } else if (activeFileLanguage === "assemblyscript") {
+    return {
+      path: await compileAssemblyScriptBinary(activeFile, logDebugConsole),
       lang: activeFileLanguage,
     };
   }
   throw new Error(
-    "Invalid language, only Rust or Javascript files are supported"
+    "Invalid language. Only Rust, JavaScript, or AssemblyScript files are supported."
   );
 }
 

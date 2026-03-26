@@ -2,22 +2,56 @@ import * as vscode from "vscode";
 import path from "path";
 import { readFileSync } from "fs";
 
-import { FastEdgeDebugAdapterDescriptorFactory } from "./FastEdgeDebugAdapterDescriptorFactory";
-import { BinaryDebugConfigurationProvider } from "./BinaryDebugConfigurationProvider";
 import {
-  createLaunchJson,
   createMCPJson,
+  initWorkspace,
   setupCodespaceSecret,
   runFile,
   runWorkspace,
+  loadWasmInDebugger,
+  loadConfigInDebugger,
+  initializeDebuggerComponents,
 } from "./commands";
 import { initializeTriggerFileHandler } from "./autorun/triggerFileHandler";
+import {
+  DebuggerServerManager,
+  DebuggerWebviewProvider,
+} from "./debugger";
+
+// Per-app-root instances — keyed by resolved app root path
+const serverManagers = new Map<string, DebuggerServerManager>();
+const webviewProviders = new Map<string, DebuggerWebviewProvider>();
+
+let extensionContext: vscode.ExtensionContext | null = null;
+
+function getOrCreateForAppRoot(appRoot: string): {
+  manager: DebuggerServerManager;
+  provider: DebuggerWebviewProvider;
+} {
+  if (!extensionContext) {
+    throw new Error("Extension not activated");
+  }
+
+  if (!serverManagers.has(appRoot)) {
+    const manager = new DebuggerServerManager(extensionContext.extensionPath, appRoot);
+    const provider = new DebuggerWebviewProvider(extensionContext, manager);
+    serverManagers.set(appRoot, manager);
+    webviewProviders.set(appRoot, provider);
+  }
+
+  return {
+    manager: serverManagers.get(appRoot)!,
+    provider: webviewProviders.get(appRoot)!,
+  };
+}
 
 export function activate(context: vscode.ExtensionContext) {
-  // Read the cliVersion from METADATA.json
+  extensionContext = context;
+
+  // Read the cliVersion from METADATA.json (bundled with debugger)
   const metadataJsonPath = path.join(
     context.extensionPath,
-    "fastedge-cli/METADATA.json",
+    "dist/debugger/fastedge-cli/METADATA.json",
   );
   const metadataJson = JSON.parse(readFileSync(metadataJsonPath, "utf8"));
   const cliVersion = metadataJson.fastedge_run_version || "unknown";
@@ -34,26 +68,54 @@ export function activate(context: vscode.ExtensionContext) {
   // Initialize trigger file handler for auto-running commands
   initializeTriggerFileHandler(context);
 
+  // Wire up the per-app factory for runFile/runWorkspace
+  initializeDebuggerComponents(getOrCreateForAppRoot);
+
+  // Register debug configuration provider so F5 works
+  context.subscriptions.push(
+    vscode.debug.registerDebugConfigurationProvider("fastedge", {
+      resolveDebugConfiguration(
+        folder: vscode.WorkspaceFolder | undefined,
+        config: vscode.DebugConfiguration,
+        token?: vscode.CancellationToken
+      ): vscode.ProviderResult<vscode.DebugConfiguration> {
+        // When F5 is pressed, trigger our build and debug workflow
+        const debugContext = config.debugContext || config.entrypoint || "file";
+        if (debugContext === "workspace" || debugContext === "package") {
+          runWorkspace();
+        } else {
+          runFile();
+        }
+        // Return undefined to cancel the default debug session
+        // since we're handling it ourselves
+        return undefined;
+      },
+    })
+  );
+
   context.subscriptions.push(
     vscode.commands.registerCommand("fastedge.run-file", runFile),
     vscode.commands.registerCommand("fastedge.run-workspace", runWorkspace),
-    vscode.commands.registerCommand(
-      "fastedge.generate-launch-json",
-      createLaunchJson,
-    ),
+    vscode.commands.registerCommand("fastedge.init-workspace", initWorkspace),
     vscode.commands.registerCommand("fastedge.generate-mcp-json", () =>
       createMCPJson(context),
     ),
     vscode.commands.registerCommand("fastedge.setup-codespace-secret", () =>
       setupCodespaceSecret(context),
     ),
-    vscode.debug.registerDebugAdapterDescriptorFactory(
-      "fastedge",
-      new FastEdgeDebugAdapterDescriptorFactory(),
+    vscode.commands.registerCommand("fastedge.debug-load-wasm", (uri?: vscode.Uri) =>
+      loadWasmInDebugger(uri),
     ),
-    vscode.debug.registerDebugConfigurationProvider(
-      "fastedge",
-      new BinaryDebugConfigurationProvider(context),
+    vscode.commands.registerCommand("fastedge.debug-load-config", (uri?: vscode.Uri) =>
+      loadConfigInDebugger(uri),
     ),
   );
+}
+
+export function deactivate() {
+  // Stop all per-app debugger servers on extension deactivation
+  const stops = Array.from(serverManagers.values()).map((m) =>
+    m.stop().catch(console.error)
+  );
+  return Promise.all(stops);
 }

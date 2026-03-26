@@ -19,6 +19,9 @@ on:
       VAULT_TOKEN:
         required: true
 
+permissions:
+  contents: write # Required to create releases and push tags
+
 jobs:
   build_extension:
     runs-on: [self-hosted, ubuntu-22-04, regular]
@@ -30,11 +33,11 @@ jobs:
       - name: Setup Node Environment
         uses: ./.github/setup-node
 
-      - name: Download fastedge-run Artifact
+      - name: Download debugger artifact for target platform
         uses: actions/download-artifact@v4
         with:
-          name: fastedge-run-${{ inputs.os_name }}-artifact
-          path: fastedge-cli
+          name: fastedge-debugger-${{ inputs.os_target }}-artifact
+          path: dist/debugger
 
       - name: Extract tag version
         id: extract_version
@@ -49,6 +52,26 @@ jobs:
           jq --arg version "$TAG_VERSION" '.version = $version' package.json > package.tmp.json
           mv package.tmp.json package.json
 
+      - name: Verify debugger artifact
+        run: |
+          echo "Verifying downloaded debugger for ${{ inputs.os_target }}..."
+          ls -lah dist/debugger/
+          test -f dist/debugger/server.js || { echo "❌ Missing server.js"; exit 1; }
+          test -d dist/debugger/frontend || { echo "❌ Missing frontend"; exit 1; }
+          test -d dist/debugger/fastedge-cli || { echo "❌ Missing fastedge-cli"; exit 1; }
+
+          echo "Checking CLI binary..."
+          ls -lh dist/debugger/fastedge-cli/
+
+          # Verify only the correct platform binary exists
+          BINARY_COUNT=$(find dist/debugger/fastedge-cli -type f \( -name 'fastedge-run*' -o -name '*.exe' \) | wc -l)
+          if [ "$BINARY_COUNT" -ne 1 ]; then
+            echo "❌ Expected exactly 1 CLI binary, found $BINARY_COUNT"
+            exit 1
+          fi
+
+          echo "✅ Debugger artifact verified for ${{ inputs.os_target }}"
+
       - name: Build JavaScript extension
         run: |
           pnpm run build
@@ -56,11 +79,6 @@ jobs:
       - name: List extension files
         run: |
           pnpm exec vsce ls --no-dependencies
-
-      - name: Ensure extension is exectuable
-        if: ${{ inputs.os_target != 'win32-x64' }}
-        run: |
-          chmod +x ./fastedge-cli/fastedge-run-${{ inputs.os_target }}
 
       - name: Package extension
         run: |
