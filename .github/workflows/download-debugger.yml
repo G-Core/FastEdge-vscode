@@ -43,7 +43,7 @@ jobs:
           sha256sum -c fastedge-debugger.zip.sha256
 
       - name: Upload raw debugger artifact (all platforms)
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v6
         with:
           name: fastedge-debugger-raw
           retention-days: 1
@@ -65,7 +65,7 @@ jobs:
 
     steps:
       - name: Download raw debugger artifact
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@v6
         with:
           name: fastedge-debugger-raw
 
@@ -161,7 +161,7 @@ jobs:
           echo "✅ Exactly 1 binary present"
 
       - name: Upload platform-specific debugger artifact
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v6
         with:
           name: fastedge-debugger-${{ matrix.os_target }}-artifact
           retention-days: 1
