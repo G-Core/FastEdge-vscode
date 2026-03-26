@@ -33,6 +33,11 @@ jobs:
       - name: Setup Node Environment
         uses: ./.github/setup-node
 
+      - name: Clean stale artifacts from previous runs
+        run: |
+          rm -rf dist/debugger
+          rm -f *.vsix *.vsix.sha256
+
       - name: Download debugger artifact for target platform
         uses: actions/download-artifact@v6
         with:
