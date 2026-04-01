@@ -23,7 +23,7 @@ The extension itself reads only one launch config field: **`"entrypoint"`** (`"f
 
 **Note**: The per-app isolation marker is the `.fastedge-debug/` directory, not this file. `resolveConfigRoot()` walks up from the active file to find `.fastedge-debug/`; the directory containing it becomes the `configRoot`.
 
-**Location**: Any directory in the project, co-located with the app entry file. Auto-created (as `{}`) at the active file's directory when no config file is found on first debug.
+**Location**: Any directory in the project, typically inside `.fastedge-debug/`. The config file is **not** auto-created; only the `.fastedge-debug/` directory is created automatically on first debug. Users create the config via the debugger UI's save dialog.
 
 **Loaded/saved via**: Native VSCode file dialogs (`vscode.window.showOpenDialog` / `vscode.window.showSaveDialog`), not browser file APIs. The extension bridges iframe postMessages to the extension host to work around the sandboxed webview context.
 

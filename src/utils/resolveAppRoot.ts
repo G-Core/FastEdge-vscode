@@ -20,8 +20,12 @@ export function resolveConfigRoot(startPath: string): string | null {
   let dir = startDir(startPath);
 
   while (true) {
-    if (fs.existsSync(path.join(dir, ".fastedge-debug"))) {
-      return dir;
+    try {
+      if (fs.statSync(path.join(dir, ".fastedge-debug")).isDirectory()) {
+        return dir;
+      }
+    } catch {
+      // .fastedge-debug doesn't exist in this directory — continue walking up
     }
     const parent = path.dirname(dir);
     if (parent === dir) return null;
@@ -63,5 +67,19 @@ export function resolveBuildRoot(startPath: string): string | null {
  * No-op if the directory already exists (recursive mkdir).
  */
 export function ensureDebugDir(dir: string): void {
-  fs.mkdirSync(path.join(dir, ".fastedge-debug"), { recursive: true });
+  const debugPath = path.join(dir, ".fastedge-debug");
+  try {
+    if (!fs.statSync(debugPath).isDirectory()) {
+      throw new Error(
+        `Cannot create debug directory: "${debugPath}" already exists as a file. ` +
+          "Remove or rename it and try again.",
+      );
+    }
+  } catch (err: unknown) {
+    if (err instanceof Error && "code" in err && (err as NodeJS.ErrnoException).code === "ENOENT") {
+      fs.mkdirSync(debugPath, { recursive: true });
+    } else {
+      throw err;
+    }
+  }
 }

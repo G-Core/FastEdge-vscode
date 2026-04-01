@@ -219,6 +219,50 @@ describe("ensureDebugDir", () => {
 });
 
 // ---------------------------------------------------------------------------
+// .fastedge-debug exists as a file (not a directory)
+// ---------------------------------------------------------------------------
+
+describe("resolveConfigRoot — .fastedge-debug is a file", () => {
+  it("skips a file named .fastedge-debug and returns null when no directory marker exists", () => {
+    touch(path.join(tmp, ".fastedge-debug")); // file, not directory
+    touch(path.join(tmp, "index.js"));
+
+    const result = resolveConfigRoot(path.join(tmp, "index.js"));
+    expect(result).toBeNull();
+  });
+
+  it("skips a file named .fastedge-debug and finds the real directory marker above", () => {
+    const child = path.join(tmp, "app");
+    touch(path.join(child, ".fastedge-debug")); // file in child
+    touch(path.join(child, "index.js"));
+    mkDebugDir(tmp); // real directory marker one level up
+
+    const result = resolveConfigRoot(path.join(child, "index.js"));
+    expect(result).toBe(tmp);
+  });
+});
+
+describe("ensureDebugDir — .fastedge-debug is a file", () => {
+  it("throws a clear error when .fastedge-debug already exists as a file", () => {
+    touch(path.join(tmp, ".fastedge-debug")); // file, not directory
+
+    expect(() => ensureDebugDir(tmp)).toThrowError(
+      /already exists as a file/,
+    );
+  });
+
+  it("does not remove the blocking file", () => {
+    touch(path.join(tmp, ".fastedge-debug"));
+
+    try { ensureDebugDir(tmp); } catch { /* expected */ }
+
+    // The file should still be there — ensureDebugDir must not delete it
+    expect(fs.existsSync(path.join(tmp, ".fastedge-debug"))).toBe(true);
+    expect(fs.statSync(path.join(tmp, ".fastedge-debug")).isFile()).toBe(true);
+  });
+});
+
+// ---------------------------------------------------------------------------
 // Config root vs build root split — workspace-1 scenario end-to-end
 // ---------------------------------------------------------------------------
 

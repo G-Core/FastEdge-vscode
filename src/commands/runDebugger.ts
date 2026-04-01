@@ -217,7 +217,8 @@ async function loadConfigInDebugger(uri?: vscode.Uri): Promise<void> {
   }
 
   const configPath = uri.fsPath;
-  const appRoot = path.dirname(configPath);
+  const configDir = path.dirname(configPath);
+  const appRoot = resolveConfigRoot(configPath) ?? configDir;
 
   const { provider } = debuggerFactory(appRoot);
 
