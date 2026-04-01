@@ -227,7 +227,7 @@ See `SEARCH_GUIDE.md` for more patterns.
    - Rust: Uses `cargo build` with wasm32-wasip1 target
    - JavaScript: Uses `fastedge-build` tool
    - AssemblyScript: Uses `asc --target release` (CDN/proxy-wasm apps)
-   - All output to `<configRoot>/.fastedge/bin/debugger.wasm`
+   - All output to `<configRoot>/.fastedge-debug/app.wasm`
 
 4. **Commands** (`src/commands/`)
    - Generate mcp.json
@@ -236,14 +236,14 @@ See `SEARCH_GUIDE.md` for more patterns.
 
 5. **Configuration** (`src/dotenv/`, `src/utils/resolveAppRoot.ts`)
    - Dotenv file auto-discovery from `configRoot`
-   - `fastedge-config.test.json` as app root marker + runtime config store
-   - `resolveConfigRoot()` / `resolveBuildRoot()` for per-app isolation
+   - `.fastedge-debug/` directory as app root marker; `fastedge-config.test.json` as runtime config store
+   - `resolveConfigRoot()` (finds `.fastedge-debug/`) / `resolveBuildRoot()` for per-app isolation
 
 ### Key Terms
 
 - **FastEdge-run**: Bundled CLI that runs WASM binaries locally
-- **fastedge-config.test.json**: Per-app config file; also the `configRoot` anchor for server isolation
-- **configRoot**: Directory containing `fastedge-config.test.json` — anchors per-app server + port file
+- **fastedge-config.test.json**: Per-app config file for runtime settings (env vars, secrets, headers)
+- **configRoot**: Directory containing `.fastedge-debug/` — anchors per-app server + port file
 - **buildRoot**: Directory containing `package.json` or `Cargo.toml` — anchors build CWD
 - **dotenv hierarchy**: .env → .env.variables → .env.secrets (see DOTENV.md in root)
 - **WASM**: WebAssembly - compiled output of Rust/JS/AS code

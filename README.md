@@ -141,7 +141,7 @@ Please be aware that if you are adding **sensitive** information to these files,
 .env.*
 
 # Build artifacts
-.fastedge/
+.fastedge-debug/
 ```
 
 For more information on how the extension locates and uses dotenv files, see [DOTENV.md](https://github.com/G-Core/FastEdge-vscode/blob/main/DOTENV.md).

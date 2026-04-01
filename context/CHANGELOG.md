@@ -39,7 +39,7 @@ Added two right-click context menu commands in the VSCode file explorer as the s
 ## [2026-03-18] - DotenvPanel: show resolved app root as default path label
 
 ### Overview
-The dotenv path default display was showing `"workspace root (default)"` — a misleading label, since the actual default is the app root (resolved via `resolveConfigRoot`: nearest `fastedge-config.test.json`, or `package.json`/`Cargo.toml`). Now the panel requests the real path from the extension on mount and displays it when no custom path is set.
+The dotenv path default display was showing `"workspace root (default)"` — a misleading label, since the actual default is the app root (resolved via `resolveConfigRoot`: nearest `.fastedge-debug/` directory, or `package.json`/`Cargo.toml`). Now the panel requests the real path from the extension on mount and displays it when no custom path is set.
 
 ### 🎯 What Was Completed
 
@@ -129,7 +129,7 @@ Removed four legacy/redundant commands and renamed the workspace command to bett
 #### Dead code removed
 - `src/commands/launchJson.ts` — deleted
 - `src/commands/index.ts` — removed `launchJson` re-export
-- `src/extension.ts` — removed `startDebuggerServer`, `stopDebuggerServer`, `debugFastEdgeApp`, `getActiveAppRoot` functions and their imports (`createLaunchJson`, `resolveConfigRoot`, `resolveBuildRoot`, `ensureConfigFile`)
+- `src/extension.ts` — removed `startDebuggerServer`, `stopDebuggerServer`, `debugFastEdgeApp`, `getActiveAppRoot` functions and their imports (`createLaunchJson`, `resolveConfigRoot`, `resolveBuildRoot`, `ensureDebugDir`)
 - `src/types.ts` — removed `LaunchConfiguration` interface (unused)
 - `package.json` — removed dead `configurationAttributes` fields (kept only `entrypoint`); removed unused deps `@vscode/debugadapter`, `@vscode/debugprotocol`
 
@@ -142,10 +142,10 @@ Removed four legacy/redundant commands and renamed the workspace command to bett
 
 ---
 
-## [2026-03-12] - Config Root vs Build Root Split + .debug-port Sidecar
+## [2026-03-12] - Config Root vs Build Root Split + .fastedge-debug/ Directory
 
 ### Overview
-Refactored app root resolution to separate two previously conflated concerns: where the build runs (build root = `package.json` / `Cargo.toml`) and which directory anchors per-app isolation (config root = `fastedge-config.test.json`). Moved `.debug-port` from `.fastedge/.debug-port` to a direct sibling of `fastedge-config.test.json`. For apps with no config file, the file is now auto-created next to the active file rather than at the build root.
+Refactored app root resolution to separate two previously conflated concerns: where the build runs (build root = `package.json` / `Cargo.toml`) and which directory anchors per-app isolation (config root = `.fastedge-debug/` directory). Moved `.debug-port` from `.fastedge/.debug-port` to `{configRoot}/.fastedge-debug/.debug-port`. For apps with no `.fastedge-debug/` directory, one is auto-created next to the active file rather than at the build root.
 
 ### Background
 
@@ -155,31 +155,31 @@ The old `resolveAppRoot()` returned the first directory containing any of `faste
 
 #### 1. `resolveAppRoot.ts` — split into three exports
 
-- `resolveConfigRoot(startPath)` — walks up to find `fastedge-config.test.json`; returns `null` if not found
+- `resolveConfigRoot(startPath)` — walks up to find `.fastedge-debug/` directory; returns `null` if not found
 - `resolveBuildRoot(startPath)` — walks up to find `package.json` or `Cargo.toml`
-- `ensureConfigFile(dir)` — writes `{}` to `fastedge-config.test.json` if it doesn't exist (no-op otherwise)
+- `ensureDebugDir(dir)` — creates `.fastedge-debug/` directory if it doesn't exist (no-op otherwise)
 
 Old `resolveAppRoot()` export removed entirely.
 
 #### 2. Call site updates
 
-- `rustBuild.ts` / `jsBuild.ts` — build `cwd` and `package.json` reads now use `resolveBuildRoot()`; `.fastedge/bin/` WASM output uses `resolveConfigRoot() ?? buildRoot`
+- `rustBuild.ts` / `jsBuild.ts` — build `cwd` and `package.json` reads now use `resolveBuildRoot()`; `.fastedge-debug/` WASM output uses `resolveConfigRoot() ?? buildRoot`
 - `runDebugger.ts` / `extension.ts:getActiveAppRoot()` — port anchor uses `resolveConfigRoot()`; falls back to creating config at `path.dirname(activeFile)` (the active file's directory, not the build root)
 
-#### 3. `.debug-port` moved to sidecar
+#### 3. `.debug-port` moved into `.fastedge-debug/`
 
 - **Before**: `{configRoot}/.fastedge/.debug-port`
-- **After**: `{configRoot}/.debug-port` (direct sibling of `fastedge-config.test.json`)
+- **After**: `{configRoot}/.fastedge-debug/.debug-port` (inside the `.fastedge-debug/` directory)
 - `writePortFile()` in `fastedge-test/server/server.ts` no longer needs to `mkdirSync` for the port file
 - `PORT_FILE_DIR` constant removed from `DebuggerServerManager.ts`
 
 #### 4. Third-app fallback: config created at active file's directory
 
-When no `fastedge-config.test.json` is found, one is created co-located with the active file (`path.dirname(activeFilePath)`). This makes that directory its own configRoot, giving the app its own `.debug-port` without assuming anything about project structure.
+When no `.fastedge-debug/` directory is found, one is created co-located with the active file (`path.dirname(activeFilePath)`). This makes that directory its own configRoot, giving the app its own `.fastedge-debug/.debug-port` without assuming anything about project structure.
 
 #### 5. Tests added
 
-- `src/utils/resolveAppRoot.test.ts` — 17 vitest tests covering all workspace layouts (workspace-1, workspace-2 variants, Rust/Cargo.toml, null cases, `ensureConfigFile` idempotency)
+- `src/utils/resolveAppRoot.test.ts` — 17 vitest tests covering all workspace layouts (workspace-1, workspace-2 variants, Rust/Cargo.toml, null cases, `ensureDebugDir` idempotency)
 - `vitest ^2.1.9` added to devDependencies; `pnpm test` script added
 
 **Files Modified:**
@@ -199,7 +199,7 @@ When no `fastedge-config.test.json` is found, one is created co-located with the
 ## [2026-03-11] - Config File Rename + Native Load/Save Dialogs
 
 ### Overview
-Updated to use the renamed `fastedge-config.test.json` (previously `test-config.json`) as the app root marker. Implemented native VSCode load and save file dialogs for the debugger's config buttons — previously all dialog strategies failed silently in the sandboxed iframe context.
+Updated to use the renamed `fastedge-config.test.json` (previously `test-config.json`) as the app root marker (later replaced by `.fastedge-debug/` directory as the marker). Implemented native VSCode load and save file dialogs for the debugger's config buttons — previously all dialog strategies failed silently in the sandboxed iframe context.
 
 ### Background
 
@@ -220,9 +220,9 @@ Both load and save detect `window !== window.top` and delegate to the extension 
 - Dialog opens at the app's root directory
 
 #### 3. Save Config — Native Save Dialog
-- Extension handler: `openSavePicker` → `vscode.window.showSaveDialog({ defaultUri: appRoot/fastedge-config.test.json })` → posts `savePickerResult` back
+- Extension handler: `openSavePicker` → `vscode.window.showSaveDialog({ defaultUri: appRoot/.fastedge-debug/fastedge-config.test.json })` → posts `savePickerResult` back
 - Frontend calls `POST /api/config/save-as` with the returned path; server writes the file
-- Always suggests `fastedge-config.test.json` so the saved file doubles as the app root marker
+- Defaults to `.fastedge-debug/fastedge-config.test.json` inside the app's debug directory
 
 #### 4. Webview HTML Bridge
 - Forwards `openFilePicker`, `openSavePicker` from iframe → extension host
@@ -248,24 +248,24 @@ The original architecture created one global `DebuggerServerManager` from `works
 - **Two VSCode windows** each debugging a different app: config changes in one bled into the other via the shared server state.
 - **Multi-root workspace** (`/my-cdn-app` + `/my-http-app` in one window): the build always ran from the workspace root, so `npx fastedge-build` and `cargo build` couldn't find the correct `node_modules/.bin/fastedge-build` or `Cargo.toml` for child apps. HTTP WASM builds failed entirely.
 
-The isolation boundary is the **app folder** — the nearest ancestor directory containing `fastedge-config.test.json`, `package.json`, or `Cargo.toml`.
+The isolation boundary is the **app folder** — the nearest ancestor directory containing `.fastedge-debug/`, `package.json`, or `Cargo.toml`.
 
 ### 🎯 What Was Completed
 
 #### 1. `resolveAppRoot()` utility (`src/utils/resolveAppRoot.ts`) — NEW FILE
-- Walks up from a file path, checking each directory for (in priority order): `fastedge-config.test.json` → `package.json` → `Cargo.toml`
+- Walks up from a file path, checking each directory for (in priority order): `.fastedge-debug/` → `package.json` → `Cargo.toml`
 - All three markers checked at each level before moving up (avoids false positives from nested manifests)
 - Returns `null` if no marker found (surfaced as user-visible error)
 - Used by build, server, and panel code as the single source of app identity
 
 #### 2. Build root fix (`src/compiler/jsBuild.ts`, `rustBuild.ts`, `compiler/index.ts`)
 - `compileJavascriptBinary`: replaces `workspaceFolders[0]` with `resolveAppRoot(activeFilePath)` for CWD, bin dir, and `package.json` entry point lookup
-- `compileRustAndFindBinary`: `cwd` for `cargo build` and `.fastedge/bin/` copy destination now use app root
+- `compileRustAndFindBinary`: `cwd` for `cargo build` and `.fastedge-debug/` copy destination now use app root
 - `compiler/index.ts`: workspace mode no longer anchors to `workspaceFolders[0]`; always derives root from active file
 
 #### 3. Per-app `DebuggerServerManager` (`src/debugger/DebuggerServerManager.ts`)
 - Constructor now takes `appRoot` instead of `workspacePath`
-- `start()` reads `<appRoot>/.fastedge/.debug-port`, health-checks the port, reuses if healthy or spawns fresh if stale/missing
+- `start()` reads `<appRoot>/.fastedge-debug/.debug-port`, health-checks the port, reuses if healthy or spawns fresh if stale/missing
 - `stop()` sends SIGTERM and deletes the port file
 - Spawns server with `WORKSPACE_PATH: appRoot` (used by server for dotenv and port file)
 - On unexpected process exit: port file is deleted
@@ -299,7 +299,7 @@ The isolation boundary is the **app folder** — the nearest ancestor directory 
 - Stale port file: detected and cleaned up on next `start()`
 
 ### 📝 Key Design Decisions
-- **App root = nearest manifest ancestor**: `fastedge-config.test.json` wins over `package.json`/`Cargo.toml` because it is always at the FastEdge app root by convention. Language manifests may exist in parent directories (monorepo root `package.json`, cargo workspace).
+- **App root = nearest manifest ancestor**: `.fastedge-debug/` wins over `package.json`/`Cargo.toml` because it is always at the FastEdge app root by convention. Language manifests may exist in parent directories (monorepo root `package.json`, cargo workspace).
 - **Port file owned by the server, read by the extension**: server writes it after `httpServer.listen()`, deletes on shutdown. Extension reads it at start time only.
 - **Agents never spawn servers**: if an agent finds no port file for the app it's working in, it should prompt the user to open the debug panel first. (T010/T011 in fastedge-plugin — not yet implemented.)
 

@@ -19,15 +19,15 @@ The extension itself reads only one launch config field: **`"entrypoint"`** (`"f
 
 ## fastedge-config.test.json
 
-**Role**: Primary config file for a FastEdge app. Serves a dual purpose:
-1. **App root marker** — `resolveConfigRoot()` walks up from the active file to find it; the directory containing it becomes the `configRoot` for per-app isolation
-2. **Runtime config store** — env vars, secrets, headers, port, memory limits
+**Role**: Primary config file for a FastEdge app. Serves as the **runtime config store** — env vars, secrets, headers, port, memory limits.
 
-**Location**: Any directory in the project, co-located with the app entry file. Auto-created (as `{}`) at the active file's directory when no config file is found on first debug.
+**Note**: The per-app isolation marker is the `.fastedge-debug/` directory, not this file. `resolveConfigRoot()` walks up from the active file to find `.fastedge-debug/`; the directory containing it becomes the `configRoot`.
+
+**Location**: Any directory in the project, typically inside `.fastedge-debug/`. The config file is **not** auto-created; only the `.fastedge-debug/` directory is created automatically on first debug. Users create the config via the debugger UI's save dialog.
 
 **Loaded/saved via**: Native VSCode file dialogs (`vscode.window.showOpenDialog` / `vscode.window.showSaveDialog`), not browser file APIs. The extension bridges iframe postMessages to the extension host to work around the sandboxed webview context.
 
-**If not found**: `ensureConfigFile(dir)` creates `{}` at `path.dirname(activeFilePath)`.
+**If not found**: `ensureDebugDir(dir)` creates `.fastedge-debug/` at `path.dirname(activeFilePath)`.
 
 ---
 
@@ -37,12 +37,12 @@ Two separate utilities in `src/utils/resolveAppRoot.ts`:
 
 | Function | Walks up for | Used by |
 |----------|-------------|---------|
-| `resolveConfigRoot(startPath)` | `fastedge-config.test.json` | Port anchor, panel isolation, WASM output dir |
+| `resolveConfigRoot(startPath)` | `.fastedge-debug/` directory | Port anchor, panel isolation, WASM output dir |
 | `resolveBuildRoot(startPath)` | `package.json` or `Cargo.toml` | Build CWD, entrypoint resolution |
 
 These are deliberately separate — in a monorepo the `package.json` may be several levels above the app's own `fastedge-config.test.json`.
 
-**`.debug-port` sidecar**: Written by the server at `{configRoot}/.debug-port` (direct sibling of `fastedge-config.test.json`) after `httpServer.listen()`. The extension reads it at startup to find the per-app server port.
+**`.debug-port` file**: Written by the server at `{configRoot}/.fastedge-debug/.debug-port` (inside the `.fastedge-debug/` directory) after `httpServer.listen()`. The extension reads it at startup to find the per-app server port.
 
 ---
 

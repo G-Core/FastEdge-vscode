@@ -67,7 +67,7 @@ The extension provides several VS Code commands:
 
 Runtime config is managed in two places:
 
-1. **fastedge-config.test.json** — env vars, secrets, headers, port, memory limits. Loaded/saved via the debugger UI using native VSCode file dialogs. Also serves as the per-app root marker for server isolation.
+1. **fastedge-config.test.json** — env vars, secrets, headers, port, memory limits. Loaded/saved via the debugger UI using native VSCode file dialogs. The per-app root marker for server isolation is the `.fastedge-debug/` directory.
 
 2. **Dotenv files** (`.env`, `.env.variables`, `.env.secrets`, `.env.req_headers`, `.env.rsp_headers`) — auto-discovered from the app's config root directory.
 
@@ -85,7 +85,7 @@ Runtime config is managed in two places:
 - Current File mode: Uses active editor file as entrypoint
 - Workspace mode: Uses `package.json` "main" field as entrypoint
 - Runs `fastedge-build <input> <output>`
-- Default output: `.fastedge/bin/debugger.wasm`
+- Default output: `.fastedge-debug/app.wasm`
 
 ### 5. Runtime Execution
 
@@ -192,7 +192,7 @@ FastEdge-vscode/
 2. App roots resolved: `resolveConfigRoot()` + `resolveBuildRoot()` from active file
 3. Compilation:
    - Rust: `cargo build --target wasm32-wasip1` from `buildRoot`
-   - JS: `fastedge-build` from `buildRoot`, output to `{configRoot}/.fastedge/bin/debugger.wasm`
+   - JS: `fastedge-build` from `buildRoot`, output to `<configRoot>/.fastedge-debug/app.wasm`
    - AS: `asc --target release` with proxy-wasm support
 4. Per-app `DebuggerServerManager` started (or reused) for `configRoot`
 5. WASM auto-loaded into debugger via REST API

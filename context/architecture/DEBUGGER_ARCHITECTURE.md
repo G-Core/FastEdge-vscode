@@ -406,7 +406,7 @@ curl http://localhost:5179/health
 1. **Auto-restart on crash** - Automatically restart server if it crashes
 2. **Multiple instances** - Support multiple debugger servers on different ports
 3. **Build integration** - Automatically compile and load WASM when file changes
-4. **Agent REST API access** - Agents reading `.debug-port` to hit the REST API directly (tracked in fastedge-plugin)
+4. **Agent REST API access** - Agents reading `.fastedge-debug/.debug-port` to hit the REST API directly (tracked in fastedge-plugin)
 5. **GitHub Actions automation** - Download pre-built debugger bundles from releases
 
 ---

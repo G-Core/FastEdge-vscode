@@ -3,7 +3,7 @@ import * as vscode from "vscode";
 import * as path from "path";
 import * as fs from "fs";
 
-const PORT_FILE_NAME = ".debug-port";
+const DEBUG_DIR = ".fastedge-debug";
 
 /**
  * Manages the lifecycle of the fastedge-debugger server for a specific app root.
@@ -20,7 +20,7 @@ export class DebuggerServerManager {
   ) {}
 
   private get portFilePath(): string {
-    return path.join(this.appRoot, PORT_FILE_NAME);
+    return path.join(this.appRoot, DEBUG_DIR, ".debug-port");
   }
 
   private readPortFile(): number | null {

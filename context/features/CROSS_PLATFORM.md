@@ -50,13 +50,13 @@ If you add new shell-invoked commands to mcp.json generation, follow the same br
 ```typescript
 // ✅ correct — extension-side file ops
 import path from "path";
-path.join(configRoot, ".fastedge", "bin", "debugger.wasm");
+path.join(configRoot, ".fastedge-debug", "app.wasm");
 
 // ✅ correct — VS Code API file ops
 vscode.Uri.joinPath(workspaceFolder.uri, ".vscode", "mcp.json");
 
 // ❌ wrong — breaks on Windows
-configRoot + "/" + ".fastedge/bin/debugger.wasm";
+configRoot + "/" + ".fastedge-debug/app.wasm";
 ```
 
 ### Temp files — always use `os.tmpdir()`

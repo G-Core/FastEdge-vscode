@@ -116,7 +116,7 @@ Runtime config in `fastedge-config.test.json` (edited in the debugger UI) takes 
 
 **Always on** — no configuration required:
 
-1. **Start location**: `configRoot` (directory containing `fastedge-config.test.json`)
+1. **Start location**: `configRoot` (directory containing `.fastedge-debug/`)
 
 2. **Walk up directory tree**:
 ```typescript
@@ -478,13 +478,14 @@ my-project/
 ├── config/
 │   ├── .env.variables
 │   └── .env.secrets
-├── fastedge-config.test.json
+├── .fastedge-debug/
+│   └── fastedge-config.test.json
 └── src/
     └── index.js
 ```
 
 **Discovery**:
-- Server starts from `configRoot` (directory with `fastedge-config.test.json`)
+- Server starts from `configRoot` (directory containing `.fastedge-debug/`)
 - Walks up, finds `config/` is not at or above `configRoot` — so place dotenv files at `configRoot` level or above for auto-discovery
 
 **Note**: Per-directory dotenv path override (old `"dotenv": "./config"` launch.json option) no longer exists. Place dotenv files where auto-discovery will find them.

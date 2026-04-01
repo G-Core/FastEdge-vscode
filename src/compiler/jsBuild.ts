@@ -5,13 +5,13 @@ import path from "path";
 import { DebugContext, LogToDebugConsole } from "../types";
 import { resolveConfigRoot, resolveBuildRoot } from "../utils/resolveAppRoot";
 
-const BINARY_NAME = "debugger.wasm";
+const BINARY_NAME = "app.wasm";
 
-const makeBinDirectory = (appRoot: string) =>
+const makeDebugDirectory = (appRoot: string) =>
   new Promise<string>((resolve, reject) => {
-    const fastedgeBinDir = path.join(appRoot, ".fastedge", "bin");
-    fs.mkdir(fastedgeBinDir, { recursive: true }, (err) =>
-      err ? reject(err) : resolve(fastedgeBinDir)
+    const debugDir = path.join(appRoot, ".fastedge-debug");
+    fs.mkdir(debugDir, { recursive: true }, (err) =>
+      err ? reject(err) : resolve(debugDir)
     );
   });
 
@@ -51,10 +51,10 @@ export function compileJavascriptBinary(
       }
 
       // WASM output goes to configRoot (= WORKSPACE_PATH) so the debugger server
-      // can serve it. Falls back to buildRoot when no fastedge-config.test.json
+      // can serve it. Falls back to buildRoot when no .fastedge-debug/ dir
       // exists (caller should have created it, but guard defensively).
       const configRoot = resolveConfigRoot(activeFilePath) ?? buildRoot;
-      const binPath = await makeBinDirectory(configRoot);
+      const binPath = await makeDebugDirectory(configRoot);
 
       const jsEntryPoint =
         debugContext === "file"
