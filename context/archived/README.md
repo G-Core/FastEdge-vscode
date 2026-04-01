@@ -10,7 +10,7 @@ The extension originally implemented VS Code's **Debug Adapter Protocol (DAP)** 
 
 - A bundled Node server (`dist/debugger/server.js`) started via `fork()`
 - A webview panel embedding the debugger UI
-- Per-app root isolation with `fastedge-config.test.json` as the anchor
+- Per-app root isolation with `.fastedge-debug/` directory as the anchor
 - Runtime config managed entirely in the debugger UI (not launch.json)
 
 ## When to read these files

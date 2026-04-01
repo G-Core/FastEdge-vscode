@@ -63,8 +63,9 @@ export class DebuggerWebviewProvider {
 
           if (message.command === "openFilePicker") {
             const appRoot = this.serverManager.getAppRoot();
+            const debugDir = path.join(appRoot, ".fastedge-debug");
             const uris = await vscode.window.showOpenDialog({
-              defaultUri: vscode.Uri.file(appRoot),
+              defaultUri: vscode.Uri.file(debugDir),
               canSelectMany: false,
               filters: { "JSON Files": ["json"] },
               title: "Load FastEdge Config",
@@ -103,9 +104,10 @@ export class DebuggerWebviewProvider {
 
           if (message.command === "openSavePicker") {
             const appRoot = this.serverManager.getAppRoot();
+            const debugDir = path.join(appRoot, ".fastedge-debug");
             const suggestedName = message.suggestedName ?? "fastedge-config.test.json";
             const uri = await vscode.window.showSaveDialog({
-              defaultUri: vscode.Uri.file(path.join(appRoot, suggestedName)),
+              defaultUri: vscode.Uri.file(path.join(debugDir, suggestedName)),
               filters: { "JSON Files": ["json"] },
               title: "Save FastEdge Config",
             });

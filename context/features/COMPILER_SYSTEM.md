@@ -28,7 +28,7 @@ All three compilers use two root concepts resolved by `src/utils/resolveAppRoot.
 
 **`resolveBuildRoot(activeFilePath)`** — walks up from the active file to find the nearest directory containing `package.json` or `Cargo.toml`. This is where build commands run (CWD for spawned processes).
 
-**`resolveConfigRoot(activeFilePath)`** — walks up to find the nearest directory containing `fastedge-config.test.json`. This is the per-app anchor: the debugger server's `WORKSPACE_PATH`, and where `.fastedge/bin/debugger.wasm` is written. Falls back to `buildRoot` if not found.
+**`resolveConfigRoot(activeFilePath)`** — walks up to find the nearest directory containing `.fastedge-debug/`. This is the per-app anchor: the debugger server's `WORKSPACE_PATH`, and where `.fastedge-debug/app.wasm` is written. Falls back to `buildRoot` if not found.
 
 The separation of build root vs config root is what allows multiple apps in the same workspace to have isolated debug ports without interfering with each other.
 
@@ -86,7 +86,7 @@ rustup target add wasm32-wasip1
 3. Read WASI target from `.cargo/config.toml` via `rustConfigWasiTarget()` — falls back to `wasm32-wasip1`
 4. Spawn `cargo build --message-format=json --target=<wasiTarget>` at `buildRoot`
 5. Parse JSON output line-by-line; find the `compiler-artifact` entry with a `.wasm` filename
-6. Copy WASM to `<configRoot>/.fastedge/bin/debugger.wasm`
+6. Copy WASM to `<configRoot>/.fastedge-debug/app.wasm`
 
 **Note**: `cargo build` stderr (human-readable progress) is piped to the build console. The `--message-format=json` stdout is consumed internally for artifact path extraction.
 
@@ -128,11 +128,11 @@ npm install --save-dev @gcoredev/fastedge-sdk-js
 **Steps**:
 1. Resolve `buildRoot` (directory containing `package.json`)
 2. Resolve `configRoot` (falls back to `buildRoot`)
-3. Create `<configRoot>/.fastedge/bin/` directory
+3. Create `<configRoot>/.fastedge-debug/` directory
 4. Determine entry point:
    - **File mode**: active file path
    - **Workspace mode**: `package.json` `main` field resolved relative to `buildRoot`
-5. Spawn `npx fastedge-build <entryPoint> <configRoot>/.fastedge/bin/debugger.wasm` at `buildRoot`
+5. Spawn `npx fastedge-build <entryPoint> <configRoot>/.fastedge-debug/app.wasm` at `buildRoot`
 
 ### Entrypoint Modes
 
@@ -191,7 +191,7 @@ my-app/
 }
 ```
 
-**Note**: The `outFile` in `asconfig.json` is overridden by the extension — output always goes to `.fastedge/bin/debugger.wasm`.
+**Note**: The `outFile` in `asconfig.json` is overridden by the extension — output always goes to `.fastedge-debug/app.wasm`.
 
 ### Build Process
 
@@ -201,8 +201,8 @@ my-app/
 1. Resolve `buildRoot` (directory containing `package.json`)
 2. Verify `asconfig.json` exists at `buildRoot` — throws if missing
 3. Resolve `configRoot` (falls back to `buildRoot`)
-4. Create `<configRoot>/.fastedge/bin/` directory
-5. Spawn: `npx asc assembly/index.ts --target release --outFile <configRoot>/.fastedge/bin/debugger.wasm` at `buildRoot`
+4. Create `<configRoot>/.fastedge-debug/` directory
+5. Spawn: `npx asc assembly/index.ts --target release --outFile <configRoot>/.fastedge-debug/app.wasm` at `buildRoot`
 
 The `--target release` flag picks up optimization settings from `asconfig.json` (shrink level, no-assert, etc.). `--outFile` overrides only the output path to the standard debugger location.
 
@@ -240,12 +240,12 @@ Returns `BinaryInfo: { path: string; lang: ExtLanguage }` where `ExtLanguage = "
 
 All three compilers write to the same path:
 ```
-<configRoot>/.fastedge/bin/debugger.wasm
+<configRoot>/.fastedge-debug/app.wasm
 ```
 
-`configRoot` is the directory containing `fastedge-config.test.json` (or `buildRoot` if none exists). This path is what the debugger server receives via `POST /api/load` and serves via `/api/workspace-wasm`.
+`configRoot` is the directory containing `.fastedge-debug/` (or `buildRoot` if none exists). This path is what the debugger server receives via `POST /api/load` and serves via `/api/workspace-wasm`.
 
-`.fastedge/bin/` can be safely gitignored.
+`.fastedge-debug/` can be safely gitignored.
 
 ---
 
@@ -267,7 +267,7 @@ AssemblyScript always builds in release mode because the AS `--target release` s
 2. **AS ≠ JS** — AssemblyScript detected by `asconfig.json` at `buildRoot`, not language ID (VSCode reports AS as `typescript`)
 3. **Two root concepts** — `buildRoot` (where build runs) and `configRoot` (where output goes), allowing multi-app workspaces
 4. **Fixed AS entry point** — always `assembly/index.ts`; no file vs workspace mode
-5. **Uniform output** — all three compilers write to `<configRoot>/.fastedge/bin/debugger.wasm`
+5. **Uniform output** — all three compilers write to `<configRoot>/.fastedge-debug/app.wasm`
 
 ---
 

@@ -143,7 +143,7 @@ vscode.workspace.getConfiguration('fastedge').update(
 1. **User triggers debug command** (F5, `run-file`, or `run-workspace`)
 2. **App root resolved** from active file via `resolveConfigRoot()` / `resolveBuildRoot()`
 3. **Per-app manager lookup**: `Map<appRoot, DebuggerServerManager>` — creates lazily if not present
-4. **Build**: Compiler runs (Rust/JS/AS), output to `{configRoot}/.fastedge/bin/debugger.wasm`
+4. **Build**: Compiler runs (Rust/JS/AS), output to `<configRoot>/.fastedge-debug/app.wasm`
 5. **Server start**: `debuggerServerManager.start()` forks bundled `dist/debugger/server.js` using `process.execPath`
 6. **Port resolved**: `resolvePort()` scans 5179–5188, reuses own server or picks free port
 7. **Webview opened**: Panel titled `"FastEdge Debugger — {appName}"` loads debugger UI in iframe
@@ -357,7 +357,7 @@ Per-app `DebuggerServerManager` / `DebuggerWebviewProvider` instances are create
 - Each app folder gets its own isolated server + webview panel
 - App root resolved from the active file — not from `workspaceFolders[0]`
 - Build CWD uses `resolveBuildRoot()` to find the nearest `package.json` / `Cargo.toml`
-- Config isolation uses `resolveConfigRoot()` to find the nearest `fastedge-config.test.json`
+- Config isolation uses `resolveConfigRoot()` to find the nearest `.fastedge-debug/` directory
 - Two apps can debug simultaneously on different ports (5179, 5180, etc.)
 
 ---

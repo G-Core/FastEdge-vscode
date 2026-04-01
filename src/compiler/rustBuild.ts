@@ -26,8 +26,8 @@ export function compileRustAndFindBinary(
 
     // WASM output goes to the config root (= WORKSPACE_PATH) so the debugger
     // server can serve it via /api/workspace-wasm. Falls back to build root
-    // when no fastedge-config.test.json exists (should have been created by
-    // the caller, but guard defensively).
+    // when no .fastedge-debug/ dir exists (should have been created by the
+    // caller, but guard defensively).
     const configRoot = resolveConfigRoot(activeFilePath) ?? buildRoot;
 
     const target = rustConfigWasiTarget(logDebugConsole, activeFilePath);
@@ -90,13 +90,13 @@ export function compileRustAndFindBinary(
           if (/.*\.wasm$/.test(message.filenames[0])) {
             const cargoWasmPath = message.filenames[0];
 
-            // Copy to <configRoot>/.fastedge/bin/debugger.wasm for auto-load support.
+            // Copy to <configRoot>/.fastedge-debug/app.wasm for auto-load support.
             // configRoot = WORKSPACE_PATH so the server can find it via /api/workspace-wasm.
-            const fastedgeBinDir = path.join(configRoot, ".fastedge", "bin");
-            const standardWasmPath = path.join(fastedgeBinDir, "debugger.wasm");
+            const debugDir = path.join(configRoot, ".fastedge-debug");
+            const standardWasmPath = path.join(debugDir, "app.wasm");
 
             // Create directory if it doesn't exist
-            fs.mkdirSync(fastedgeBinDir, { recursive: true });
+            fs.mkdirSync(debugDir, { recursive: true });
 
             // Copy the WASM file
             try {

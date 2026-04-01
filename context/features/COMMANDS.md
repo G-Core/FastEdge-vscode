@@ -46,7 +46,7 @@ Builds the **active editor file** as the WASM entry point, starts a per-app debu
 
 ### Full Workflow
 
-1. **Resolve app identity** — finds nearest `fastedge-config.test.json` as `configRoot` (creates one at the active file's directory if none found)
+1. **Resolve app identity** — finds nearest `.fastedge-debug/` directory as `configRoot` (creates one at the active file's directory if none found)
 2. **Build WASM** — compiles using active file as entry point; shows output in a "FastEdge Build" pseudoterminal (auto-closes after 3s on success, stays open on failure)
 3. **Start debugger server** — lazy-starts a per-`configRoot` server on port 5179–5188; reuses existing server if healthy
 4. **Open debugger webview** — polls `/api/client-count` until UI WebSocket connects (max 5s), then calls `POST /api/load` with the WASM path
