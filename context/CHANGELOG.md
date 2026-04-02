@@ -13,6 +13,50 @@ See `SEARCH_GUIDE.md` for more search patterns.
 
 ---
 
+## [2026-04-02] - Discriminated union config schema: appType + path/url split for /api/execute
+
+> **Source**: Bundled debugger (fastedge-test). No changes to extension `src/` — the extension hosts the debugger via `dist/debugger/` and is unaware of the config schema. See `context/BUNDLED_DEBUGGER.md` for the bundling architecture.
+
+### Overview
+The config schema now uses a discriminated union on `appType` (`"proxy-wasm"` or `"http-wasm"`). HTTP WASM configs use `request.path` (path only, e.g. `"/api/hello?q=1"`) instead of the previous `request.url`. CDN/proxy-WASM configs continue to use `request.url` (full URL). The server `/api/execute` endpoint accepts both `path` (preferred for HTTP) and `url` (legacy/CDN). The frontend API client now sends `{ path }` for HTTP WASM execute calls and `{ url }` for CDN.
+
+### What Changed (in bundled debugger)
+- Config schema: `appType` field is now explicit — `"proxy-wasm"` or `"http-wasm"`
+- HTTP WASM: `request.path` replaces `request.url` (path-only, e.g. `"/api/hello?q=1"`)
+- CDN / Proxy-WASM: `request.url` remains (full URL, e.g. `"https://example.com/page"`)
+- Server `/api/execute`: accepts both `path` and `url` fields
+- Frontend API client: sends `{ path }` for HTTP WASM, `{ url }` for CDN
+
+### Context Docs Updated
+- `context/architecture/DEBUGGER_ARCHITECTURE.md` — `/api/execute` examples updated to show both formats
+
+---
+
+## [2026-04-01] - configDir in filePickerResult for relative dotenv path resolution
+
+### Overview
+The extension now sends `configDir` (the directory of the config file) alongside `content` and `fileName` in `filePickerResult` messages. This allows the debugger frontend to resolve relative `dotenv.path` values (e.g., `"./fixtures"`) against the config file's directory instead of the server CWD.
+
+### What Was Completed
+
+#### 1. `DebuggerWebviewProvider.ts`
+- `openFilePicker` handler now includes `configDir: path.dirname(uris[0].fsPath)` in the `filePickerResult` message
+- `sendConfig()` method accepts an optional `configDir` parameter and forwards it in the message
+
+#### 2. `runDebugger.ts`
+- `loadConfigInDebugger()` passes `path.dirname(configPath)` to `sendConfig()` for auto-load flow
+
+**Files Modified:**
+- `src/debugger/DebuggerWebviewProvider.ts` — `configDir` in `filePickerResult` + `sendConfig()` signature
+- `src/commands/runDebugger.ts` — passes `configDir` to `sendConfig()`
+
+### Notes
+- The bridge HTML already forwards the full `event.data` object, so `configDir` passes through to the iframe automatically
+- This is a cross-repo change coordinated with fastedge-test (which consumes `configDir` in `ConfigButtons.tsx`)
+- See fastedge-test `context/features/DOTENV.md` → "Relative Path Resolution" for the full flow
+
+---
+
 ## [2026-03-20] - Explorer context menu commands for loading WASM and config files
 
 ### Overview

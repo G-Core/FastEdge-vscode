@@ -1,6 +1,6 @@
 # Debugger Architecture - FastEdge VSCode Extension
 
-**Last Updated**: February 11, 2026
+**Last Updated**: April 2, 2026
 **Current Version**: Webview-based bundled debugger architecture
 
 This document describes how the FastEdge VSCode extension provides debugging capabilities through an embedded fastedge-debugger server and webview UI.
@@ -177,15 +177,37 @@ webview.html = getWebviewContent(frontendPath, serverUrl);
    - WASM module initialized
 
 2. **Execute Request**:
-   ```bash
+
+   The request format depends on the app type (`appType` in config):
+
+   **HTTP WASM** (`appType: "http-wasm"`) — uses `path` (preferred):
+   ```http
    POST http://localhost:5179/api/execute
+   Content-Type: application/json
+
    {
      "method": "GET",
-     "path": "/",
+     "path": "/api/hello?q=1",
      "headers": {},
      "body": ""
    }
    ```
+
+   **CDN / Proxy-WASM** (`appType: "proxy-wasm"`) — uses `url` (full URL):
+   ```http
+   POST http://localhost:5179/api/execute
+   Content-Type: application/json
+
+   {
+     "method": "GET",
+     "url": "https://example.com/page",
+     "headers": {},
+     "body": ""
+   }
+   ```
+
+   The server accepts both `path` and `url` fields; `path` is preferred for HTTP WASM, `url` for CDN/proxy-WASM. The frontend API client sends `{ path }` for HTTP and `{ url }` for CDN.
+
    - Request processed by WASM
    - Response captured
    - Logs streamed via WebSocket
@@ -240,13 +262,25 @@ await fetch('http://localhost:5179/api/load', {
   body: JSON.stringify({ wasmBase64, dotenv: { enabled: true } })
 });
 
-// Execute request
+// Execute request — HTTP WASM (uses path)
 const response = await fetch('http://localhost:5179/api/execute', {
   method: 'POST',
   headers: { 'Content-Type': 'application/json' },
   body: JSON.stringify({
     method: 'GET',
-    path: '/',
+    path: '/api/hello?q=1',
+    headers: {},
+    body: ''
+  })
+});
+
+// Execute request — CDN / Proxy-WASM (uses url)
+const cdnResponse = await fetch('http://localhost:5179/api/execute', {
+  method: 'POST',
+  headers: { 'Content-Type': 'application/json' },
+  body: JSON.stringify({
+    method: 'GET',
+    url: 'https://example.com/page',
     headers: {},
     body: ''
   })
@@ -456,6 +490,6 @@ curl http://localhost:5179/health
 
 ---
 
-**Last Updated**: February 11, 2026
+**Last Updated**: April 2, 2026
 **Architecture Version**: Webview-based (v0.1.14+)
 **Status**: ✅ Production-ready
