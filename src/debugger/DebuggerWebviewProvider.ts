@@ -73,7 +73,8 @@ export class DebuggerWebviewProvider {
             if (uris && uris.length > 0) {
               const content = await readFile(uris[0].fsPath, "utf-8");
               const fileName = path.basename(uris[0].fsPath);
-              this.panel?.webview.postMessage({ command: "filePickerResult", content, fileName });
+              const configDir = path.dirname(uris[0].fsPath);
+              this.panel?.webview.postMessage({ command: "filePickerResult", content, fileName, configDir });
             } else {
               this.panel?.webview.postMessage({ command: "filePickerResult", canceled: true });
             }
@@ -354,12 +355,12 @@ export class DebuggerWebviewProvider {
    * Posts a filePickerResult message, which ConfigButtons already handles.
    * Waits for the React app to connect via WebSocket before posting.
    */
-  async sendConfig(content: string, fileName: string): Promise<void> {
+  async sendConfig(content: string, fileName: string, configDir?: string): Promise<void> {
     await this.waitForWebSocketClient();
     if (!this.panel) {
       throw new Error("Debugger panel was closed before the config could be sent.");
     }
-    this.panel.webview.postMessage({ command: "filePickerResult", content, fileName });
+    this.panel.webview.postMessage({ command: "filePickerResult", content, fileName, configDir });
   }
 
   /**

@@ -554,6 +554,18 @@ try {
 
 ---
 
+## Relative dotenv.path in Config Files (April 2026)
+
+When the extension loads a config file (via file picker or context menu), it now sends `configDir` (the config file's parent directory) in the `filePickerResult` message. This allows the debugger frontend to resolve relative `dotenv.path` values against the config file's directory.
+
+- `DebuggerWebviewProvider.ts` — `openFilePicker` includes `configDir` in message; `sendConfig()` accepts optional `configDir`
+- `runDebugger.ts` — `loadConfigInDebugger()` passes `path.dirname(configPath)` to `sendConfig()`
+- The bridge HTML forwards the full `event.data` object, so `configDir` passes through automatically
+
+This ensures a config with `"dotenv": { "path": "./fixtures" }` resolves consistently whether loaded via VSCode extension, CLI test framework, or server API.
+
+---
+
 ## Key Takeaways
 
 1. **Always on** - Auto-discovered from `configRoot`, no configuration required
@@ -562,6 +574,7 @@ try {
 4. **Merge behavior** - Objects merged, not replaced
 5. **FastEdge-run integration** - Translates to CLI arguments
 6. **Error handling** - Graceful degradation (missing files skipped, parse errors logged)
+7. **Relative paths** - Resolved against config file directory, not server CWD (April 2026)
 
 ---
 
@@ -569,7 +582,8 @@ try {
 - `../DOTENV.md` (root) - User guide
 - `CONFIGURATION_SYSTEM.md` - Overall configuration architecture
 - `DEBUGGER_ARCHITECTURE.md` - How config is used
+- fastedge-test `context/features/DOTENV.md` → "Relative Path Resolution" for the cross-repo flow
 
 ---
 
-**Last Updated**: March 2026
+**Last Updated**: April 2026
