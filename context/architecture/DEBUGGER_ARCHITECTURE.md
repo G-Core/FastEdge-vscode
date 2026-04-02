@@ -181,8 +181,10 @@ webview.html = getWebviewContent(frontendPath, serverUrl);
    The request format depends on the app type (`appType` in config):
 
    **HTTP WASM** (`appType: "http-wasm"`) — uses `path` (preferred):
-   ```bash
+   ```http
    POST http://localhost:5179/api/execute
+   Content-Type: application/json
+
    {
      "method": "GET",
      "path": "/api/hello?q=1",
@@ -192,8 +194,10 @@ webview.html = getWebviewContent(frontendPath, serverUrl);
    ```
 
    **CDN / Proxy-WASM** (`appType: "proxy-wasm"`) — uses `url` (full URL):
-   ```bash
+   ```http
    POST http://localhost:5179/api/execute
+   Content-Type: application/json
+
    {
      "method": "GET",
      "url": "https://example.com/page",

@@ -228,7 +228,7 @@ async function loadConfigInDebugger(uri?: vscode.Uri): Promise<void> {
 
     // Read config and send to the React app via the existing filePickerResult path
     const content = await readFile(configPath, "utf-8");
-    await provider.sendConfig(content, path.basename(configPath), path.dirname(configPath));
+    await provider.sendConfig(content, path.basename(configPath), configDir);
   } catch (error) {
     vscode.window.showErrorMessage(`Failed to load config: ${(error as Error).message}`);
   }

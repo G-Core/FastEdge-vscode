@@ -15,10 +15,12 @@ See `SEARCH_GUIDE.md` for more search patterns.
 
 ## [2026-04-02] - Discriminated union config schema: appType + path/url split for /api/execute
 
+> **Source**: Bundled debugger (fastedge-test). No changes to extension `src/` — the extension hosts the debugger via `dist/debugger/` and is unaware of the config schema. See `context/BUNDLED_DEBUGGER.md` for the bundling architecture.
+
 ### Overview
 The config schema now uses a discriminated union on `appType` (`"proxy-wasm"` or `"http-wasm"`). HTTP WASM configs use `request.path` (path only, e.g. `"/api/hello?q=1"`) instead of the previous `request.url`. CDN/proxy-WASM configs continue to use `request.url` (full URL). The server `/api/execute` endpoint accepts both `path` (preferred for HTTP) and `url` (legacy/CDN). The frontend API client now sends `{ path }` for HTTP WASM execute calls and `{ url }` for CDN.
 
-### What Changed
+### What Changed (in bundled debugger)
 - Config schema: `appType` field is now explicit — `"proxy-wasm"` or `"http-wasm"`
 - HTTP WASM: `request.path` replaces `request.url` (path-only, e.g. `"/api/hello?q=1"`)
 - CDN / Proxy-WASM: `request.url` remains (full URL, e.g. `"https://example.com/page"`)
