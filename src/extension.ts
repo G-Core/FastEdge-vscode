@@ -81,7 +81,11 @@ export function activate(context: vscode.ExtensionContext) {
       ): vscode.ProviderResult<vscode.DebugConfiguration> {
         // When F5 is pressed, trigger our build and debug workflow
         const debugContext = config.debugContext || config.entrypoint || "file";
-        if (debugContext === "workspace" || debugContext === "package") {
+        const activeFileName = vscode.window.activeTextEditor?.document.uri.fsPath;
+        const isManifest = activeFileName
+          ? /[/\\](package\.json|Cargo\.toml)$/.test(activeFileName)
+          : false;
+        if (debugContext === "workspace" || debugContext === "package" || isManifest) {
           runWorkspace();
         } else {
           runFile();

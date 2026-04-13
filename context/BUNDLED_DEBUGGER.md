@@ -1,6 +1,6 @@
 # Bundled Debugger Implementation
 
-**Last Updated**: March 12, 2026
+**Last Updated**: April 13, 2026
 **Version**: 0.1.19+
 **Status**: ✅ Implemented & Packaged
 
@@ -27,9 +27,11 @@ Extension resolves config root (nearest .fastedge-debug/ directory) and build ro
     ↓
 Extension reads <configRoot>/.fastedge-debug/.debug-port (if present) → health-checks
     ↓
-If healthy: reuse existing server   If missing/stale: fork new server on next free port
+If healthy: reuse existing server   If missing/stale: fork new server (no PORT env var)
     ↓
-Server writes port to <configRoot>/.fastedge-debug/.debug-port
+fastedge-test picks port via auto-increment (5179-5188), writes to <configRoot>/.fastedge-debug/.debug-port
+    ↓
+Extension waits for port file (waitForPortFile()), reads chosen port, confirms health
     ↓
 Per-app webview panel opens ("FastEdge Debugger — <appName>")
 ```
@@ -127,16 +129,19 @@ const bundledServerPath = path.join(
   'dist/debugger/server.js'
 );
 
-// Fork using VSCode's Node.js
+// Fork using VSCode's Node.js — no PORT env var
+// fastedge-test picks its own port via auto-increment (5179-5188)
 this.serverProcess = fork(bundledServerPath, [], {
   cwd: path.dirname(bundledServerPath),
   execPath: process.execPath, // VSCode's Node!
   stdio: ['ignore', 'pipe', 'pipe', 'ipc'],
   env: {
     ...process.env,
-    PORT: '5179',
   },
 });
+
+// Wait for fastedge-test to write the port file, then read chosen port
+const port = await this.waitForPortFile();
 ```
 
 ### Key Design Decisions

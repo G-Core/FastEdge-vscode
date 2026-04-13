@@ -108,7 +108,7 @@ The debugger server is forked with `process.execPath` (VSCode's embedded Node.js
 | MCP Docker command | `src/commands/mcpJson.ts:getPlatformDockerCommand()` | ✅ |
 | File path handling | Throughout — `path.join()` and `vscode.Uri.joinPath()` | ✅ |
 | Server fork | `src/debugger/DebuggerServerManager.ts` — `process.execPath` | ✅ |
-| Port scanning | `DebuggerServerManager.resolvePort()` — HTTP fetch, platform-agnostic | ✅ |
+| Port discovery | `DebuggerServerManager.waitForPortFile()` — reads port file written by fastedge-test, platform-agnostic | ✅ |
 
 ---
 
@@ -131,4 +131,4 @@ Pipeline flow (see `.github/workflows/`):
 
 ---
 
-**Last Updated**: March 2026
+**Last Updated**: April 2026

@@ -1,6 +1,6 @@
 # Debugger Architecture - FastEdge VSCode Extension
 
-**Last Updated**: April 2, 2026
+**Last Updated**: April 13, 2026
 **Current Version**: Webview-based bundled debugger architecture
 
 This document describes how the FastEdge VSCode extension provides debugging capabilities through an embedded fastedge-debugger server and webview UI.
@@ -47,7 +47,7 @@ The FastEdge extension uses a **bundled debugger** approach instead of the tradi
 
 **Responsibilities**:
 - Start/stop server process
-- Monitor server health
+- Discover port via port file (`.fastedge-debug/.debug-port`)
 - Handle server crashes/failures
 - Provide server status to extension
 
@@ -76,10 +76,24 @@ this.serverProcess = fork(bundledServerPath, [], {
   stdio: ['ignore', 'pipe', 'pipe', 'ipc'],
   env: {
     ...process.env,
-    PORT: '5179',
+    // No PORT env var — fastedge-test picks its own port
+    // via auto-increment (5179-5188) and writes it to
+    // <configRoot>/.fastedge-debug/.debug-port
   },
 });
 ```
+
+**Port Discovery**:
+
+The extension no longer selects the port. After forking the server, it calls `waitForPortFile()` which watches for `<appRoot>/.fastedge-debug/.debug-port` to appear (written by fastedge-test's `startServer()`). The extension reads the chosen port from this file and confirms the server is healthy before proceeding.
+
+**App Root Resolution** (shared contract with CLI):
+All entry points resolve the app root using the same priority:
+1. Walk up from the starting path to find an existing `.fastedge-debug/` directory (explicit user anchor)
+2. Walk up to find the nearest `package.json` or `Cargo.toml` (build manifest = app identity)
+3. Fall back to the starting directory
+
+This ensures `.fastedge-debug/` always lands next to the build manifest, regardless of whether the developer uses `npx fastedge-debug`, VSCode F5, or the Package Entry command.
 
 **Why fork() instead of spawn()**:
 - Uses VSCode's built-in Node.js (no external dependency)
@@ -372,7 +386,8 @@ try {
 ```
 
 **Common Issues**:
-- Port 5179 already in use → Show error, suggest stopping other process
+- Port range 5179–5188 exhausted → fastedge-test throws clear error
+- Port file not appearing → Server failed to start (check logs)
 - Bundled server missing → Extension installation corrupted
 - Node.js runtime issue → VSCode problem (very rare)
 
@@ -490,6 +505,6 @@ curl http://localhost:5179/health
 
 ---
 
-**Last Updated**: April 2, 2026
+**Last Updated**: April 13, 2026
 **Architecture Version**: Webview-based (v0.1.14+)
 **Status**: ✅ Production-ready

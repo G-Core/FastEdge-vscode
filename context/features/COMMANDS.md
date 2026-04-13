@@ -48,7 +48,7 @@ Builds the **active editor file** as the WASM entry point, starts a per-app debu
 
 1. **Resolve app identity** — finds nearest `.fastedge-debug/` directory as `configRoot` (creates one at the active file's directory if none found)
 2. **Build WASM** — compiles using active file as entry point; shows output in a "FastEdge Build" pseudoterminal (auto-closes after 3s on success, stays open on failure)
-3. **Start debugger server** — lazy-starts a per-`configRoot` server on port 5179–5188; reuses existing server if healthy
+3. **Start debugger server** — lazy-starts a per-`configRoot` server; fastedge-test picks a port (5179–5188) and writes it to `.debug-port`; extension discovers port via `waitForPortFile()`; reuses existing server if healthy
 4. **Open debugger webview** — polls `/api/client-count` until UI WebSocket connects (max 5s), then calls `POST /api/load` with the WASM path
 
 ### Behavior by Language
@@ -245,4 +245,4 @@ await vscode.commands.executeCommand('fastedge.run-file');
 
 ---
 
-**Last Updated**: March 17, 2026
+**Last Updated**: April 2026

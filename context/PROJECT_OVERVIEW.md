@@ -194,7 +194,7 @@ FastEdge-vscode/
    - Rust: `cargo build --target wasm32-wasip1` from `buildRoot`
    - JS: `fastedge-build` from `buildRoot`, output to `<configRoot>/.fastedge-debug/app.wasm`
    - AS: `asc --target release` with proxy-wasm support
-4. Per-app `DebuggerServerManager` started (or reused) for `configRoot`
+4. Per-app `DebuggerServerManager` started (or reused) for `configRoot` — port selected by fastedge-test, discovered via `.debug-port` file
 5. WASM auto-loaded into debugger via REST API
 6. Webview panel opened showing debugger UI
 7. User executes requests and views logs
@@ -337,4 +337,4 @@ pnpm run package        # Creates .vsix file
 
 ---
 
-**Last Updated**: March 2026
+**Last Updated**: April 2026

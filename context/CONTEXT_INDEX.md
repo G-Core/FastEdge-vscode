@@ -219,7 +219,7 @@ See `SEARCH_GUIDE.md` for more patterns.
    - Manages extension lifecycle
 
 2. **Debugger** (`src/debugger/`)
-   - `DebuggerServerManager` — forks bundled `dist/debugger/server.js`, manages port + lifecycle
+   - `DebuggerServerManager` — forks bundled `dist/debugger/server.js`, discovers port via `.debug-port` file, manages lifecycle
    - `DebuggerWebviewProvider` — creates webview panel, bridges iframe↔extension messages
    - Per-app instances keyed by `configRoot`
 
@@ -285,4 +285,4 @@ See `SEARCH_GUIDE.md` for more patterns.
 
 ---
 
-**Last Updated**: March 2026
+**Last Updated**: April 2026
