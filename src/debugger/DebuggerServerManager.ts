@@ -87,6 +87,10 @@ export class DebuggerServerManager {
     if (this.isStarting) {
       console.log("Debugger server is already starting");
       await this.waitForPortFile(30000);
+      const resolvedPort = this.readPortFile();
+      if (resolvedPort !== null) {
+        this.port = resolvedPort;
+      }
       return;
     }
 
