@@ -42,7 +42,7 @@ Two separate utilities in `src/utils/resolveAppRoot.ts`:
 
 These are deliberately separate — in a monorepo the `package.json` may be several levels above the app's own `fastedge-config.test.json`.
 
-**`.debug-port` file**: Written by the server at `{configRoot}/.fastedge-debug/.debug-port` (inside the `.fastedge-debug/` directory) after `httpServer.listen()`. The extension reads it at startup to find the per-app server port.
+**`.debug-port` file**: Written by fastedge-test's `startServer()` at `{configRoot}/.fastedge-debug/.debug-port` after picking a port via auto-increment (5179-5188) and calling `httpServer.listen()`. The extension discovers the port by calling `waitForPortFile()` after forking the server — it does not pass a `PORT` env var.
 
 ---
 

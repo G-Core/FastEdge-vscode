@@ -13,6 +13,52 @@ See `SEARCH_GUIDE.md` for more search patterns.
 
 ---
 
+## [2026-04-13] - App root resolution aligned: fall back to build manifest, not source file directory
+
+### Overview
+All debug entry points (`buildAndDebug`, `loadWasmInDebugger`, `loadConfigInDebugger`) now fall back to `resolveBuildRoot()` (nearest `package.json`/`Cargo.toml`) instead of `dirname(activeFile)` when no existing `.fastedge-debug/` is found. This aligns with industry convention (artifacts next to build manifest) and matches the CLI's new walk-up resolution in `fastedge-test`.
+
+### What Changed
+
+#### `src/commands/runDebugger.ts`
+- **`buildAndDebug()`**: `portAnchor` fallback changed from `dirname(activeFilePath)` + `ensureDebugDir()` to `buildRoot`
+- **`loadWasmInDebugger()`**: `appRoot` fallback changed from `wasmDir` to `resolveBuildRoot(wasmPath) ?? wasmDir`
+- **`loadConfigInDebugger()`**: `appRoot` fallback changed from `configDir` to `resolveBuildRoot(configPath) ?? configDir`
+- **Removed**: `ensureDebugDir` import (server's `writePortFile()` creates the directory)
+
+### Context Docs Updated
+- `context/architecture/DEBUGGER_ARCHITECTURE.md` — port file comment updated
+
+---
+
+## [2026-04-13] - Port resolution moved to fastedge-test; extension discovers port via port file
+
+### Overview
+The `resolvePort()` method was removed from `DebuggerServerManager.ts`. Port auto-increment (5179-5188) is now handled entirely by fastedge-test's `startServer()`. The extension no longer passes `PORT` in the env when forking the server. Instead, after forking, it calls `waitForPortFile()` to watch for `.fastedge-debug/.debug-port`, reads the port fastedge-test chose, and confirms health. This replaces the old `waitForHealthy()` method.
+
+### What Changed
+
+#### 1. `DebuggerServerManager.ts`
+- **Removed**: `resolvePort()` method (port scanning 5179-5188 with identity check)
+- **Removed**: `PORT` env var from `fork()` call — server spawned without it
+- **Removed**: `waitForHealthy()` method
+- **Added**: `waitForPortFile()` — watches for `.fastedge-debug/.debug-port` to appear, reads port, confirms health
+
+#### 2. Port selection responsibility
+- **Before**: Extension scanned ports 5179-5188, passed chosen port via `PORT` env var
+- **After**: fastedge-test's `startServer()` picks its own port via auto-increment, writes it to `.debug-port`; extension discovers it
+
+### Context Docs Updated
+- `context/architecture/DEBUGGER_ARCHITECTURE.md` — fork snippet updated (no PORT env), port discovery section added, error handling updated
+- `context/architecture/EXTENSION_LIFECYCLE.md` — debugger flow step 6 updated (resolvePort -> waitForPortFile), error handling updated
+- `context/BUNDLED_DEBUGGER.md` — architecture diagram and server startup code updated
+- `context/features/CROSS_PLATFORM.md` — port scanning row updated to port discovery
+- `context/features/COMMANDS.md` — server start step updated
+- `context/CONTEXT_INDEX.md` — DebuggerServerManager description updated
+- `context/PROJECT_OVERVIEW.md` — debug session flow step updated
+
+---
+
 ## [2026-04-02] - Discriminated union config schema: appType + path/url split for /api/execute
 
 > **Source**: Bundled debugger (fastedge-test). No changes to extension `src/` — the extension hosts the debugger via `dist/debugger/` and is unaware of the config schema. See `context/BUNDLED_DEBUGGER.md` for the bundling architecture.

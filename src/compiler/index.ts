@@ -36,6 +36,27 @@ function getActiveFileLanguage(activeFile: string): ExtLanguage | null {
   return null;
 }
 
+/**
+ * Detect the project language from the build manifest rather than the active
+ * editor's language. Used for "workspace" / "package entry" builds where the
+ * active file may be any type (README, JSON, etc.).
+ */
+function getProjectLanguage(activeFile: string): ExtLanguage | null {
+  const buildRoot = resolveBuildRoot(activeFile);
+  if (!buildRoot) return null;
+
+  if (fs.existsSync(path.join(buildRoot, "Cargo.toml"))) {
+    return "rust";
+  }
+  if (fs.existsSync(path.join(buildRoot, "asconfig.json"))) {
+    return "assemblyscript";
+  }
+  if (fs.existsSync(path.join(buildRoot, "package.json"))) {
+    return "javascript";
+  }
+  return null;
+}
+
 async function compileActiveEditorsBinary(
   debugContext: DebugContext = "file",
   logDebugConsole: LogToDebugConsole
@@ -48,11 +69,16 @@ async function compileActiveEditorsBinary(
     );
   }
 
-  const activeFileLanguage = getActiveFileLanguage(activeFile);
+  const activeFileLanguage =
+    debugContext === "workspace"
+      ? getProjectLanguage(activeFile)
+      : getActiveFileLanguage(activeFile);
 
   if (!activeFileLanguage) {
     throw new Error(
-      "Language not supported. Only Rust, JavaScript, or AssemblyScript files are supported."
+      debugContext === "workspace"
+        ? "Could not detect project language. Ensure your project has a package.json or Cargo.toml."
+        : "Language not supported. Only Rust, JavaScript, or AssemblyScript files are supported."
     );
   }
 

@@ -8,6 +8,9 @@ const DEBUG_DIR = ".fastedge-debug";
 /**
  * Manages the lifecycle of the fastedge-debugger server for a specific app root.
  * Each app folder gets its own server instance and port file.
+ *
+ * Port selection is handled by fastedge-test's startServer() which auto-increments
+ * from 5179 if ports are busy. The resolved port is written to .fastedge-debug/.debug-port.
  */
 export class DebuggerServerManager {
   private serverProcess: ChildProcess | null = null;
@@ -42,19 +45,10 @@ export class DebuggerServerManager {
   }
 
   /**
-   * Check if the debugger server is healthy and responding.
-   * Returns true only if the server is our own fastedge-debugger process.
+   * Check if the debugger server is healthy and responding on the current port.
    */
   async isHealthy(): Promise<boolean> {
-    try {
-      const response = await fetch(`http://localhost:${this.port}/health`, {
-        signal: AbortSignal.timeout(500),
-      });
-      const data = await response.json();
-      return response.ok && data.status === "ok" && data.service === "fastedge-debugger";
-    } catch {
-      return false;
-    }
+    return this.isHealthyOnPort(this.port);
   }
 
   private async isHealthyOnPort(port: number): Promise<boolean> {
@@ -70,45 +64,15 @@ export class DebuggerServerManager {
   }
 
   /**
-   * Find a free port starting from the preferred port.
-   * Skips ports occupied by foreign processes.
-   */
-  private async resolvePort(): Promise<number> {
-    for (let port = 5179; port < 5189; port++) {
-      let response: Response;
-      try {
-        response = await fetch(`http://localhost:${port}/health`, {
-          signal: AbortSignal.timeout(500),
-        });
-      } catch {
-        // Connection refused or timeout — port is free
-        return port;
-      }
-      // If fetch succeeded, something is listening — figure out what
-      try {
-        const data = await response.json();
-        if (data.status === "ok" && data.service === "fastedge-debugger") {
-          console.log(`Port ${port} is in use by another fastedge-debugger, trying ${port + 1}...`);
-          continue;
-        }
-      } catch {
-        // JSON parse failed but a process is listening — port is occupied
-      }
-      console.log(`Port ${port} is occupied by a foreign process, trying ${port + 1}...`);
-    }
-    throw new Error("Could not find a free port for the debugger server (tried 10 ports)");
-  }
-
-  /**
    * Start the debugger server for this app root.
    * Checks the port file first — reuses an existing healthy server if found.
+   * Port selection is delegated to fastedge-test's auto-increment logic.
    */
   async start(): Promise<void> {
     // Step 1: Check if a server is already running for this app via port file
     const filePort = this.readPortFile();
     if (filePort !== null) {
       if (await this.isHealthyOnPort(filePort)) {
-        // Existing server is alive — reuse it
         this.port = filePort;
         console.log(`Reusing existing debugger server on port ${this.port} for ${this.appRoot}`);
         return;
@@ -122,16 +86,18 @@ export class DebuggerServerManager {
     // Step 2: Concurrent call guard (same manager instance only)
     if (this.isStarting) {
       console.log("Debugger server is already starting");
-      await this.waitForHealthy(30000);
+      await this.waitForPortFile(30000);
+      const resolvedPort = this.readPortFile();
+      if (resolvedPort !== null) {
+        this.port = resolvedPort;
+      }
       return;
     }
 
     this.isStarting = true;
 
     try {
-      // Step 3: Find a free port and spawn
-      this.port = await this.resolvePort();
-
+      // Step 3: Spawn the server — it picks its own port via auto-increment
       const bundledServerPath = path.join(
         this.extensionPath,
         "dist",
@@ -146,15 +112,16 @@ export class DebuggerServerManager {
         );
       }
 
-      console.log(`Starting debugger server for ${this.appRoot} on port ${this.port}`);
+      console.log(`Starting debugger server for ${this.appRoot}...`);
 
+      // No PORT env var — let fastedge-test's startServer() resolve it via auto-increment.
+      // WORKSPACE_PATH tells it where to write .fastedge-debug/.debug-port.
       this.serverProcess = fork(bundledServerPath, [], {
         cwd: path.dirname(bundledServerPath),
         execPath: process.execPath,
         stdio: ["ignore", "pipe", "pipe", "ipc"],
         env: {
           ...process.env,
-          PORT: String(this.port),
           VSCODE_INTEGRATION: "true",
           WORKSPACE_PATH: this.appRoot,
         },
@@ -181,7 +148,13 @@ export class DebuggerServerManager {
         this.deletePortFile();
       });
 
-      await this.waitForHealthy(30000);
+      // Step 4: Wait for the port file to appear and the server to become healthy
+      await this.waitForPortFile(30000);
+      const resolvedPort = this.readPortFile();
+      if (resolvedPort === null) {
+        throw new Error("Server started but port file was not written");
+      }
+      this.port = resolvedPort;
 
       console.log(`Debugger server started on port ${this.port} for ${this.appRoot}`);
     } finally {
@@ -190,14 +163,15 @@ export class DebuggerServerManager {
   }
 
   /**
-   * Wait for the debugger server to become healthy
+   * Wait for the port file to appear and the server to become healthy.
    */
-  private async waitForHealthy(timeoutMs: number = 30000): Promise<void> {
+  private async waitForPortFile(timeoutMs: number = 30000): Promise<void> {
     const startTime = Date.now();
-    const checkInterval = 500;
+    const checkInterval = 300;
 
     while (Date.now() - startTime < timeoutMs) {
-      if (await this.isHealthy()) {
+      const port = this.readPortFile();
+      if (port !== null && await this.isHealthyOnPort(port)) {
         return;
       }
       await new Promise((resolve) => setTimeout(resolve, checkInterval));
@@ -217,8 +191,6 @@ export class DebuggerServerManager {
       this.serverProcess = null;
       console.log(`Stopping debugger server for ${this.appRoot}...`);
       proc.kill("SIGINT");
-      // Wait for graceful shutdown before cleaning the port file,
-      // as the server's own signal handler will delete it too
       const exited = await new Promise<boolean>((resolve) => {
         const timer = setTimeout(() => resolve(false), 2000);
         proc.once("exit", () => { clearTimeout(timer); resolve(true); });

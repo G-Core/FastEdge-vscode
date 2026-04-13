@@ -73,7 +73,7 @@ function getOrCreateForAppRoot(appRoot: string) { ... }
 
 **Key Features**:
 - Per-app isolation — each `configRoot` gets its own server + panel
-- Server port range 5179–5188 with identity check (`service === "fastedge-debugger"`)
+- Server port range 5179–5188 — port selection handled by fastedge-test's `startServer()`, discovered via `.debug-port` file
 - Server forked using `process.execPath` (VSCode's bundled Node, no external Node needed)
 - Closing a panel stops its server and removes it from the map
 
@@ -144,8 +144,8 @@ vscode.workspace.getConfiguration('fastedge').update(
 2. **App root resolved** from active file via `resolveConfigRoot()` / `resolveBuildRoot()`
 3. **Per-app manager lookup**: `Map<appRoot, DebuggerServerManager>` — creates lazily if not present
 4. **Build**: Compiler runs (Rust/JS/AS), output to `<configRoot>/.fastedge-debug/app.wasm`
-5. **Server start**: `debuggerServerManager.start()` forks bundled `dist/debugger/server.js` using `process.execPath`
-6. **Port resolved**: `resolvePort()` scans 5179–5188, reuses own server or picks free port
+5. **Server start**: `debuggerServerManager.start()` forks bundled `dist/debugger/server.js` using `process.execPath` (no `PORT` env var — fastedge-test picks its own port)
+6. **Port discovered**: `waitForPortFile()` watches for `.fastedge-debug/.debug-port`, reads the port fastedge-test chose (5179–5188), confirms health
 7. **Webview opened**: Panel titled `"FastEdge Debugger — {appName}"` loads debugger UI in iframe
 8. **WASM auto-loaded** into debugger via REST API
 9. **Session ends** when user closes the panel — `onDidDispose` calls `serverManager.stop()`
@@ -347,7 +347,8 @@ Per-app `DebuggerServerManager` / `DebuggerWebviewProvider` instances are create
 **Debugger server errors**:
 - Startup failures surfaced via `vscode.window.showErrorMessage()`
 - Server crashes detected on process exit; port file deleted automatically
-- Port exhaustion (all 5179–5188 occupied) throws clear error
+- Port exhaustion (all 5179–5188 occupied) — fastedge-test throws clear error
+- Port file timeout — server failed to start or write port file
 
 ---
 
@@ -395,4 +396,4 @@ Per-app `DebuggerServerManager` / `DebuggerWebviewProvider` instances are create
 
 ---
 
-**Last Updated**: March 2026
+**Last Updated**: April 2026

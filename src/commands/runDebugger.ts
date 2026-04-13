@@ -3,7 +3,7 @@ import * as path from "path";
 import { readFile } from "fs/promises";
 import { DebuggerServerManager, DebuggerWebviewProvider } from "../debugger";
 import { compileActiveEditorsBinary } from "../compiler";
-import { resolveConfigRoot, resolveBuildRoot, ensureDebugDir } from "../utils/resolveAppRoot";
+import { resolveConfigRoot, resolveBuildRoot } from "../utils/resolveAppRoot";
 import { DebugContext } from "../types";
 
 type AppDebuggerFactory = (appRoot: string) => {
@@ -78,16 +78,10 @@ async function buildAndDebug(debugContext: DebugContext): Promise<void> {
     return;
   }
 
-  // Resolve per-app identity anchor. If no .fastedge-debug/ dir exists yet,
-  // create one co-located with the active file so that the entrypoint directory
-  // becomes its own configRoot. This gives each app isolation without requiring
-  // the user to have pre-created a debug directory.
-  let portAnchor = resolveConfigRoot(activeFilePath);
-  if (!portAnchor) {
-    const activeDir = path.dirname(activeFilePath);
-    ensureDebugDir(activeDir);
-    portAnchor = activeDir;
-  }
+  // Resolve per-app identity anchor. Prefer an existing .fastedge-debug/ dir,
+  // otherwise anchor to the build root (next to package.json / Cargo.toml).
+  // The server's writePortFile() creates .fastedge-debug/ on startup.
+  const portAnchor = resolveConfigRoot(activeFilePath) ?? buildRoot;
 
   const { manager, provider } = debuggerFactory(portAnchor);
 
@@ -177,11 +171,7 @@ async function loadWasmInDebugger(uri?: vscode.Uri): Promise<void> {
 
   const wasmPath = uri.fsPath;
   const wasmDir = path.dirname(wasmPath);
-  const configRoot = resolveConfigRoot(wasmPath);
-  if (!configRoot) {
-    ensureDebugDir(wasmDir);
-  }
-  const appRoot = configRoot ?? wasmDir;
+  const appRoot = resolveConfigRoot(wasmPath) ?? resolveBuildRoot(wasmPath) ?? wasmDir;
 
   const { provider } = debuggerFactory(appRoot);
 
@@ -218,7 +208,7 @@ async function loadConfigInDebugger(uri?: vscode.Uri): Promise<void> {
 
   const configPath = uri.fsPath;
   const configDir = path.dirname(configPath);
-  const appRoot = resolveConfigRoot(configPath) ?? configDir;
+  const appRoot = resolveConfigRoot(configPath) ?? resolveBuildRoot(configPath) ?? configDir;
 
   const { provider } = debuggerFactory(appRoot);
 
