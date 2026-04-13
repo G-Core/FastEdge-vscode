@@ -34,7 +34,10 @@
       "esbuild",
       "@vscode/vsce-sign",
       "keytar"
-    ]
+    ],
+    "overrides": {
+      "flatted": ">=3.4.2"
+    }
   },
   "contributes": {
     "configuration": {
@@ -150,13 +153,14 @@
   "devDependencies": {
     "@types/node": "^25.0.10",
     "@types/vscode": "^1.106.0",
-    "@typescript-eslint/eslint-plugin": "^8.46.4",
-    "@typescript-eslint/parser": "^8.46.4",
+    "@typescript-eslint/eslint-plugin": "^8.58.1",
+    "@typescript-eslint/parser": "^8.58.1",
     "@vscode/vsce": "^3.7.0",
     "esbuild": "^0.27.0",
-    "eslint": "^9.39.1",
+    "eslint": "^9.39.4",
     "typescript": "^5.9.3",
-    "vitest": "^2.1.9"
+    "vite": "^6.4.2",
+    "vitest": "^4.1.4"
   },
   "dependencies": {
     "jsonc-parser": "^3.3.1",
