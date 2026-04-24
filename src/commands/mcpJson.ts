@@ -20,6 +20,7 @@ function getPlatformDockerCommand(): { command: string; args: string[] } {
         "run",
         "--rm",
         "-i",
+        "--pull=always",
         "-v",
         "${workspaceFolder}:/workspace",
         "-e",
@@ -38,7 +39,7 @@ function getPlatformDockerCommand(): { command: string; args: string[] } {
       command: "bash",
       args: [
         "-c",
-        'docker run --rm -i -v "${workspaceFolder}:/workspace" -e "WORKSPACE_ROOT=/workspace" -e "FASTEDGE_API_KEY=$FASTEDGE_API_KEY" -e "FASTEDGE_API_URL=$FASTEDGE_API_URL" ghcr.io/g-core/fastedge-mcp-server:latest',
+        'docker run --rm -i --pull=always -v "${workspaceFolder}:/workspace" -e "WORKSPACE_ROOT=/workspace" -e "FASTEDGE_API_KEY=$FASTEDGE_API_KEY" -e "FASTEDGE_API_URL=$FASTEDGE_API_URL" ghcr.io/g-core/fastedge-mcp-server:latest',
       ],
     };
   }
@@ -101,12 +102,25 @@ async function createMCPJson(context?: vscode.ExtensionContext) {
     );
 
     let existingMCPJson = {} as MCPConfiguration;
+    let existingRawContent: string | null = null;
     try {
       const fileData = await vscode.workspace.fs.readFile(mcpJsonPath);
-      const mcpJsonContent = Buffer.from(fileData).toString("utf8");
-      existingMCPJson = JSON.parse(mcpJsonContent);
+      existingRawContent = Buffer.from(fileData).toString("utf8");
     } catch {
-      /* Do nothing - just means there is not an existing mcp.json */
+      /* File doesn't exist - OK, we'll create a new one */
+    }
+
+    if (existingRawContent !== null) {
+      try {
+        existingMCPJson = JSON.parse(existingRawContent);
+      } catch (error: any) {
+        // File exists but is not valid JSON (e.g., trailing comma, comments).
+        // Do NOT overwrite — tell the user to fix it manually.
+        vscode.window.showErrorMessage(
+          `Existing .vscode/mcp.json could not be parsed as JSON (${error?.message || error}). Please fix or remove the file before running this command.`,
+        );
+        return;
+      }
     }
 
     if (
@@ -257,6 +271,7 @@ async function createMCPJson(context?: vscode.ExtensionContext) {
           : "Linux";
 
     const mcpJsonContent = {
+      ...existingMCPJson,
       servers: {
         ...existingMCPJson.servers,
         "fastedge-assistant": {
