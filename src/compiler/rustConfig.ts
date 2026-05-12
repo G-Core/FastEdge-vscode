@@ -32,8 +32,8 @@ function rustConfigWasiTarget(
   startDir: string
 ): string {
   // Explicit `.cargo/config.toml` `[build] target = ...` wins.
+  const configPath = findCargoConfig(startDir);
   try {
-    const configPath = findCargoConfig(startDir);
     if (configPath !== null) {
       const configContent = fs.readFileSync(configPath, "utf-8");
       const config = toml.parse(configContent);
@@ -42,13 +42,16 @@ function rustConfigWasiTarget(
       }
     }
   } catch (error) {
-    logDebugConsole("Failed to read or parse .cargo/config.toml\n", "stderr");
+    logDebugConsole(
+      `Failed to read or parse .cargo/config.toml${configPath ? ` (${configPath})` : ""}: ${(error as Error).message}\n`,
+      "stderr"
+    );
   }
 
   // Otherwise infer from `Cargo.toml` `[dependencies]`: wstd → wasip2, else wasip1.
   let wasiTarget = "wasm32-wasip1";
+  const cargoTomlPath = findCargoToml(startDir);
   try {
-    const cargoTomlPath = findCargoToml(startDir);
     if (cargoTomlPath !== null) {
       const cargoContent = fs.readFileSync(cargoTomlPath, "utf-8");
       const cargo = toml.parse(cargoContent);
@@ -58,7 +61,7 @@ function rustConfigWasiTarget(
     }
   } catch (error) {
     logDebugConsole(
-      `Failed to read or parse Cargo.toml (fallback target: ${wasiTarget})\n`,
+      `Failed to read or parse Cargo.toml${cargoTomlPath ? ` (${cargoTomlPath})` : ""}: ${(error as Error).message} (fallback target: ${wasiTarget})\n`,
       "stderr"
     );
   }

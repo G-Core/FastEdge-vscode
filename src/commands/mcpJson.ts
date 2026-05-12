@@ -183,10 +183,21 @@ async function createMCPJson(context?: vscode.ExtensionContext) {
     // points at preprod/staging. Otherwise the image's baked default is used.
     const config = vscode.workspace.getConfiguration("fastedge");
     const configuredApiUrl = config.get<string>("apiUrl") || "";
-    const apiBaseOverride =
-      configuredApiUrl && configuredApiUrl !== DEFAULT_API_URL
-        ? configuredApiUrl
-        : "";
+    let apiBaseOverride = "";
+    if (configuredApiUrl && configuredApiUrl !== DEFAULT_API_URL) {
+      try {
+        const parsedUrl = new URL(configuredApiUrl);
+        if (parsedUrl.protocol !== "http:" && parsedUrl.protocol !== "https:") {
+          throw new Error(`Unsupported protocol: ${parsedUrl.protocol}`);
+        }
+        apiBaseOverride = configuredApiUrl;
+      } catch (error: any) {
+        vscode.window.showErrorMessage(
+          `Invalid fastedge.apiUrl setting: "${configuredApiUrl}" is not a valid http(s) URL (${error?.message || error}). Update the setting or remove it to use the default.`,
+        );
+        return;
+      }
+    }
 
     // Get API key from secure storage (VS Code's secret storage)
     const envApiKeyPlaceholder = "${env:GCORE_API_TOKEN}";
