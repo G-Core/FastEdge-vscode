@@ -70,7 +70,16 @@ async function addToGitignore(workspaceFolder: vscode.WorkspaceFolder) {
     vscode.window.showInformationMessage(
       "Added .vscode/mcp.json to .gitignore",
     );
-  } catch {
+  } catch (error: any) {
+    if (
+      !(error instanceof vscode.FileSystemError) ||
+      error.code !== "FileNotFound"
+    ) {
+      vscode.window.showErrorMessage(
+        `Failed to update .gitignore: ${error?.message || error}`,
+      );
+      return;
+    }
     // .gitignore doesn't exist, create it
     const newGitignoreContent = `# VS Code MCP configuration (contains API keys)\n${mcpJsonPattern}\n`;
     await vscode.workspace.fs.writeFile(
@@ -104,13 +113,23 @@ async function createMCPJson(context?: vscode.ExtensionContext) {
     try {
       const fileData = await vscode.workspace.fs.readFile(mcpJsonPath);
       existingRawContent = Buffer.from(fileData).toString("utf8");
-    } catch {
+    } catch (error: any) {
+      if (
+        !(error instanceof vscode.FileSystemError) ||
+        error.code !== "FileNotFound"
+      ) {
+        vscode.window.showErrorMessage(
+          `Failed to read .vscode/mcp.json: ${error?.message || error}`,
+        );
+        return;
+      }
       /* File doesn't exist - OK, we'll create a new one */
     }
 
     if (existingRawContent !== null) {
+      let parsed: unknown;
       try {
-        existingMCPJson = JSON.parse(existingRawContent);
+        parsed = JSON.parse(existingRawContent);
       } catch (error: any) {
         // File exists but is not valid JSON (e.g., trailing comma, comments).
         // Do NOT overwrite — tell the user to fix it manually.
@@ -119,6 +138,29 @@ async function createMCPJson(context?: vscode.ExtensionContext) {
         );
         return;
       }
+      if (
+        parsed === null ||
+        typeof parsed !== "object" ||
+        Array.isArray(parsed)
+      ) {
+        vscode.window.showErrorMessage(
+          "Existing .vscode/mcp.json is not a JSON object. Please fix or remove the file before running this command.",
+        );
+        return;
+      }
+      const servers = (parsed as { servers?: unknown }).servers;
+      if (
+        servers !== undefined &&
+        (servers === null ||
+          typeof servers !== "object" ||
+          Array.isArray(servers))
+      ) {
+        vscode.window.showErrorMessage(
+          "Existing .vscode/mcp.json has a 'servers' field that is not an object. Please fix or remove the file before running this command.",
+        );
+        return;
+      }
+      existingMCPJson = parsed as MCPConfiguration;
     }
 
     if (
