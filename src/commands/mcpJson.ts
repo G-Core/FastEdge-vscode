@@ -6,43 +6,41 @@ import { isCodespace, setupCodespaceSecret } from "./codespaceSecrets";
 
 const DEFAULT_API_URL = "https://api.gcore.com";
 
-function getPlatformDockerCommand(): { command: string; args: string[] } {
+function getPlatformDockerCommand(includeBaseOverride: boolean): {
+  command: string;
+  args: string[];
+} {
   const platform = os.platform();
 
   if (platform === "win32") {
-    // Windows - use cmd with Windows-style environment variables (%VAR%)
-    // Note: Removed --user flag as it's not supported on Windows Docker Desktop
-    return {
-      command: "cmd",
-      args: [
-        "/c",
-        "docker",
-        "run",
-        "--rm",
-        "-i",
-        "--pull=always",
-        "-v",
-        "${workspaceFolder}:/workspace",
-        "-e",
-        "WORKSPACE_ROOT=/workspace",
-        "-e",
-        "FASTEDGE_API_KEY=%FASTEDGE_API_KEY%",
-        "-e",
-        "FASTEDGE_API_URL=%FASTEDGE_API_URL%",
-        "ghcr.io/g-core/fastedge-mcp-server:latest",
-      ],
-    };
-  } else {
-    // macOS and Linux - use bash with Unix-style environment variables ($VAR)
-    // Includes --user flag for proper permissions
-    return {
-      command: "bash",
-      args: [
-        "-c",
-        'docker run --rm -i --pull=always -v "${workspaceFolder}:/workspace" -e "WORKSPACE_ROOT=/workspace" -e "FASTEDGE_API_KEY=$FASTEDGE_API_KEY" -e "FASTEDGE_API_URL=$FASTEDGE_API_URL" ghcr.io/g-core/fastedge-mcp-server:latest',
-      ],
-    };
+    // Windows - cmd, Windows-style env (%VAR%). No --user flag (Windows Docker Desktop).
+    const args = [
+      "/c",
+      "docker",
+      "run",
+      "--rm",
+      "-i",
+      "--pull=always",
+      "-v",
+      "${workspaceFolder}:/workspace",
+      "-e",
+      "WORKSPACE_ROOT=/workspace",
+      "-e",
+      "GCORE_API_KEY=%GCORE_API_KEY%",
+    ];
+    if (includeBaseOverride) {
+      args.push("-e", "GCORE_API_BASE=%GCORE_API_BASE%");
+    }
+    args.push("ghcr.io/g-core/fastedge-mcp-server:latest");
+    return { command: "cmd", args };
   }
+
+  // macOS and Linux - bash, Unix-style env ($VAR).
+  const dockerCmd =
+    'docker run --rm -i --pull=always -v "${workspaceFolder}:/workspace" -e "WORKSPACE_ROOT=/workspace" -e "GCORE_API_KEY=$GCORE_API_KEY"' +
+    (includeBaseOverride ? ' -e "GCORE_API_BASE=$GCORE_API_BASE"' : "") +
+    " ghcr.io/g-core/fastedge-mcp-server:latest";
+  return { command: "bash", args: ["-c", dockerCmd] };
 }
 
 async function addToGitignore(workspaceFolder: vscode.WorkspaceFolder) {
@@ -136,9 +134,17 @@ async function createMCPJson(context?: vscode.ExtensionContext) {
       return;
     }
 
-    // Get existing configuration values as defaults
+    // Get existing configuration values as defaults.
+    // The API URL is no longer prompted. The `fastedge.apiUrl` setting acts as an
+    // advanced override: when set to anything other than the baked-in default
+    // (https://api.gcore.com), it is emitted as GCORE_API_BASE so the MCP server
+    // points at preprod/staging. Otherwise the image's baked default is used.
     const config = vscode.workspace.getConfiguration("fastedge");
-    const defaultApiUrl = config.get<string>("apiUrl") || DEFAULT_API_URL;
+    const configuredApiUrl = config.get<string>("apiUrl") || "";
+    const apiBaseOverride =
+      configuredApiUrl && configuredApiUrl !== DEFAULT_API_URL
+        ? configuredApiUrl
+        : "";
 
     // Get API key from secure storage (VS Code's secret storage)
     const envApiKeyPlaceholder = "${env:GCORE_API_TOKEN}";
@@ -207,62 +213,27 @@ async function createMCPJson(context?: vscode.ExtensionContext) {
       }
     }
 
-    // Prompt user for FASTEDGE_API_URL
-    const apiUrl = await vscode.window.showInputBox({
-      prompt: "Enter your FastEdge API URL",
-      placeHolder: `e.g., ${DEFAULT_API_URL}`,
-      value: defaultApiUrl, // Pre-fill with saved value
-      validateInput: (value) => {
-        if (!value || value.trim().length === 0) {
-          return "API URL is required";
-        }
-        try {
-          new URL(value);
-          return null;
-        } catch {
-          return "Please enter a valid URL";
-        }
-      },
-    });
+    // API URL is no longer prompted (see apiBaseOverride above).
 
-    if (!apiUrl) {
-      vscode.window.showErrorMessage(
-        "API URL is required to configure MCP server.",
-      );
-      return;
-    }
-
-    // Check if values have changed and ask user if they want to save them as defaults
+    // Offer to remember the API key when it differs from the stored default.
     const apiKeyChanged = apiKey !== defaultApiKey;
-    const apiUrlChanged = apiUrl !== defaultApiUrl;
 
-    if (apiKeyChanged || apiUrlChanged) {
-      const saveAsDefaults = await vscode.window.showQuickPick(["Yes", "No"], {
-        placeHolder: "Save these values as defaults for future use?",
+    if (apiKeyChanged) {
+      const saveAsDefault = await vscode.window.showQuickPick(["Yes", "No"], {
+        placeHolder: "Save this API key as the default for future use?",
         canPickMany: false,
       });
 
-      if (saveAsDefaults === "Yes") {
-        // Save API key securely using VS Code's secret storage
-        if (apiKeyChanged && context?.secrets) {
-          await context.secrets.store("fastedge.apiKey", apiKey);
-        }
-        // Save API URL in regular configuration (not sensitive)
-        if (apiUrlChanged) {
-          await config.update(
-            "apiUrl",
-            apiUrl,
-            vscode.ConfigurationTarget.Global,
-          );
-        }
+      if (saveAsDefault === "Yes" && context?.secrets) {
+        await context.secrets.store("fastedge.apiKey", apiKey);
         vscode.window.showInformationMessage(
-          "Default values updated successfully.",
+          "Default API key updated successfully.",
         );
       }
     }
 
     // Get platform-specific Docker command
-    const dockerConfig = getPlatformDockerCommand();
+    const dockerConfig = getPlatformDockerCommand(Boolean(apiBaseOverride));
     const platformName =
       os.platform() === "win32"
         ? "Windows"
@@ -279,8 +250,8 @@ async function createMCPJson(context?: vscode.ExtensionContext) {
           command: dockerConfig.command,
           args: dockerConfig.args,
           env: {
-            FASTEDGE_API_KEY: apiKey,
-            FASTEDGE_API_URL: apiUrl,
+            GCORE_API_KEY: apiKey,
+            ...(apiBaseOverride ? { GCORE_API_BASE: apiBaseOverride } : {}),
           },
         },
       },
