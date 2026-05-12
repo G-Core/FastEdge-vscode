@@ -54,7 +54,7 @@
         "fastedge.apiUrl": {
           "type": "string",
           "default": "https://api.gcore.com",
-          "description": "Default FastEdge API URL for MCP server configuration",
+          "description": "Advanced override for the Gcore API base URL used by the FastEdge MCP server. Leave at the default for normal use. Set to a non-prod URL (e.g. https://api.preprod.world) for in-house development — 'FastEdge (Generate mcp.json)' will emit it as GCORE_API_BASE. See DEVELOPMENT.md.",
           "scope": "application"
         }
       }

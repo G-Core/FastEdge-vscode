@@ -111,7 +111,7 @@ export function compileRustAndFindBinary(
           }
         }
       }
-      reject(new Error("cargo build succeeded but no .wasm artifact found in output. Ensure your Cargo.toml targets wasm32-wasi or wasm32-wasip1."));
+      reject(new Error(`cargo build succeeded but no .wasm artifact found in output. Ensure the selected Rust target (${target}) produces a .wasm artifact and that the appropriate Rust target is installed (for example via rustup for wasm32-wasip1 or wasm32-wasip2).`));
     });
   });
 }

@@ -13,6 +13,41 @@ See `SEARCH_GUIDE.md` for more search patterns.
 
 ---
 
+## [2026-05-12] - Align `Generate mcp.json` with FastEdge-mcp-server canonical env vars
+
+### Overview
+`FastEdge (Generate mcp.json)` now emits the canonical Gcore env var names. `FASTEDGE_API_KEY` is renamed to `GCORE_API_KEY` (FastEdge-mcp-server still accepts the legacy name as a fallback in `src/server.ts`). `FASTEDGE_API_URL` is dropped — the server no longer reads it. The `fastedge.apiUrl` setting becomes an advanced, opt-in override: when its value differs from the baked-in prod default, it is emitted as `GCORE_API_BASE` in the generated mcp.json and as a `-e` flag in the docker invocation. Most users see no URL prompt now; preprod devs set the setting via VS Code Settings UI.
+
+### What Changed
+
+#### `src/commands/mcpJson.ts`
+- `getPlatformDockerCommand(includeBaseOverride: boolean)`: signature gained an `includeBaseOverride` flag. Windows (`cmd`) and bash branches now pass `-e GCORE_API_KEY=...` (was `FASTEDGE_API_KEY`). The `-e GCORE_API_BASE=...` flag is appended only when the override is in play, so no `%GCORE_API_BASE%` / `$GCORE_API_BASE` literal leaks when there is no value.
+- `FASTEDGE_API_URL` removed from docker args in both platform branches.
+- API URL prompt removed. The `fastedge.apiUrl` VS Code setting is read silently; when it differs from `https://api.gcore.com` it is emitted as `GCORE_API_BASE`.
+- Generated `env` block now writes `GCORE_API_KEY` (was `FASTEDGE_API_KEY`) and conditionally `GCORE_API_BASE`.
+- "Save as defaults" dialog simplified — only the API key path remains, since the URL is no longer prompted.
+
+#### `package.json`
+- `fastedge.apiUrl` setting description rewritten to reflect its new role as an optional override emitted as `GCORE_API_BASE`.
+
+### Files Created
+- `DEVELOPMENT.md` — in-house dev recipe for pointing the MCP server at preprod from VS Code; cross-links to `FastEdge-mcp-server/DEVELOPMENT.md`; includes a 403 token-type troubleshooting note.
+
+### Merge safety (unchanged)
+The command still:
+- Parses existing `.vscode/mcp.json`; bails on parse failure without overwriting.
+- Bails if `fastedge-assistant` already exists in `servers`.
+- Otherwise performs a shallow merge that preserves all other top-level keys and other server entries.
+
+### Codespace flow (surface unchanged)
+Secret name remains `GCORE_API_TOKEN` (matches `devcontainer.json` and the coordinator `.mcp.json`). It now lands in the generated mcp.json as `GCORE_API_KEY: "${env:GCORE_API_TOKEN}"` (was `FASTEDGE_API_KEY`).
+
+### Notes
+- FastEdge-mcp-server's `src/server.ts` still accepts `FASTEDGE_API_KEY` as a legacy fallback, so a user with a pre-existing mcp.json continues to work until they regenerate it.
+- `fastedge-codespace/.vscode/mcp.json` still uses `FASTEDGE_API_KEY` — out of scope for this change; flagged for follow-up sync.
+
+---
+
 ## [2026-04-13] - App root resolution aligned: fall back to build manifest, not source file directory
 
 ### Overview
