@@ -22,9 +22,9 @@ For the server side of preprod (rebuilding with preprod schemas, batch budgets, 
 | Where                         | Name              | Required | Purpose                                                                                                                                        |
 | ----------------------------- | ----------------- | -------- | ---------------------------------------------------------------------------------------------------------------------------------------------- |
 | VS Code setting               | `fastedge.apiUrl` | No       | Advanced override emitted as `GCORE_API_BASE` in generated `mcp.json`. Default `https://api.gcore.com` is omitted (image uses baked prod URL). |
-| Host shell / Codespace secret | `GCORE_API_TOKEN` | Yes      | Your Gcore **Permanent API Token** (user-scoped). VS Code substitutes it into `mcp.json` as `${env:GCORE_API_TOKEN}` → `GCORE_API_KEY`.        |
+| Host shell / Codespace secret | `GCORE_API_KEY`   | Yes      | Your Gcore **Permanent API Token** (user-scoped). Set this in your shell or as a Codespace secret; VS Code injects it directly into `mcp.json` as `${env:GCORE_API_KEY}`. |
 
-> **403 troubleshooting** — `Access to user API denied for admin` means `GCORE_API_TOKEN` is an admin / reseller / master-scope credential, not a user-scoped Permanent API Token. Issue a Permanent API Token from your Gcore profile (Profile → API Tokens) and replace the value. The MCP server resolves tenancy from the token itself; there is no `client_id` / `project_id` plumbing.
+> **403 troubleshooting** — `Access to user API denied for admin` means `GCORE_API_KEY` is an admin / reseller / master-scope credential, not a user-scoped Permanent API Token. Issue a Permanent API Token from your Gcore profile (Profile → API Tokens) and replace the value. The MCP server resolves tenancy from the token itself; there is no `client_id` / `project_id` plumbing.
 
 ## Building and packaging the extension
 

@@ -134,16 +134,16 @@ async function setupCodespaceSecret(context?: vscode.ExtensionContext) {
   const hasCli = await hasGitHubCLI();
   if (!hasCli) {
     vscode.window.showErrorMessage(
-      "GitHub CLI (gh) is not available. Please install it to use this feature.\n\nAlternatively, you can set the secret manually via:\n1. GitHub repository Settings > Secrets > Codespaces\n2. Or run: gh codespace secret set GCORE_API_TOKEN",
+      "GitHub CLI (gh) is not available. Please install it to use this feature.\n\nAlternatively, you can set the secret manually via:\n1. GitHub repository Settings > Secrets > Codespaces\n2. Or run: gh codespace secret set GCORE_API_KEY",
     );
     return;
   }
 
   // Check if the secret is already set in the environment
-  const existingToken = await hasExistingCodespaceSecret("GCORE_API_TOKEN");
+  const existingToken = await hasExistingCodespaceSecret("GCORE_API_KEY");
   if (existingToken) {
     const overwrite = await vscode.window.showQuickPick(["No", "Yes"], {
-      placeHolder: `GCORE_API_TOKEN is already set. Do you want to update it?`,
+      placeHolder: `GCORE_API_KEY is already set. Do you want to update it?`,
     });
     if (overwrite !== "Yes") {
       return;
@@ -178,7 +178,7 @@ async function setupCodespaceSecret(context?: vscode.ExtensionContext) {
     },
     async (progress) => {
       try {
-        progress.report({ message: "Configuring GCORE_API_TOKEN..." });
+        progress.report({ message: "Configuring GCORE_API_KEY..." });
 
         // Get current repository to grant access
         const currentRepo = await getCurrentRepository();
@@ -186,7 +186,7 @@ async function setupCodespaceSecret(context?: vscode.ExtensionContext) {
         // Set the secret for the current codespace securely
         // Note: This sets it at the user level and grants access to the current repository
         await setCodespaceSecret(
-          "GCORE_API_TOKEN",
+          "GCORE_API_KEY",
           apiToken,
           currentRepo ?? undefined,
         );
@@ -198,7 +198,7 @@ async function setupCodespaceSecret(context?: vscode.ExtensionContext) {
 
         vscode.window
           .showInformationMessage(
-            "✅ GCORE_API_TOKEN configured successfully!\n\n⚠️ You need to REBUILD your Codespace for the secret to take effect.\n\nRun: Codespaces: Rebuild Container",
+            "✅ GCORE_API_KEY configured successfully!\n\n⚠️ You need to REBUILD your Codespace for the secret to take effect.\n\nRun: Codespaces: Rebuild Container",
             "Rebuild Now",
             "Later",
           )
@@ -209,7 +209,7 @@ async function setupCodespaceSecret(context?: vscode.ExtensionContext) {
           });
       } catch (error: any) {
         vscode.window.showErrorMessage(
-          `Failed to set Codespace secret: ${error?.message || error}\n\nYou can set it manually via:\n1. GitHub repository Settings > Secrets > Codespaces\n2. Or run: gh codespace secret set GCORE_API_TOKEN`,
+          `Failed to set Codespace secret: ${error?.message || error}\n\nYou can set it manually via:\n1. GitHub repository Settings > Secrets > Codespaces\n2. Or run: gh codespace secret set GCORE_API_KEY`,
         );
       }
     },

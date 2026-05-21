@@ -200,7 +200,7 @@ async function createMCPJson(context?: vscode.ExtensionContext) {
     }
 
     // Get API key from secure storage (VS Code's secret storage)
-    const envApiKeyPlaceholder = "${env:GCORE_API_TOKEN}";
+    const envApiKeyPlaceholder = "${env:GCORE_API_KEY}";
     let defaultApiKey = "";
     if (context?.secrets) {
       defaultApiKey = (await context.secrets.get("fastedge.apiKey")) || "";
@@ -211,7 +211,7 @@ async function createMCPJson(context?: vscode.ExtensionContext) {
     let usePlainMCPToken = true;
     if (inCodespace) {
       const useSecretSetup = await vscode.window.showInformationMessage(
-        "🌐 Codespace Detected\n\nFor better security in Codespaces, we recommend using environment variables instead of storing API keys in mcp.json.\n\nWould you like to set up GCORE_API_TOKEN as a Codespace secret?",
+        "🌐 Codespace Detected\n\nFor better security in Codespaces, we recommend using environment variables instead of storing API keys in mcp.json.\n\nWould you like to set up GCORE_API_KEY as a Codespace secret?",
         { modal: true },
         "Set Up Secret",
         "Continue with mcp.json",
