@@ -134,7 +134,7 @@ async function setupCodespaceSecret(context?: vscode.ExtensionContext) {
   const hasCli = await hasGitHubCLI();
   if (!hasCli) {
     vscode.window.showErrorMessage(
-      "GitHub CLI (gh) is not available. Please install it to use this feature.\n\nAlternatively, you can set the secret manually via:\n1. GitHub repository Settings > Secrets > Codespaces\n2. Or run: gh codespace secret set GCORE_API_KEY",
+      "GitHub CLI (gh) is not available. Please install it to use this feature.\n\nAlternatively, you can set the secret manually via:\n1. GitHub repository Settings > Secrets > Codespaces\n2. Or run: gh secret set GCORE_API_KEY --app codespaces --user --repos <owner/repo>",
     );
     return;
   }
@@ -177,11 +177,11 @@ async function setupCodespaceSecret(context?: vscode.ExtensionContext) {
       cancellable: false,
     },
     async (progress) => {
+      // Get current repository to grant access
+      const currentRepo = await getCurrentRepository();
+
       try {
         progress.report({ message: "Configuring GCORE_API_KEY..." });
-
-        // Get current repository to grant access
-        const currentRepo = await getCurrentRepository();
 
         // Set the secret for the current codespace securely
         // Note: This sets it at the user level and grants access to the current repository
@@ -208,8 +208,9 @@ async function setupCodespaceSecret(context?: vscode.ExtensionContext) {
             }
           });
       } catch (error: any) {
+        const reposFlag = ` --repos ${currentRepo ?? "<owner/repo>"}`;
         vscode.window.showErrorMessage(
-          `Failed to set Codespace secret: ${error?.message || error}\n\nYou can set it manually via:\n1. GitHub repository Settings > Secrets > Codespaces\n2. Or run: gh codespace secret set GCORE_API_KEY`,
+          `Failed to set Codespace secret: ${error?.message || error}\n\nYou can set it manually via:\n1. GitHub repository Settings > Secrets > Codespaces\n2. Or run: gh secret set GCORE_API_KEY --app codespaces --user${reposFlag}`,
         );
       }
     },

@@ -16,7 +16,7 @@ See `SEARCH_GUIDE.md` for more search patterns.
 ## [2026-05-21] - Unify on GCORE_API_KEY — remove GCORE_API_TOKEN
 
 ### Overview
-Removed all references to `GCORE_API_TOKEN`. Users now provide `GCORE_API_KEY` directly in all paths (shell env, Codespace secret, generated mcp.json placeholder). The previous indirection (`GCORE_API_TOKEN` secret → `${env:GCORE_API_TOKEN}` → `GCORE_API_KEY` in mcp.json) is gone.
+Removed `GCORE_API_TOKEN` from the extension's code paths and user-facing setup (commands, prompts, generated mcp.json, DEVELOPMENT.md). Users now provide `GCORE_API_KEY` directly in all paths (shell env, Codespace secret, generated mcp.json placeholder). The previous indirection (`GCORE_API_TOKEN` secret → `${env:GCORE_API_TOKEN}` → `GCORE_API_KEY` in mcp.json) is gone. Earlier changelog entries that reference `GCORE_API_TOKEN` (e.g., 2026-05-12) describe state prior to this change and are not current guidance.
 
 ### 🎯 What Was Completed
 
