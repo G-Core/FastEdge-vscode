@@ -13,6 +13,31 @@ See `SEARCH_GUIDE.md` for more search patterns.
 
 ---
 
+## [2026-05-21] - Unify on GCORE_API_KEY — remove GCORE_API_TOKEN
+
+### Overview
+Removed `GCORE_API_TOKEN` from the extension's code paths and user-facing setup (commands, prompts, generated mcp.json, DEVELOPMENT.md). Users now provide `GCORE_API_KEY` directly in all paths (shell env, Codespace secret, generated mcp.json placeholder). The previous indirection (`GCORE_API_TOKEN` secret → `${env:GCORE_API_TOKEN}` → `GCORE_API_KEY` in mcp.json) is gone. Earlier changelog entries that reference `GCORE_API_TOKEN` (e.g., 2026-05-12) describe state prior to this change and are not current guidance.
+
+### 🎯 What Was Completed
+
+#### 1. `src/commands/mcpJson.ts`
+- `envApiKeyPlaceholder` changed from `${env:GCORE_API_TOKEN}` to `${env:GCORE_API_KEY}`
+- Codespace detection dialog updated to mention `GCORE_API_KEY`
+
+#### 2. `src/commands/codespaceSecrets.ts`
+- All 6 occurrences of `GCORE_API_TOKEN` replaced with `GCORE_API_KEY` (secret name, prompts, messages)
+
+#### 3. `DEVELOPMENT.md`
+- Env reference table updated: `GCORE_API_TOKEN` → `GCORE_API_KEY`, description simplified
+- 403 troubleshooting note updated
+
+**Files Modified:**
+- `src/commands/mcpJson.ts`
+- `src/commands/codespaceSecrets.ts`
+- `DEVELOPMENT.md`
+
+---
+
 ## [2026-05-12] - Align `Generate mcp.json` with FastEdge-mcp-server canonical env vars
 
 ### Overview
