@@ -42,7 +42,7 @@ Consequences worth knowing:
 
 Environment variables are forwarded with bare `-e GCORE_API_KEY` / `-e GCORE_API_BASE`: docker reads them from its own environment, which the MCP client supplies via the config's `env` block. No `%VAR%` / `$VAR` expansion, so no shell is needed.
 
-If you add new shell-invoked commands to mcp.json generation, follow the same branching pattern.
+If you add new commands to mcp.json generation, keep them platform-independent argv arrays — no shell, no branching.
 
 ---
 

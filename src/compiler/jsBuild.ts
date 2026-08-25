@@ -19,7 +19,7 @@ const makeDebugDirectory = (appRoot: string) =>
   });
 
 const getPackageJsonEntryPoint = (appRoot: string) =>
-  new Promise<string>((resolve, reject) => {
+  new Promise<unknown>((resolve, reject) => {
     fs.readFile(
       path.join(appRoot, "package.json"),
       "utf8",
@@ -46,8 +46,8 @@ const getPackageJsonEntryPoint = (appRoot: string) =>
  * escape the project (absolute paths, `../` traversal) rather than pointing the
  * compiler at arbitrary files on the developer's machine.
  */
-const resolvePackageEntryPoint = (buildRoot: string, mainField: string) => {
-  if (!mainField.trim()) {
+const resolvePackageEntryPoint = (buildRoot: string, mainField: unknown) => {
+  if (typeof mainField !== "string" || !mainField.trim()) {
     throw new Error(
       'No "main" entry point found in package.json. Add a "main" field pointing at your app entry file.',
     );

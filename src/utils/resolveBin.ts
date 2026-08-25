@@ -16,7 +16,7 @@ import * as path from "node:path";
  * `npx` would fetch a missing package from the registry and execute it, which
  * is neither reproducible nor safe to do on the user's behalf.
  *
- * ponytail: Yarn Plug'n'Play is unsupported — its dependency map lives in
+ * Note: Yarn Plug'n'Play is unsupported — its dependency map lives in
  * .pnp.cjs, which Node ignores unless preloaded. Supporting it means executing
  * workspace JavaScript before the compiler starts; revisit only if a real
  * project needs it.

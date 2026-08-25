@@ -4,16 +4,17 @@ import * as vscode from "vscode";
 USAGE EXAMPLE FOR TRIGGER FILE (.vscode/.fastedge-run-command):
 ----------------------------------------
 Simple command (no args):
-fastedge.generate-launch-json
+fastedge.setup-codespace-secret
 
 OR JSON format with args:
 {
-  "command": "fastedge.generate-mcp-json",
+  "command": "fastedge.setup-codespace-secret",
   "args": ["optionalArg1", 42]
 }
 ----------------------------------------
-e.g. to auto-generate launch.json on startup.
-echo "fastedge.generate-launch-json" > .vscode/.fastedge-run-command
+See ALLOWED_COMMANDS below for the full list of commands that can be
+triggered this way.
+echo "fastedge.setup-codespace-secret" > .vscode/.fastedge-run-command
 */
 
 /**
