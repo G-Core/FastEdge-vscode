@@ -1,0 +1,5 @@
+# Pins the fixture's wasm target, and exercises the code path that reads
+# `[build] target` out of a workspace-controlled file — the second injection
+# vector in the CWE-78 report (see rustConfig.ts).
+[build]
+target = "wasm32-wasip1"

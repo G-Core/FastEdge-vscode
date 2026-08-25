@@ -1,0 +1,82 @@
+name: Test
+
+# Cross-platform verification. The extension launches build tools as child
+# processes without a shell, so how a process starts differs per OS — that
+# cannot be verified on Linux alone, and the unit tests mock spawn entirely.
+#
+# GitHub-hosted runners (not the self-hosted Ubuntu pool) so macOS and Windows
+# are actually exercised.
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+  workflow_call:
+
+jobs:
+  unit:
+    name: Unit (${{ matrix.os }})
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, macos-latest, windows-latest]
+
+    steps:
+      - uses: actions/checkout@v6
+
+      - name: Setup Node Environment
+        uses: ./.github/setup-node
+
+      - name: Typecheck
+        run: pnpm run check-types
+
+      - name: Lint
+        run: pnpm run lint
+
+      - name: Unit tests
+        run: pnpm test
+
+  integration:
+    name: Integration (${{ matrix.os }})
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, macos-latest, windows-latest]
+
+    steps:
+      - uses: actions/checkout@v6
+
+      - name: Setup Node Environment
+        uses: ./.github/setup-node
+
+      # The fixtures are real FastEdge apps with the real toolchains as their
+      # own dependencies, installed the way a user's project would be — this is
+      # what proves `spawn(process.execPath, [<tool>.js, ...])` starts on
+      # Windows, where .cmd shims cannot be spawned without a shell.
+      - name: Install fixture dependencies
+        run: pnpm run fixtures:install
+
+      # wasip1 for fastedge-crate HTTP apps and CDN proxy-wasm apps; wasip2 for
+      # wstd apps, which rustConfigWasiTarget infers rather than reads.
+      - name: Install Rust wasm targets
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: wasm32-wasip1, wasm32-wasip2
+
+      - name: Cache cargo registry and fixture target dirs
+        uses: actions/cache@v5
+        with:
+          path: |
+            ~/.cargo/registry
+            ~/.cargo/git
+            test/fixtures/rust-app/target
+            test/fixtures/rust-app-wasi-http/target
+            test/fixtures/rust-app-cdn/target
+          key: ${{ runner.os }}-cargo-${{ hashFiles('test/fixtures/*/Cargo.toml') }}
+          restore-keys: ${{ runner.os }}-cargo-
+
+      - name: Integration tests (real builds)
+        run: pnpm run test:integration

@@ -4,8 +4,11 @@ import path from "path";
 
 import { LogToDebugConsole } from "../types";
 import { resolveConfigRoot, resolveBuildRoot } from "../utils/resolveAppRoot";
+import { resolvePackageBin } from "../utils/resolveBin";
 
 const BINARY_NAME = "app.wasm";
+const AS_PACKAGE = "assemblyscript";
+const AS_BIN = "asc";
 const AS_ENTRY_POINT = path.join("assembly", "index.ts");
 
 const makeDebugDirectory = (appRoot: string) =>
@@ -45,14 +48,30 @@ export function compileAssemblyScriptBinary(
 
       // Use --target release to pick up optimisation settings from asconfig.json,
       // but override --outFile to route output to the standard debugger location.
+      // Launched via process.execPath with an argv array — never a shell.
+      // See utils/resolveBin.ts for why npx is not used.
+      const ascBin = resolvePackageBin(buildRoot, AS_PACKAGE, AS_BIN);
       const asBuild = spawn(
-        "npx",
-        ["asc", AS_ENTRY_POINT, "--target", "release", "--outFile", outFile],
+        process.execPath,
+        [
+          ascBin,
+          AS_ENTRY_POINT,
+          "--target",
+          "release",
+          "--outFile",
+          outFile,
+        ],
         {
-          shell: true,
           stdio: ["ignore", "pipe", "pipe"],
           cwd: buildRoot,
         }
+      );
+
+      // Without a shell, a launch failure arrives as "error", not exit code 127.
+      asBuild.on("error", (err: Error) =>
+        reject(
+          new Error(`Failed to start the AssemblyScript compiler: ${err.message}`)
+        )
       );
 
       let stderr = "";
@@ -68,6 +87,18 @@ export function compileAssemblyScriptBinary(
       asBuild.on("close", (code: number) => {
         if (code !== 0) {
           reject(new Error(`asc build exited with code ${code}: ${stderr}`));
+          return;
+        }
+        // A zero exit code is not proof of a binary — see the equivalent check
+        // in jsBuild.ts. Resolving a path that does not exist sends the
+        // debugger off to load a stale binary instead of reporting the failure.
+        if (!fs.existsSync(outFile)) {
+          reject(
+            new Error(
+              `The asc build reported success but produced no binary at ${outFile}. ` +
+                "Check the build output above for the cause."
+            )
+          );
           return;
         }
         resolve(outFile);

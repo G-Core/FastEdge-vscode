@@ -132,7 +132,7 @@ npm install --save-dev @gcoredev/fastedge-sdk-js
 4. Determine entry point:
    - **File mode**: active file path
    - **Workspace mode**: `package.json` `main` field resolved relative to `buildRoot`
-5. Spawn `npx fastedge-build <entryPoint> <configRoot>/.fastedge-debug/app.wasm` at `buildRoot`
+5. Resolve the `fastedge-build` bin from the project (`utils/resolveBin.ts`) and spawn `process.execPath <bin> <entryPoint> <configRoot>/.fastedge-debug/app.wasm` at `buildRoot` — argv array, no shell
 
 ### Entrypoint Modes
 
@@ -160,7 +160,7 @@ Used for **CDN/Proxy-WASM applications** (HTTP request/response manipulation via
 npm install --save-dev assemblyscript @assemblyscript/wasi-shim
 ```
 
-The `asc` compiler is provided by the `assemblyscript` package — no global install needed; `npx asc` resolves it from `node_modules`.
+The `asc` compiler is provided by the `assemblyscript` package — no global install needed. It must be a local devDependency: the extension resolves `bin.asc` from the project and runs it with the VS Code Node runtime. Nothing is downloaded on demand.
 
 ### Project Structure
 
@@ -202,7 +202,7 @@ my-app/
 2. Verify `asconfig.json` exists at `buildRoot` — throws if missing
 3. Resolve `configRoot` (falls back to `buildRoot`)
 4. Create `<configRoot>/.fastedge-debug/` directory
-5. Spawn: `npx asc assembly/index.ts --target release --outFile <configRoot>/.fastedge-debug/app.wasm` at `buildRoot`
+5. Resolve the `asc` bin from the project and spawn `process.execPath <bin> assembly/index.ts --target release --outFile <configRoot>/.fastedge-debug/app.wasm` at `buildRoot` — argv array, no shell
 
 The `--target release` flag picks up optimization settings from `asconfig.json` (shrink level, no-assert, etc.). `--outFile` overrides only the output path to the standard debugger location.
 
@@ -254,8 +254,8 @@ All three compilers write to the same path:
 | Language | Build mode | Incremental |
 |---|---|---|
 | Rust | `cargo build` (debug) | Yes — Cargo caches in `target/` |
-| JavaScript | `npx fastedge-build` | No — rebuilds from scratch |
-| AssemblyScript | `npx asc --target release` | No — rebuilds from scratch |
+| JavaScript | `fastedge-build` (resolved bin, run via `process.execPath`) | No — rebuilds from scratch |
+| AssemblyScript | `asc --target release` (resolved bin, run via `process.execPath`) | No — rebuilds from scratch |
 
 AssemblyScript always builds in release mode because the AS `--target release` settings in `asconfig.json` are what produce a valid proxy-wasm binary. Debug builds may produce larger output but are otherwise equivalent for local testing.
 

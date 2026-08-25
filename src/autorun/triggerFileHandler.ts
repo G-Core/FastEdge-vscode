@@ -22,17 +22,21 @@ echo "fastedge.generate-launch-json" > .vscode/.fastedge-run-command
 const TRIGGER_FILE_PATH = ".vscode/.fastedge-run-command";
 
 /**
- * Allowlist of commands that can be executed via trigger file
- * This is a security measure to prevent arbitrary command execution
+ * Allowlist of commands that can be executed via trigger file.
+ *
+ * The trigger file lives in the workspace, so anything listed here can be
+ * invoked without a click by whatever wrote it. Keep it to commands an actual
+ * producer needs: the only one is the devcontainer bootstrap in
+ * fastedge-codespace, which writes "fastedge.setup-codespace-secret" and then
+ * polls for the secret to appear.
+ *
+ * Deliberately removed: the build commands (they reach the compilers with
+ * workspace-controlled input), generate-mcp-json (writes credentials to disk),
+ * reloadWindow (no producer; a reload loop is a denial of service), and
+ * generate-launch-json (never a registered command — the real id is
+ * fastedge.init-workspace).
  */
-const ALLOWED_COMMANDS = [
-  "fastedge.setup-codespace-secret",
-  "fastedge.generate-launch-json",
-  "fastedge.generate-mcp-json",
-  "fastedge.run-file",
-  "fastedge.run-workspace",
-  "workbench.action.reloadWindow",
-];
+const ALLOWED_COMMANDS = ["fastedge.setup-codespace-secret"];
 
 /**
  * Command structure for JSON format
@@ -71,37 +75,6 @@ export function initializeTriggerFileHandler(
     });
 
     context.subscriptions.push(watcher);
-  }
-}
-
-/**
- * Check for existing trigger file on activation
- */
-async function checkForTriggerFile(
-  outputChannel: vscode.OutputChannel,
-): Promise<void> {
-  const workspaceFolders = vscode.workspace.workspaceFolders;
-
-  if (!workspaceFolders || workspaceFolders.length === 0) {
-    outputChannel.appendLine(
-      "No workspace folder found, skipping trigger file check",
-    );
-    return;
-  }
-
-  // Check first workspace folder (most common case)
-  const triggerPath = vscode.Uri.joinPath(
-    workspaceFolders[0].uri,
-    TRIGGER_FILE_PATH,
-  );
-
-  try {
-    await vscode.workspace.fs.stat(triggerPath);
-    outputChannel.appendLine(`Found trigger file at: ${triggerPath.fsPath}`);
-    await executeTriggerFile(triggerPath, outputChannel);
-  } catch {
-    // File doesn't exist, that's fine
-    outputChannel.appendLine("No trigger file found on activation");
   }
 }
 

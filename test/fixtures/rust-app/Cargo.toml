@@ -1,0 +1,19 @@
+# Mirrors FastEdge-sdk-rust/examples/http/basic/hello_world.
+#
+# The empty [workspace] table keeps this fixture standalone. The `fastedge`
+# dependency is the point: it brings the #[fastedge::http] proc macro, so the
+# build exercises the real toolchain rather than a bare cdylib that would
+# compile even if a real app could not.
+[workspace]
+
+[package]
+name = "fastedge-fixture-rust-app"
+version = "0.1.0"
+edition = "2021"
+
+[lib]
+crate-type = ["cdylib"]
+
+[dependencies]
+fastedge = "0.4"
+anyhow = "1"

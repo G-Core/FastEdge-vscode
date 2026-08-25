@@ -18,26 +18,29 @@ Platform detection in TypeScript: use `os.platform()` or `process.platform`. Bot
 
 ## Platform-Specific Code
 
+**No child process in this extension is spawned through a shell.** Shell invocation made workspace-controlled values (`package.json` `main`, `.cargo/config.toml` target, directory names) executable — see the CWE-78 entry in `CHANGELOG.md`. Every spawn uses an argv array.
+
 ### Rust compilation — `src/compiler/rustBuild.ts`
 
-Shell is selected based on platform before spawning cargo:
-
-```typescript
-const isWindows = os.platform() === "win32";
-const shell = isWindows ? "cmd.exe" : "sh";
-spawn("cargo", [...], { shell, ... });
-```
+`spawn("cargo", [...])` with no `shell` option and no platform branching. `cargo` is a native executable, so Windows resolves `cargo.exe` from PATH without a command interpreter.
 
 ### JS / AssemblyScript compilation — `src/compiler/jsBuild.ts`, `asBuild.ts`
 
-Both use `shell: true`, which delegates to the system default shell on every platform (cmd.exe on Windows, sh on Unix). No explicit branching needed.
+Neither uses `npx`. `utils/resolveBin.ts` resolves the tool's real JS entry point from the project (`createRequire` from `buildRoot` → the package's `bin` field), and it is launched as `spawn(process.execPath, [binPath, ...args])`.
+
+Do **not** "fix" Windows by spawning `npx.cmd`: patched Node rejects `.bat`/`.cmd` without a shell with `EINVAL` (CVE-2024-27980), and unpatched Node routes it through `cmd.exe` and re-opens argument injection.
+
+Consequences worth knowing:
+
+- The build tool must be a local devDependency. Nothing is downloaded — a missing tool is a clear error, not a silent registry fetch.
+- Yarn Plug'n'Play projects are unsupported: their dependency map lives in `.pnp.cjs`, which Node ignores unless preloaded.
+- A launch failure now arrives as the child's `"error"` event, not exit code 127. All three compilers attach an `error` handler; a new spawn without one will hang forever.
 
 ### MCP Docker command generation — `src/commands/mcpJson.ts`
 
-`getPlatformDockerCommand()` branches on `os.platform()`:
+`getDockerCommand()` does **not** branch on platform. `docker` is invoked directly with an argv array on every platform — no `cmd /c` or `bash -c` wrapper, so the workspace path is never spliced into a shell string.
 
-- **win32**: `cmd /c docker run ...` with `%VAR%` env var syntax. `--user` flag omitted (not supported on Docker Desktop for Windows).
-- **linux / darwin**: `bash -c "docker run ..."` with `$VAR` env var syntax. `--user` flag included.
+Environment variables are forwarded with bare `-e GCORE_API_KEY` / `-e GCORE_API_BASE`: docker reads them from its own environment, which the MCP client supplies via the config's `env` block. No `%VAR%` / `$VAR` expansion, so no shell is needed.
 
 If you add new shell-invoked commands to mcp.json generation, follow the same branching pattern.
 
@@ -70,13 +73,17 @@ path.join(tmpdir(), "temp-file");
 const tmp = "/tmp/temp-file";
 ```
 
-### Process spawning — pick the right shell strategy
+### Process spawning — never use a shell
 
 | Use case | Pattern |
 |----------|---------|
-| `cargo`, `npx`, `asc` — cross-platform CLI tools | `shell: true` or explicit `cmd.exe` / `sh` |
+| Native executable (`cargo`, `docker`) | `spawn(name, argvArray)` — no `shell`; Windows resolves the `.exe` from PATH |
+| Node CLI tool from the user's project (`fastedge-build`, `asc`) | `resolvePackageBin()` → `spawn(process.execPath, [binPath, ...args])` |
+| A `.cmd` / `.bat` shim, including `npx.cmd` | **Never.** Resolve the underlying JS entry point instead — see `utils/resolveBin.ts` |
 | Shell syntax (`&&`, `|`, `&`) in the command string | **Dev scripts only** — not in production code |
-| Generating shell commands for config files | Branch on `os.platform()` — see `mcpJson.ts` |
+| Generating commands for config files | Emit an argv array, not a command string — see `mcpJson.ts` |
+
+Anything reaching a child process argument may be workspace-controlled and attacker-authored. Keep it in argv, where metacharacters are inert.
 
 ### Process signals — SIGTERM is unreliable on Windows
 
@@ -103,9 +110,9 @@ The debugger server is forked with `process.execPath` (VSCode's embedded Node.js
 | VSIX platform targeting | `.github/workflows/build-extension.yml` — `vsce package --target $os_target` | ✅ |
 | One binary per VSIX | `.github/workflows/download-debugger.yml` — matrix strips other binaries | ✅ |
 | `chmod +x` on Unix, skip on Windows | download-debugger.yml matrix step | ✅ |
-| Rust spawn shell (cmd vs sh) | `src/compiler/rustBuild.ts:16` | ✅ |
-| JS/AS spawn | `src/compiler/jsBuild.ts`, `asBuild.ts` — `shell: true` | ✅ |
-| MCP Docker command | `src/commands/mcpJson.ts:getPlatformDockerCommand()` | ✅ |
+| Rust spawn | `src/compiler/rustBuild.ts` — bare `cargo`, argv array, no shell | ✅ |
+| JS/AS spawn | `src/compiler/jsBuild.ts`, `asBuild.ts` — `process.execPath` + resolved bin, no shell | ✅ |
+| MCP Docker command | `src/commands/mcpJson.ts:getDockerCommand()` — argv array, platform-independent | ✅ |
 | File path handling | Throughout — `path.join()` and `vscode.Uri.joinPath()` | ✅ |
 | Server fork | `src/debugger/DebuggerServerManager.ts` — `process.execPath` | ✅ |
 | Port discovery | `DebuggerServerManager.waitForPortFile()` — reads port file written by fastedge-test, platform-agnostic | ✅ |

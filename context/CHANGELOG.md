@@ -13,6 +13,101 @@ See `SEARCH_GUIDE.md` for more search patterns.
 
 ---
 
+## [2026-08-25] - Security: OS command injection (CWE-78) in the compilers
+
+### Overview
+An external report demonstrated arbitrary command execution from a malicious workspace. All three compilers spawned their build tool with a shell, so workspace-controlled values were parsed as shell syntax. A repo with `"main": "index.js; touch /tmp/PWNED #"` in package.json executed that command when the developer ran "Debug: FastEdge App (Package Entry)".
+
+No child process in the extension is spawned through a shell any more.
+
+### 🎯 What Was Completed
+
+#### 1. Shell removed from every compiler
+- `jsBuild.ts` / `asBuild.ts`: dropped `shell: true`; dropped `npx` entirely
+- `rustBuild.ts`: dropped `shell = isWindows ? "cmd.exe" : "sh"`; `cargo` is a native executable and resolves from PATH on Windows without a command interpreter
+- Injection vectors closed: `package.json` `main` (the reported PoC), `.cargo/config.toml` `[build] target` (returned verbatim by `rustConfig.ts`, second vector), and workspace directory names reaching `--outFile` in `asBuild.ts`
+
+#### 2. `src/utils/resolveBin.ts` (new)
+- Resolves a build tool's real JS entry from the project — `createRequire(buildRoot/package.json)` → package `bin` field — for launch via `spawn(process.execPath, [bin, ...args])`
+- **Do not "fix" Windows with `npx.cmd`**: patched Node rejects `.bat`/`.cmd` without a shell with `EINVAL` (CVE-2024-27980); unpatched Node routes it via `cmd.exe` and re-opens argument injection
+- Verified: esbuild leaves the runtime `createRequire(...).resolve()` intact in the bundled extension rather than binding it to the extension's own module graph
+
+#### 3. Trust-boundary validation
+- `package.json` `main` must resolve inside the build root (`path.resolve` + `path.relative`), rejecting absolute paths and `../` traversal
+- **Not** added: a wasip1/wasip2 allowlist for the Rust target. Once argv is literal it buys nothing and would break the documented `.cargo/config.toml` custom-target support
+
+#### 4. `error` handlers on all three spawns
+- Without a shell a launch failure arrives as the child's `"error"` event, not exit code 127. Without a listener the build promise hangs forever. Every new spawn needs one.
+
+#### 5. `src/autorun/triggerFileHandler.ts` — amplifier closed
+- `ALLOWED_COMMANDS` trimmed to `fastedge.setup-codespace-secret`, the only command any producer writes (`fastedge-codespace/.devcontainer/start.sh`)
+- Removed: `run-file` / `run-workspace` (reached the vulnerable build with no user click), `generate-mcp-json` (writes credentials), `reloadWindow` (no producer; reload loop = DoS), `generate-launch-json` (never a registered command — the real id is `fastedge.init-workspace`)
+- Deleted dead `checkForTriggerFile()` — never called, so a committed trigger file has never executed on activation
+
+#### 6. `src/commands/mcpJson.ts` — same class, weaker prerequisites
+- `getPlatformDockerCommand()` → `getDockerCommand()`: docker invoked with an argv array, no `bash -c` / `cmd /c` wrapper, so the workspace path is no longer spliced into a shell string
+- Env forwarding switched to bare `-e GCORE_API_KEY` / `-e GCORE_API_BASE` — docker reads them from its own environment, which the MCP client supplies via the config's `env` block. Removed all platform branching
+
+#### 7. Builds that report success without producing a binary now fail
+- `jsBuild.ts` / `asBuild.ts` reject when the tool exits 0 but no `.wasm` exists at the output path
+- Found by the new cross-platform CI: **`fastedge-build` prints "Build success!!", exits 0, and writes nothing when `NODE_ENV=test`** — which is exactly what vitest sets. Reproduced outside vitest; unset and `production` both build normally
+- This is an SDK bug in `@gcoredev/fastedge-sdk-js` (reported separately), but the extension previously believed it and went on to debug a stale or missing binary. The JS error message names `NODE_ENV` when it is the cause
+- Related, out of scope: `fastedge-build` itself spawns with `shell: true` (emits Node's DEP0190), one layer below this extension
+
+#### 8. Cross-platform CI (`.github/workflows/test.yml`)
+- Before this, **no test job existed and every job ran on self-hosted Ubuntu**. The per-OS matrix in `create-release.yml` only packages VSIXs — it builds on Ubuntu and stamps `--target`, so no non-Linux machine had ever executed this code
+- Two jobs, each on `ubuntu-latest` / `macos-latest` / `windows-latest`: **unit** (typecheck, lint, mocked tests) and **integration** (real builds)
+- The compilers do not import `vscode`, so integration tests need plain vitest — no extension host, no xvfb
+- Fixtures mirror the canonical SDK examples rather than minimal stubs; a stub without the wasi-shim `extends` or the `fastedge` proc macro compiles cleanly while a real app breaks:
+
+| Fixture | Shape | Covers |
+|---------|-------|--------|
+| `js-app` | HTTP, `fastedge-build` | JS toolchain launch |
+| `as-app` | CDN proxy-wasm, `asc` | AssemblyScript toolchain launch |
+| `rust-app` | HTTP, `fastedge` crate | wasip1 via explicit `.cargo/config.toml` |
+| `rust-app-wasi-http` | HTTP, `wstd` crate | wasip2 **inferred** — deliberately has no `.cargo/config.toml` |
+| `rust-app-cdn` | CDN, `proxy-wasm` crate | `rustBuild`'s `filenames.length === 1` artifact selection |
+
+- `src/compiler/rustConfig.test.ts` covers target selection for every app shape plus custom targets and malformed configs — the `wstd` → wasip2 inference had no test at all, despite feeding the `--target=` argument this patch changed
+- **CI cannot cover**: Docker on Windows or macOS runners (no Linux containers), so `getDockerCommand()` is verified by argv-shape assertions only. "Does Docker Desktop for Windows forward a valueless `-e`" stays a manual pre-release check
+
+**Files Modified:**
+- `src/compiler/jsBuild.ts`, `asBuild.ts`, `rustBuild.ts` - no shell; `process.execPath` launch; entry-point containment; error handlers; output verification
+- `src/autorun/triggerFileHandler.ts` - allowlist trimmed; dead code removed
+- `src/commands/mcpJson.ts` - argv-array docker command
+- `tsconfig.json` - dropped vestigial `rootDir` (tsc never emits; esbuild builds) so `test/integration` is typechecked; `test/fixtures` excluded
+- `package.json` - added `test:integration` and `fixtures:install` scripts
+- `.gitignore` - fixture build artifacts
+- `context/features/CROSS_PLATFORM.md` - previously prescribed `shell: true` as the correct pattern
+- `context/architecture/EXTENSION_LIFECYCLE.md` - autorun was described as rebuild-on-file-change
+- `context/features/COMPILER_SYSTEM.md`, `COMMANDS.md` - documented the `npx` invocation
+
+**Files Created:**
+- `src/utils/resolveBin.ts` - project-local bin resolution
+- `src/compiler/compilerSpawn.test.ts` - 6 regression tests
+- `src/compiler/rustConfig.test.ts` - 8 target-selection tests
+- `src/commands/mcpJson.test.ts` - 5 docker argv-shape tests
+- `.github/workflows/test.yml` - cross-platform unit + integration matrix
+- `test/integration/compilers.test.ts` - 5 real builds
+- `test/fixtures/` - five FastEdge app fixtures
+
+### 🧪 Testing
+`pnpm test` — 40 unit tests. `pnpm run test:integration` — 5 real builds (~19s locally), after `pnpm run fixtures:install`. Both run on Linux, macOS and Windows in CI.
+
+The spawn suite asserts, per compiler, that the command is `process.execPath` (or bare `cargo`), that argv[0] is the resolved bin, that `shell` is falsy, and that the payload survives as one literal argv element. Verified the guard bites: reinstating `shell: true` in `jsBuild.ts` fails the JS case.
+
+Asserting only "no shell + literal argv" is insufficient — that passes for `spawn("npx.cmd", …, {shell:false})`, the exact implementation that breaks on Windows. The `process.execPath` assertion is what catches it.
+
+### 📝 Notes
+**Behaviour changes:**
+- Build tools must be local devDependencies. `npx` previously downloaded a missing package from the registry and ran it; that is gone. A missing tool now fails with an install instruction.
+- Yarn Plug'n'Play is unsupported — the dependency map lives in `.pnp.cjs`, which Node ignores unless preloaded. Supporting it means executing workspace JavaScript before the compiler starts.
+- `getDockerCommand()` output is platform-independent; the "Generated mcp.json with <platform> configuration" message lost its platform name.
+
+**Known issue, deliberately not fixed here:** `resolveAppRoot.ts` and `rustConfig.ts` walk to the filesystem root, so an ancestor `package.json` / `Cargo.toml` / `.cargo/config.toml` *outside* the VS Code workspace can become the build root. Plausibly intentional for nested monorepos — needs a product decision, tracked separately.
+
+---
+
 ## [2026-05-21] - Unify on GCORE_API_KEY — remove GCORE_API_TOKEN
 
 ### Overview

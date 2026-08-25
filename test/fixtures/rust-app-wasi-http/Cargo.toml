@@ -1,0 +1,19 @@
+# Mirrors FastEdge-sdk-rust/examples/http/wasi/hello_world.
+#
+# Deliberately has NO .cargo/config.toml: rustConfigWasiTarget must *infer*
+# wasm32-wasip2 from the `wstd` dependency, and that inferred string becomes the
+# --target argument. The wasip1 fixture covers the explicit-config branch; this
+# one covers inference, which nothing tested before.
+[workspace]
+
+[package]
+name = "fastedge-fixture-rust-wasi-http"
+version = "0.1.0"
+edition = "2021"
+
+[lib]
+crate-type = ["cdylib"]
+
+[dependencies]
+wstd = "0.6"
+anyhow = "1"

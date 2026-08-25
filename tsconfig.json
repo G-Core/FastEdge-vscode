@@ -4,12 +4,11 @@
     "module": "commonjs",
     "moduleResolution": "node",
     "outDir": "./dist",
-    "rootDir": "./src",
     "strict": true,
     "esModuleInterop": true,
     "skipLibCheck": true,
     "forceConsistentCasingInFileNames": true
   },
-  "include": ["src"],
-  "exclude": ["node_modules", ".vscode", "dist"]
+  "include": ["src", "test/integration"],
+  "exclude": ["node_modules", ".vscode", "dist", "test/fixtures"]
 }
