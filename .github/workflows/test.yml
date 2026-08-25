@@ -1,5 +1,8 @@
 name: Test
 
+permissions:
+  contents: read
+
 # Cross-platform verification. The extension launches build tools as child
 # processes without a shell, so how a process starts differs per OS — that
 # cannot be verified on Linux alone, and the unit tests mock spawn entirely.
