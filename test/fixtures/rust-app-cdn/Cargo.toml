@@ -1,0 +1,18 @@
+# Mirrors FastEdge-sdk-rust/examples/cdn/headers — a CDN proxy-wasm app.
+#
+# Same cargo invocation as the wasip1 HTTP fixture, so this adds no launcher
+# coverage. It is here for rustBuild's artifact selection: that code accepts a
+# compiler-artifact message only when `filenames.length === 1`, and a different
+# crate shape is what would break that assumption.
+[workspace]
+
+[package]
+name = "fastedge-fixture-rust-cdn"
+version = "0.1.0"
+edition = "2021"
+
+[lib]
+crate-type = ["cdylib"]
+
+[dependencies]
+proxy-wasm = "0.2"

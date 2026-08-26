@@ -55,7 +55,7 @@ Builds the **active editor file** as the WASM entry point, starts a per-app debu
 
 **Rust**: `cargo build --target wasm32-wasip1` from `buildRoot` (nearest `Cargo.toml`)
 
-**JavaScript**: `npx fastedge-build <activeFile> <output.wasm>` from `buildRoot`
+**JavaScript**: `<node> <resolved fastedge-build bin> <activeFile> <output.wasm>` from `buildRoot` (no shell, no `npx` — see `CROSS_PLATFORM.md`)
 
 **AssemblyScript**: `asc assembly/index.ts` from `buildRoot`
 
@@ -87,7 +87,7 @@ Use this when you're editing a helper file (e.g. `src/utils/headers.js`) but wan
 
 ### Behavior by Language
 
-**JavaScript**: `npx fastedge-build <package.json main> <output.wasm>` from `buildRoot`
+**JavaScript**: `<node> <resolved fastedge-build bin> <package.json main> <output.wasm>` from `buildRoot`. `main` must resolve inside the build root or the build is rejected
 
 **Rust / AssemblyScript**: Identical to `run-file` — `debugContext` is ignored.
 

@@ -44,3 +44,10 @@ js-extension/
 # Dev tools
 .nx
 
+
+# Integration test fixtures build in place
+test/fixtures/*/node_modules/
+test/fixtures/*/.fastedge-debug/
+test/fixtures/*/build/
+test/fixtures/*/target/
+test/fixtures/*/package-lock.json

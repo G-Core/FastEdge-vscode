@@ -1,5 +1,4 @@
 import { spawn } from "child_process";
-import * as os from "os";
 import * as fs from "fs";
 import * as path from "path";
 import { LogToDebugConsole } from "../types";
@@ -12,8 +11,6 @@ export function compileRustAndFindBinary(
 ) {
   return new Promise<string>(async (resolve, reject) => {
     logDebugConsole("Compiling Rust binary...\n");
-    const isWindows = os.platform() === "win32";
-    const shell = isWindows ? "cmd.exe" : "sh";
 
     const buildRoot = resolveBuildRoot(activeFilePath);
     if (!buildRoot) {
@@ -32,14 +29,25 @@ export function compileRustAndFindBinary(
 
     const target = rustConfigWasiTarget(logDebugConsole, activeFilePath);
     logDebugConsole("wasm build target: " + target + "\n", "stderr");
+    // No shell: `target` comes from the workspace's .cargo/config.toml, and an
+    // argv array keeps it a literal argument. cargo is a native executable, so
+    // Windows resolves cargo.exe from PATH without a command interpreter.
     const cargoBuild = spawn(
       "cargo",
       ["build", "--message-format=json", `--target=${target}`],
       {
-        shell,
         stdio: ["ignore", "pipe", "pipe"],
         cwd: buildRoot,
       }
+    );
+
+    // Without a shell, a launch failure arrives as "error", not exit code 127.
+    cargoBuild.on("error", (err: Error) =>
+      reject(
+        new Error(
+          `Failed to start cargo: ${err.message}. Install Rust and ensure "cargo" is on the PATH used to launch VS Code.`
+        )
+      )
     );
 
     let stdout = "";

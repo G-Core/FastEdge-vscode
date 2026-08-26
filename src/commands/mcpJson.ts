@@ -1,46 +1,42 @@
 import * as vscode from "vscode";
-import * as os from "os";
 
 import { MCPConfiguration } from "../types";
 import { isCodespace, setupCodespaceSecret } from "./codespaceSecrets";
 
 const DEFAULT_API_URL = "https://api.gcore.com";
 
-function getPlatformDockerCommand(includeBaseOverride: boolean): {
+/**
+ * Build the docker invocation for the generated mcp.json.
+ *
+ * Docker is launched directly with an argv array on every platform — no
+ * `bash -c` / `cmd /c` wrapper. The wrapper meant the workspace path was
+ * spliced into a shell command string, so a path containing shell syntax
+ * changed what ran. It also required per-platform variable expansion
+ * (`$VAR` / `%VAR%`); a bare `-e NAME` makes docker forward the value from
+ * its own environment instead, which the MCP client supplies via the "env"
+ * block below.
+ */
+function getDockerCommand(includeBaseOverride: boolean): {
   command: string;
   args: string[];
 } {
-  const platform = os.platform();
-
-  if (platform === "win32") {
-    // Windows - cmd, Windows-style env (%VAR%). No --user flag (Windows Docker Desktop).
-    const args = [
-      "/c",
-      "docker",
-      "run",
-      "--rm",
-      "-i",
-      "--pull=always",
-      "-v",
-      "${workspaceFolder}:/workspace",
-      "-e",
-      "WORKSPACE_ROOT=/workspace",
-      "-e",
-      "GCORE_API_KEY=%GCORE_API_KEY%",
-    ];
-    if (includeBaseOverride) {
-      args.push("-e", "GCORE_API_BASE=%GCORE_API_BASE%");
-    }
-    args.push("ghcr.io/g-core/fastedge-mcp-server:latest");
-    return { command: "cmd", args };
+  const args = [
+    "run",
+    "--rm",
+    "-i",
+    "--pull=always",
+    "-v",
+    "${workspaceFolder}:/workspace",
+    "-e",
+    "WORKSPACE_ROOT=/workspace",
+    "-e",
+    "GCORE_API_KEY",
+  ];
+  if (includeBaseOverride) {
+    args.push("-e", "GCORE_API_BASE");
   }
-
-  // macOS and Linux - bash, Unix-style env ($VAR).
-  const dockerCmd =
-    'docker run --rm -i --pull=always -v "${workspaceFolder}:/workspace" -e "WORKSPACE_ROOT=/workspace" -e "GCORE_API_KEY=$GCORE_API_KEY"' +
-    (includeBaseOverride ? ' -e "GCORE_API_BASE=$GCORE_API_BASE"' : "") +
-    " ghcr.io/g-core/fastedge-mcp-server:latest";
-  return { command: "bash", args: ["-c", dockerCmd] };
+  args.push("ghcr.io/g-core/fastedge-mcp-server:latest");
+  return { command: "docker", args };
 }
 
 async function addToGitignore(workspaceFolder: vscode.WorkspaceFolder) {
@@ -285,14 +281,7 @@ async function createMCPJson(context?: vscode.ExtensionContext) {
       }
     }
 
-    // Get platform-specific Docker command
-    const dockerConfig = getPlatformDockerCommand(Boolean(apiBaseOverride));
-    const platformName =
-      os.platform() === "win32"
-        ? "Windows"
-        : os.platform() === "darwin"
-          ? "macOS"
-          : "Linux";
+    const dockerConfig = getDockerCommand(Boolean(apiBaseOverride));
 
     const mcpJsonContent = {
       ...existingMCPJson,
@@ -340,11 +329,11 @@ async function createMCPJson(context?: vscode.ExtensionContext) {
     }
 
     vscode.window.showInformationMessage(
-      `Generated mcp.json with ${platformName} configuration.`,
+      "Generated mcp.json.",
     );
   } else {
     vscode.window.showErrorMessage("No workspace folder available.");
   }
 }
 
-export { createMCPJson };
+export { createMCPJson, getDockerCommand };

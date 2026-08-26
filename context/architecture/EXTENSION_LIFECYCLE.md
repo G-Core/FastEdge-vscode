@@ -154,11 +154,20 @@ vscode.workspace.getConfiguration('fastedge').update(
 
 ### Event Handling
 
-**File watching** (autorun feature):
+**Trigger file watching** (autorun feature):
 - `src/autorun/triggerFileHandler.ts`
-- Watches files for changes
-- Can trigger rebuild/rerun automatically
-- Registered if autorun is enabled
+- Registered unconditionally at activation — there is no "autorun enabled" setting
+- Watches one path only: `.vscode/.fastedge-run-command`
+- Not a rebuild-on-file-change feature. It is a bootstrap hook so an external
+  process can drive a VS Code command that a shell script cannot: the
+  `fastedge-codespace` devcontainer writes the file from its `postAttachCommand`,
+  then polls for the resulting Codespace secret
+- Fires on create/change only, so a file already committed in a repo does **not**
+  execute when the workspace is opened
+- The file is workspace-controlled, so `ALLOWED_COMMANDS` is deliberately a
+  single entry (`fastedge.setup-codespace-secret`). Do not add build, config-
+  generating, or window-reloading commands to it — the rationale for each
+  removal is in the `ALLOWED_COMMANDS` comment in `triggerFileHandler.ts`
 
 **Configuration changes**:
 - Extension can react to settings changes via `vscode.workspace.onDidChangeConfiguration`
