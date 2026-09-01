@@ -1,4 +1,5 @@
 import * as vscode from "vscode";
+import * as fs from "fs";
 
 import { MCPConfiguration } from "../types";
 import { isCodespace, setupCodespaceSecret } from "./codespaceSecrets";
@@ -35,7 +36,9 @@ function getDockerCommand(includeBaseOverride: boolean): {
   if (includeBaseOverride) {
     args.push("-e", "GCORE_API_BASE");
   }
-  args.push("ghcr.io/g-core/fastedge-mcp-server:latest");
+  // Version is read from mcp-server.version at build time and injected by esbuild.
+  // Update that file (not this line) when the MCP server releases a new version.
+  args.push(`ghcr.io/g-core/fastedge-mcp-server:${__MCP_SERVER_VERSION__}`);
   return { command: "docker", args };
 }
 
@@ -246,6 +249,7 @@ async function createMCPJson(context?: vscode.ExtensionContext) {
         prompt: "Enter your FastEdge API Key",
         placeHolder: defaultApiKey || "Your API key here...",
         value: defaultApiKey, // Pre-fill with saved value
+        password: true, // Mask input — mirrors setupCodespaceSecret behavior
         validateInput: (value) => {
           if (!value || value.trim().length === 0) {
             return "API Key is required";
@@ -304,6 +308,10 @@ async function createMCPJson(context?: vscode.ExtensionContext) {
         mcpJsonPath,
         Buffer.from(JSON.stringify(mcpJsonContent, null, 2)),
       );
+      // Restrict read access on local files — no-op on Windows (best effort).
+      if (mcpJsonPath.scheme === "file") {
+        try { fs.chmodSync(mcpJsonPath.fsPath, 0o600); } catch { /* best effort */ }
+      }
     } catch (error: any) {
       vscode.window.showErrorMessage(
         `Failed to write mcp.json: ${error?.message || error}`,

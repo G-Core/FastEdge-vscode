@@ -1,4 +1,5 @@
 import { fork, execFile, ChildProcess } from "child_process";
+import { randomBytes } from "crypto";
 import * as vscode from "vscode";
 import * as path from "path";
 import * as fs from "fs";
@@ -16,11 +17,18 @@ export class DebuggerServerManager {
   private serverProcess: ChildProcess | null = null;
   private port: number = 5179;
   private isStarting: boolean = false;
+  // Per-instance token: generated once, injected into the server via env and
+  // passed to the webview iframe via URL fragment so the frontend can auth.
+  private readonly token: string = randomBytes(16).toString("hex");
 
   constructor(
     private extensionPath: string,
     private appRoot: string
   ) {}
+
+  getToken(): string {
+    return this.token;
+  }
 
   private get portFilePath(): string {
     return path.join(this.appRoot, DEBUG_DIR, ".debug-port");
@@ -69,17 +77,21 @@ export class DebuggerServerManager {
    * Port selection is delegated to fastedge-test's auto-increment logic.
    */
   async start(): Promise<void> {
-    // Step 1: Check if a server is already running for this app via port file
-    const filePort = this.readPortFile();
-    if (filePort !== null) {
-      if (await this.isHealthyOnPort(filePort)) {
-        this.port = filePort;
-        console.log(`Reusing existing debugger server on port ${this.port} for ${this.appRoot}`);
-        return;
-      } else {
-        // Stale port file — clean it up
-        console.log(`Stale port file found for ${this.appRoot}, removing...`);
-        this.deletePortFile();
+    // Step 1: Check if a server is already running for this app via port file.
+    // In an untrusted workspace the port file is workspace-controlled, so ignore
+    // it and always spawn a fresh server that this session owns.
+    if (vscode.workspace.isTrusted) {
+      const filePort = this.readPortFile();
+      if (filePort !== null) {
+        if (await this.isHealthyOnPort(filePort)) {
+          this.port = filePort;
+          console.log(`Reusing existing debugger server on port ${this.port} for ${this.appRoot}`);
+          return;
+        } else {
+          // Stale port file — clean it up
+          console.log(`Stale port file found for ${this.appRoot}, removing...`);
+          this.deletePortFile();
+        }
       }
     }
 
@@ -124,6 +136,8 @@ export class DebuggerServerManager {
           ...process.env,
           VSCODE_INTEGRATION: "true",
           WORKSPACE_PATH: this.appRoot,
+          FASTEDGE_DEBUG_TOKEN: this.token,
+          FASTEDGE_BIND_HOST: "127.0.0.1",
         },
       });
 
@@ -253,6 +267,7 @@ export class DebuggerServerManager {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
+          "x-fastedge-token": this.token,
         },
       });
 

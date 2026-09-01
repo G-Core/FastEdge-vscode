@@ -56,6 +56,13 @@ describe("getDockerCommand", () => {
     expect(getDockerCommand(false).args).not.toContain("GCORE_API_BASE");
   });
 
+  it("uses a pinned version tag, not :latest", () => {
+    const { args } = getDockerCommand(false);
+    const imageArg = args[args.length - 1];
+    expect(imageArg).not.toContain(":latest");
+    expect(imageArg).toContain(__MCP_SERVER_VERSION__);
+  });
+
   it("is platform independent", () => {
     const original = Object.getOwnPropertyDescriptor(process, "platform")!;
     try {
