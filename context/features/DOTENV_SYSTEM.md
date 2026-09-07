@@ -13,8 +13,6 @@ The dotenv system allows developers to:
 - Support large configuration sets
 - Share configurations across team
 
-**File**: `src/dotenv/index.ts`
-
 **See also**: `../DOTENV.md` (root) - User-facing documentation
 
 ---

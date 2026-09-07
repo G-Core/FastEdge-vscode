@@ -28,7 +28,7 @@ export function resolveConfigRoot(startPath: string): string | null {
       // .fastedge-debug doesn't exist in this directory — continue walking up
     }
     const parent = path.dirname(dir);
-    if (parent === dir) return null;
+    if (parent === dir) {return null;}
     dir = parent;
   }
 }
@@ -51,7 +51,7 @@ export function resolveBuildRoot(startPath: string): string | null {
       return dir;
     }
     const parent = path.dirname(dir);
-    if (parent === dir) return null;
+    if (parent === dir) {return null;}
     dir = parent;
   }
 }

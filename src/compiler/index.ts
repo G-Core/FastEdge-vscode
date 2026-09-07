@@ -43,7 +43,7 @@ function getActiveFileLanguage(activeFile: string): ExtLanguage | null {
  */
 function getProjectLanguage(activeFile: string): ExtLanguage | null {
   const buildRoot = resolveBuildRoot(activeFile);
-  if (!buildRoot) return null;
+  if (!buildRoot) {return null;}
 
   if (fs.existsSync(path.join(buildRoot, "Cargo.toml"))) {
     return "rust";

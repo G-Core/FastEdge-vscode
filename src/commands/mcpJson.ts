@@ -304,13 +304,21 @@ async function createMCPJson(context?: vscode.ExtensionContext) {
     };
 
     try {
-      await vscode.workspace.fs.writeFile(
-        mcpJsonPath,
-        Buffer.from(JSON.stringify(mcpJsonContent, null, 2)),
-      );
-      // Restrict read access on local files — no-op on Windows (best effort).
+      const jsonStr = JSON.stringify(mcpJsonContent, null, 2);
       if (mcpJsonPath.scheme === "file") {
+        // Open/create with mode 0o600 so new files are never briefly world-readable.
+        // chmodSync after fixes pre-existing files that may already be at 0o644.
+        const fd = fs.openSync(
+          mcpJsonPath.fsPath,
+          fs.constants.O_WRONLY | fs.constants.O_CREAT | fs.constants.O_TRUNC,
+          0o600,
+        );
+        try { fs.writeSync(fd, jsonStr); } finally { fs.closeSync(fd); }
         try { fs.chmodSync(mcpJsonPath.fsPath, 0o600); } catch { /* best effort */ }
+      } else {
+        // Remote workspace (vscode-remote, Codespaces, etc.) — Node's fs.chmod
+        // targets the local host, not the remote; accept best-effort permissions.
+        await vscode.workspace.fs.writeFile(mcpJsonPath, Buffer.from(jsonStr));
       }
     } catch (error: any) {
       vscode.window.showErrorMessage(

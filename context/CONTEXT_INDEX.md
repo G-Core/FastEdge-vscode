@@ -238,7 +238,7 @@ See `SEARCH_GUIDE.md` for more patterns.
    - Run debugger (current file or package entry)
    - Setup Codespace secrets
 
-5. **Configuration** (`src/dotenv/`, `src/utils/resolveAppRoot.ts`)
+5. **Configuration** (`src/utils/resolveAppRoot.ts`)
    - Dotenv file auto-discovery from `configRoot`
    - `.fastedge-debug/` directory as app root marker; `fastedge-config.test.json` as runtime config store
    - `resolveConfigRoot()` (finds `.fastedge-debug/`) / `resolveBuildRoot()` for per-app isolation

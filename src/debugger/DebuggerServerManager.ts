@@ -37,8 +37,9 @@ export class DebuggerServerManager {
   private readPortFile(): number | null {
     try {
       const raw = fs.readFileSync(this.portFilePath, "utf8").trim();
-      const port = parseInt(raw, 10);
-      return isNaN(port) ? null : port;
+      if (!/^\d{1,5}$/.test(raw)) {return null;}
+      const port = Number(raw);
+      return port >= 1 && port <= 65535 ? port : null;
     } catch {
       return null;
     }
@@ -61,11 +62,14 @@ export class DebuggerServerManager {
 
   private async isHealthyOnPort(port: number): Promise<boolean> {
     try {
-      const response = await fetch(`http://localhost:${port}/health`, {
+      // Use the unauthenticated /health probe — sending our session token to an
+      // unverified endpoint would let a malicious listener steal it and impersonate
+      // the server. /health only tells us something is listening; subsequent authed
+      // requests will fail naturally if it's the wrong server.
+      const response = await fetch(`http://127.0.0.1:${port}/health`, {
         signal: AbortSignal.timeout(500),
       });
-      const data = await response.json();
-      return response.ok && data.status === "ok" && data.service === "fastedge-debugger";
+      return response.ok;
     } catch {
       return false;
     }
@@ -136,6 +140,11 @@ export class DebuggerServerManager {
 
       // No PORT env var — let fastedge-test's startServer() resolve it via auto-increment.
       // WORKSPACE_PATH tells it where to write .fastedge-debug/.debug-port.
+      // In GitHub Codespaces the browser connects through a port-forwarded URL
+      // of the form <name>-<port>.<domain>. The server needs FASTEDGE_EXPECTED_HOST
+      // set to the forwarding domain so its suffix-match check allows the request
+      // (the full hostname cannot be known here because the server picks its own port).
+      const codespacesDomain = process.env.GITHUB_CODESPACES_PORT_FORWARDING_DOMAIN;
       this.serverProcess = fork(bundledServerPath, [], {
         cwd: path.dirname(bundledServerPath),
         execPath: process.execPath,
@@ -146,6 +155,7 @@ export class DebuggerServerManager {
           WORKSPACE_PATH: this.appRoot,
           FASTEDGE_DEBUG_TOKEN: this.token,
           FASTEDGE_BIND_HOST: "127.0.0.1",
+          ...(codespacesDomain ? { FASTEDGE_EXPECTED_HOST: codespacesDomain } : {}),
         },
       });
 

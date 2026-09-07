@@ -304,7 +304,6 @@ FastEdge-vscode/
 │   ├── FastEdgeDebugAdapterDescriptorFactory.ts
 │   ├── compiler/                         # Rust/JS compilation
 │   ├── commands/                         # VS Code commands
-│   ├── dotenv/                           # Dotenv handling
 │   └── autorun/                          # File watching
 ├── fastedge-cli/                         # Bundled FastEdge-run binary
 ├── package.json                          # Extension manifest

@@ -117,19 +117,23 @@ export class DebuggerWebviewProvider {
             }
           }
 
-          if (message.command === "openSavePicker") {
+          if (message.type === "openSavePicker") {
             const appRoot = this.serverManager.getAppRoot();
             const debugDir = path.join(appRoot, ".fastedge-debug");
-            const suggestedName = message.suggestedName ?? "fastedge-config.test.json";
             const uri = await vscode.window.showSaveDialog({
-              defaultUri: vscode.Uri.file(path.join(debugDir, suggestedName)),
+              defaultUri: vscode.Uri.file(path.join(debugDir, "fastedge-config.test.json")),
               filters: { "JSON Files": ["json"] },
               title: "Save FastEdge Config",
             });
             if (uri) {
-              this.panel?.webview.postMessage({ command: "savePickerResult", filePath: uri.fsPath });
+              try {
+                await vscode.workspace.fs.writeFile(uri, Buffer.from(message.config));
+                this.panel?.webview.postMessage({ type: "savePickerResult", path: uri.fsPath, saved: true });
+              } catch {
+                this.panel?.webview.postMessage({ type: "savePickerResult", path: null, saved: false });
+              }
             } else {
-              this.panel?.webview.postMessage({ command: "savePickerResult", canceled: true });
+              this.panel?.webview.postMessage({ type: "savePickerResult", path: null, saved: false });
             }
           }
         });
@@ -174,6 +178,7 @@ export class DebuggerWebviewProvider {
           headers: {
             "Content-Type": "application/json",
             "x-fastedge-token": this.serverManager.getToken(),
+            "X-Source": "vscode",
           },
           body: JSON.stringify({
             wasmPath,
@@ -217,6 +222,7 @@ export class DebuggerWebviewProvider {
           headers: {
             "Content-Type": "application/json",
             "x-fastedge-token": this.serverManager.getToken(),
+            "X-Source": "vscode",
           },
           body: JSON.stringify({ config }),
         }
@@ -245,11 +251,14 @@ export class DebuggerWebviewProvider {
     while (Date.now() - start < timeoutMs) {
       try {
         const response = await fetch(`${this.serverManager.getUrl()}/api/client-count`, {
-          headers: { "x-fastedge-token": this.serverManager.getToken() },
+          headers: {
+            "x-fastedge-token": this.serverManager.getToken(),
+            "X-Source": "vscode",
+          },
           signal: AbortSignal.timeout(2000),
         });
         const { count } = await response.json();
-        if (count > 0) return;
+        if (count > 0) {return;}
       } catch {
         // Server may not be ready yet — keep polling
       }
@@ -352,13 +361,14 @@ export class DebuggerWebviewProvider {
         else if (cmd === 'openFilePicker')   { vscode.postMessage({ command: 'openFilePicker' }); }
         else if (cmd === 'getAppRoot')       { vscode.postMessage({ command: 'getAppRoot' }); }
         else if (cmd === 'openFolderPicker') { vscode.postMessage({ command: 'openFolderPicker' }); }
-        else if (cmd === 'openSavePicker')   { vscode.postMessage({ command: 'openSavePicker', suggestedName: event.data.suggestedName }); }
+        else if (event.data.type === 'openSavePicker') { vscode.postMessage({ type: 'openSavePicker', config: event.data.config }); }
         return;
       }
       // (b) extension host responses — relay to the iframe at its exact origin
       const hostCmd = event.data && event.data.command;
       if (hostCmd === 'filePickerResult' || hostCmd === 'appRootResult' ||
-          hostCmd === 'folderPickerResult' || hostCmd === 'savePickerResult') {
+          hostCmd === 'folderPickerResult' || hostCmd === 'savePickerResult' ||
+          event.data.type === 'savePickerResult') {
         iframe.contentWindow.postMessage(event.data, FRAME_ORIGIN);
       }
     });

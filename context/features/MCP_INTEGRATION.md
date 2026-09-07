@@ -31,7 +31,7 @@ The generated entry looks like:
                "-v", "${workspaceFolder}:/workspace",
                "-e", "WORKSPACE_ROOT=/workspace",
                "-e", "GCORE_API_KEY",
-               "ghcr.io/g-core/fastedge-mcp-server:v0.2.9"],
+               "ghcr.io/g-core/fastedge-mcp-server:0.2.9"],
       "env": { "GCORE_API_KEY": "<key>" }
     }
   }
@@ -42,7 +42,7 @@ The generated entry looks like:
 
 ## Pinned image version — how to bump it
 
-The Docker image tag (`v0.2.9` above) is **not hardcoded in source**. It is
+Tags on ghcr.io have no `v` prefix. The Docker image tag (`0.2.9` above) is **not hardcoded in source**. It is
 read from a single file at build time and injected by esbuild:
 
 ```
@@ -55,9 +55,9 @@ src/commands/mcpJson.ts     ← uses __MCP_SERVER_VERSION__ (injected constant)
 **To bump the version:**
 
 ```bash
-echo "v0.3.0" > mcp-server.version
+echo "0.3.0" > mcp-server.version
 # rebuild — the new tag is baked into dist/extension.js
-pnpm run build
+npm run build
 ```
 
 A future CI job in the MCP server's release pipeline can automate this step

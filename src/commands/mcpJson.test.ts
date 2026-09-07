@@ -56,6 +56,11 @@ describe("getDockerCommand", () => {
     expect(getDockerCommand(false).args).not.toContain("GCORE_API_BASE");
   });
 
+  it("version file contains a bare semver tag with no v prefix", () => {
+    // Tags on ghcr.io have no v prefix; mcp-server.version must be x.y.z only.
+    expect(__MCP_SERVER_VERSION__).toMatch(/^\d+\.\d+\.\d+$/);
+  });
+
   it("uses a pinned version tag, not :latest", () => {
     const { args } = getDockerCommand(false);
     const imageArg = args[args.length - 1];
