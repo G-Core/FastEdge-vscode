@@ -84,9 +84,17 @@ export class DebuggerServerManager {
       const filePort = this.readPortFile();
       if (filePort !== null) {
         if (await this.isHealthyOnPort(filePort)) {
-          this.port = filePort;
-          console.log(`Reusing existing debugger server on port ${this.port} for ${this.appRoot}`);
-          return;
+          // Only reuse servers we started in this extension host; otherwise the
+          // per-session token will not match and /api/* calls will fail auth.
+          if (this.serverProcess) {
+            this.port = filePort;
+            console.log(`Reusing existing debugger server on port ${this.port} for ${this.appRoot}`);
+            return;
+          }
+          console.log(
+            `Found existing debugger server on port ${filePort} for ${this.appRoot} but no owned process; spawning a fresh server...`,
+          );
+          this.deletePortFile();
         } else {
           // Stale port file — clean it up
           console.log(`Stale port file found for ${this.appRoot}, removing...`);
