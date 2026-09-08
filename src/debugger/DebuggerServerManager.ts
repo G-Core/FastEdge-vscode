@@ -259,7 +259,7 @@ export class DebuggerServerManager {
    * Get the debugger server URL
    */
   getUrl(): string {
-    return `http://localhost:${this.port}`;
+    return `http://127.0.0.1:${this.port}`;
   }
 
   /**

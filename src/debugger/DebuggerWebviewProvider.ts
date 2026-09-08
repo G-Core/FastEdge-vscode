@@ -392,15 +392,15 @@ export class DebuggerWebviewProvider {
         else if (cmd === 'openFilePicker')   { vscode.postMessage({ command: 'openFilePicker' }); }
         else if (cmd === 'getAppRoot')       { vscode.postMessage({ command: 'getAppRoot' }); }
         else if (cmd === 'openFolderPicker') { vscode.postMessage({ command: 'openFolderPicker' }); }
-        else if (event.data.type === 'openSavePicker') { vscode.postMessage({ type: 'openSavePicker', config: event.data.config }); }
+        else if (event.data && event.data.type === 'openSavePicker') { vscode.postMessage({ type: 'openSavePicker', config: event.data.config }); }
         return;
       }
       // (b) extension host responses — relay to the iframe at its exact origin
       const hostCmd = event.data && event.data.command;
       if (hostCmd === 'filePickerResult' || hostCmd === 'appRootResult' ||
           hostCmd === 'folderPickerResult' || hostCmd === 'savePickerResult' ||
-          event.data.type === 'savePickerResult') {
-        iframe.contentWindow.postMessage(event.data, FRAME_ORIGIN);
+          (event.data && event.data.type === 'savePickerResult')) {
+        iframe.contentWindow?.postMessage(event.data, FRAME_ORIGIN);
       }
     });
   </script>
