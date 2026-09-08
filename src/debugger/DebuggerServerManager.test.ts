@@ -46,14 +46,14 @@ describe("isHealthyOnPort — unauthenticated /health probe", () => {
   });
   afterEach(() => { vi.unstubAllGlobals(); });
 
-  it("returns true (reuse) when server responds 200 — accepts our token", async () => {
+  it("returns true (reuse) when server responds 200 OK", async () => {
     (globalThis.fetch as any).mockResolvedValue({ ok: true });
     const manager = new DebuggerServerManager("/ext", "/app");
     (manager as any).port = 5179;
     expect(await (manager as any).isHealthy()).toBe(true);
   });
 
-  it("returns false (spawn fresh) when server responds 401 — alien token", async () => {
+  it("returns false (spawn fresh) when server responds non-OK", async () => {
     (globalThis.fetch as any).mockResolvedValue({ ok: false, status: 401 });
     const manager = new DebuggerServerManager("/ext", "/app");
     (manager as any).port = 5179;

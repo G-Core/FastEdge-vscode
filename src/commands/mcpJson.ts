@@ -349,7 +349,7 @@ async function createMCPJson(context?: vscode.ExtensionContext) {
         );
         try {
           fs.fchmodSync(fd, 0o600);
-          fs.writeSync(fd, jsonStr);
+          fs.writeFileSync(fd, jsonStr);
         } finally { fs.closeSync(fd); }
       } else {
         // Remote workspace (vscode-remote, Codespaces, etc.) — Node's fs.lstat
