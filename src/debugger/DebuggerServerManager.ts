@@ -40,12 +40,12 @@ export class DebuggerServerManager {
       // Format: PORT:SHA256_OF_TOKEN — proves the server was spawned by this session.
       // Legacy single-number format is rejected: can't verify server identity.
       const sep = raw.indexOf(":");
-      if (sep === -1) return null;
+      if (sep === -1) {return null;}
       const portStr = raw.substring(0, sep);
       const storedHash = raw.substring(sep + 1);
-      if (!/^\d{1,5}$/.test(portStr)) return null;
+      if (!/^\d{1,5}$/.test(portStr)) {return null;}
       const port = Number(portStr);
-      if (port < 1 || port > 65535) return null;
+      if (port < 1 || port > 65535) {return null;}
       const expectedHash = createHash("sha256").update(this.token).digest("hex");
       return storedHash === expectedHash ? port : null;
     } catch {

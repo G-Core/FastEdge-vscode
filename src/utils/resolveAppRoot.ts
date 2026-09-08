@@ -3,7 +3,9 @@ import * as path from "path";
 
 function startDir(startPath: string): string {
   try {
-    return fs.statSync(startPath).isDirectory() ? startPath : path.dirname(startPath);
+    return fs.statSync(startPath).isDirectory()
+      ? startPath
+      : path.dirname(startPath);
   } catch {
     return path.dirname(startPath);
   }
@@ -51,7 +53,9 @@ export function resolveBuildRoot(startPath: string): string | null {
       return dir;
     }
     const parent = path.dirname(dir);
-    if (parent === dir) {return null;}
+    if (parent === dir) {
+      return null;
+    }
     dir = parent;
   }
 }
@@ -76,7 +80,11 @@ export function ensureDebugDir(dir: string): void {
       );
     }
   } catch (err: unknown) {
-    if (err instanceof Error && "code" in err && (err as NodeJS.ErrnoException).code === "ENOENT") {
+    if (
+      err instanceof Error &&
+      "code" in err &&
+      (err as NodeJS.ErrnoException).code === "ENOENT"
+    ) {
       fs.mkdirSync(debugPath, { recursive: true });
     } else {
       throw err;

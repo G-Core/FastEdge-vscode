@@ -13,7 +13,7 @@ export class DebuggerWebviewProvider {
 
   constructor(
     private context: vscode.ExtensionContext,
-    private serverManager: DebuggerServerManager
+    private serverManager: DebuggerServerManager,
   ) {}
 
   /**
@@ -48,7 +48,7 @@ export class DebuggerWebviewProvider {
           {
             enableScripts: true,
             retainContextWhenHidden: true,
-          }
+          },
         );
 
         this.currentDebuggerUrl = debuggerUrl;
@@ -88,9 +88,17 @@ export class DebuggerWebviewProvider {
               const content = await readFile(uris[0].fsPath, "utf-8");
               const fileName = path.basename(uris[0].fsPath);
               const configDir = path.dirname(uris[0].fsPath);
-              this.panel?.webview.postMessage({ command: "filePickerResult", content, fileName, configDir });
+              this.panel?.webview.postMessage({
+                command: "filePickerResult",
+                content,
+                fileName,
+                configDir,
+              });
             } else {
-              this.panel?.webview.postMessage({ command: "filePickerResult", canceled: true });
+              this.panel?.webview.postMessage({
+                command: "filePickerResult",
+                canceled: true,
+              });
             }
           }
 
@@ -111,9 +119,15 @@ export class DebuggerWebviewProvider {
               title: "Select .env files directory",
             });
             if (uris && uris.length > 0) {
-              this.panel?.webview.postMessage({ command: "folderPickerResult", folderPath: uris[0].fsPath });
+              this.panel?.webview.postMessage({
+                command: "folderPickerResult",
+                folderPath: uris[0].fsPath,
+              });
             } else {
-              this.panel?.webview.postMessage({ command: "folderPickerResult", canceled: true });
+              this.panel?.webview.postMessage({
+                command: "folderPickerResult",
+                canceled: true,
+              });
             }
           }
 
@@ -121,19 +135,36 @@ export class DebuggerWebviewProvider {
             const appRoot = this.serverManager.getAppRoot();
             const debugDir = path.join(appRoot, ".fastedge-debug");
             const uri = await vscode.window.showSaveDialog({
-              defaultUri: vscode.Uri.file(path.join(debugDir, "fastedge-config.test.json")),
+              defaultUri: vscode.Uri.file(
+                path.join(debugDir, "fastedge-config.test.json"),
+              ),
               filters: { "JSON Files": ["json"] },
               title: "Save FastEdge Config",
             });
             if (uri) {
               try {
-                await vscode.workspace.fs.writeFile(uri, Buffer.from(message.config));
-                this.panel?.webview.postMessage({ type: "savePickerResult", path: uri.fsPath, saved: true });
+                await vscode.workspace.fs.writeFile(
+                  uri,
+                  Buffer.from(message.config),
+                );
+                this.panel?.webview.postMessage({
+                  type: "savePickerResult",
+                  path: uri.fsPath,
+                  saved: true,
+                });
               } catch {
-                this.panel?.webview.postMessage({ type: "savePickerResult", path: null, saved: false });
+                this.panel?.webview.postMessage({
+                  type: "savePickerResult",
+                  path: null,
+                  saved: false,
+                });
               }
             } else {
-              this.panel?.webview.postMessage({ type: "savePickerResult", path: null, saved: false });
+              this.panel?.webview.postMessage({
+                type: "savePickerResult",
+                path: null,
+                saved: false,
+              });
             }
           }
         });
@@ -158,7 +189,7 @@ export class DebuggerWebviewProvider {
       }
     } catch (error) {
       vscode.window.showErrorMessage(
-        `Failed to show debugger: ${(error as Error).message}`
+        `Failed to show debugger: ${(error as Error).message}`,
       );
       throw error;
     }
@@ -171,21 +202,18 @@ export class DebuggerWebviewProvider {
     try {
       // Load via REST API using path-based loading — server is local so the
       // path is always accessible, and avoids the "binary.wasm" placeholder filename
-      const response = await fetch(
-        `${this.serverManager.getUrl()}/api/load`,
-        {
-          method: "POST",
-          headers: {
-            "Content-Type": "application/json",
-            "x-fastedge-token": this.serverManager.getToken(),
-            "X-Source": "vscode",
-          },
-          body: JSON.stringify({
-            wasmPath,
-            dotenv: { enabled: true },
-          }),
-        }
-      );
+      const response = await fetch(`${this.serverManager.getUrl()}/api/load`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          "x-fastedge-token": this.serverManager.getToken(),
+          "X-Source": "vscode",
+        },
+        body: JSON.stringify({
+          wasmPath,
+          dotenv: { enabled: true },
+        }),
+      });
 
       if (!response.ok) {
         const error = await response.json();
@@ -196,11 +224,11 @@ export class DebuggerWebviewProvider {
       console.log(`WASM loaded successfully: ${result.wasmType}`);
 
       vscode.window.showInformationMessage(
-        `WASM loaded successfully (${result.wasmType})`
+        `WASM loaded successfully (${result.wasmType})`,
       );
     } catch (error) {
       vscode.window.showErrorMessage(
-        `Failed to load WASM: ${(error as Error).message}`
+        `Failed to load WASM: ${(error as Error).message}`,
       );
       throw error;
     }
@@ -225,7 +253,7 @@ export class DebuggerWebviewProvider {
             "X-Source": "vscode",
           },
           body: JSON.stringify({ config }),
-        }
+        },
       );
 
       if (!response.ok) {
@@ -236,7 +264,7 @@ export class DebuggerWebviewProvider {
       console.log("Configuration updated successfully");
     } catch (error) {
       vscode.window.showErrorMessage(
-        `Failed to set config: ${(error as Error).message}`
+        `Failed to set config: ${(error as Error).message}`,
       );
       throw error;
     }
@@ -250,19 +278,22 @@ export class DebuggerWebviewProvider {
     const start = Date.now();
     while (Date.now() - start < timeoutMs) {
       try {
-        const response = await fetch(`${this.serverManager.getUrl()}/api/client-count`, {
-          headers: {
-            "x-fastedge-token": this.serverManager.getToken(),
-            "X-Source": "vscode",
+        const response = await fetch(
+          `${this.serverManager.getUrl()}/api/client-count`,
+          {
+            headers: {
+              "x-fastedge-token": this.serverManager.getToken(),
+              "X-Source": "vscode",
+            },
+            signal: AbortSignal.timeout(2000),
           },
-          signal: AbortSignal.timeout(2000),
-        });
+        );
         const { count } = await response.json();
         if (count > 0) {return;}
       } catch {
         // Server may not be ready yet — keep polling
       }
-      await new Promise(resolve => setTimeout(resolve, 50));
+      await new Promise((resolve) => setTimeout(resolve, 50));
     }
     // Timeout — proceed anyway, load is better than no load
   }
@@ -382,12 +413,23 @@ export class DebuggerWebviewProvider {
    * Posts a filePickerResult message, which ConfigButtons already handles.
    * Waits for the React app to connect via WebSocket before posting.
    */
-  async sendConfig(content: string, fileName: string, configDir?: string): Promise<void> {
+  async sendConfig(
+    content: string,
+    fileName: string,
+    configDir?: string,
+  ): Promise<void> {
     await this.waitForWebSocketClient();
     if (!this.panel) {
-      throw new Error("Debugger panel was closed before the config could be sent.");
+      throw new Error(
+        "Debugger panel was closed before the config could be sent.",
+      );
     }
-    this.panel.webview.postMessage({ command: "filePickerResult", content, fileName, configDir });
+    this.panel.webview.postMessage({
+      command: "filePickerResult",
+      content,
+      fileName,
+      configDir,
+    });
   }
 
   /**
