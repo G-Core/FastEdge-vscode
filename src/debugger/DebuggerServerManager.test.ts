@@ -1,4 +1,5 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
+import { createHash } from "crypto";
 
 vi.mock("vscode", () => ({
   workspace: { isTrusted: true },
@@ -31,6 +32,11 @@ vi.mock("child_process", () => ({
 
 import { DebuggerServerManager } from "./DebuggerServerManager";
 
+/** Build the port file content the server would write: PORT:sha256(token) */
+function portFileFor(manager: DebuggerServerManager, port = 5179): string {
+  return `${port}:${createHash("sha256").update(manager.getToken()).digest("hex")}`;
+}
+
 // ── isHealthyOnPort — token-authenticated probe ───────────────────────────────
 
 describe("isHealthyOnPort — token-authenticated probe", () => {
@@ -54,58 +60,58 @@ describe("isHealthyOnPort — token-authenticated probe", () => {
     expect(await (manager as any).isHealthy()).toBe(false);
   });
 
-  it("probes /api/client-count on 127.0.0.1 (not localhost)", async () => {
+  it("probes /health on 127.0.0.1 (not localhost)", async () => {
     (globalThis.fetch as any).mockResolvedValue({ ok: true });
     const manager = new DebuggerServerManager("/ext", "/app");
     (manager as any).port = 5179;
     await (manager as any).isHealthy();
     const url: string = (globalThis.fetch as any).mock.calls[0][0];
     expect(url).toContain("127.0.0.1");
-    expect(url).toContain("/api/client-count");
+    expect(url).toContain("/health");
   });
 });
 
 // ── readPortFile — input validation ──────────────────────────────────────────
 
 describe("readPortFile — input validation", () => {
-  // fs module is already mocked; override readFileSync per test.
-  function stubPort(value: string) {
-    readFileSyncMock.mockReturnValue(value);
-  }
-
-  it("accepts a valid port", () => {
-    stubPort("5179");
-    expect((new DebuggerServerManager("/ext", "/app") as any).readPortFile()).toBe(5179);
+  it("accepts a valid port with correct token hash", () => {
+    const m = new DebuggerServerManager("/ext", "/app");
+    readFileSyncMock.mockReturnValue(portFileFor(m));
+    expect((m as any).readPortFile()).toBe(5179);
   });
 
-  it("rejects junk suffix (e.g. '5179junk')", () => {
-    stubPort("5179junk");
+  it("accepts port 1 (min valid)", () => {
+    const m = new DebuggerServerManager("/ext", "/app");
+    readFileSyncMock.mockReturnValue(portFileFor(m, 1));
+    expect((m as any).readPortFile()).toBe(1);
+  });
+
+  it("accepts port 65535 (max valid)", () => {
+    const m = new DebuggerServerManager("/ext", "/app");
+    readFileSyncMock.mockReturnValue(portFileFor(m, 65535));
+    expect((m as any).readPortFile()).toBe(65535);
+  });
+
+  it("rejects legacy plain port format (no token hash)", () => {
+    readFileSyncMock.mockReturnValue("5179");
     expect((new DebuggerServerManager("/ext", "/app") as any).readPortFile()).toBeNull();
   });
 
-  it("rejects port 0", () => {
-    stubPort("0");
+  it("rejects wrong token hash", () => {
+    readFileSyncMock.mockReturnValue("5179:wronghash");
     expect((new DebuggerServerManager("/ext", "/app") as any).readPortFile()).toBeNull();
   });
 
-  it("rejects negative port string", () => {
-    stubPort("-1");
-    expect((new DebuggerServerManager("/ext", "/app") as any).readPortFile()).toBeNull();
+  it("rejects port 0 even with correct hash", () => {
+    const m = new DebuggerServerManager("/ext", "/app");
+    readFileSyncMock.mockReturnValue(portFileFor(m, 0));
+    expect((m as any).readPortFile()).toBeNull();
   });
 
-  it("rejects port above 65535", () => {
-    stubPort("65536");
-    expect((new DebuggerServerManager("/ext", "/app") as any).readPortFile()).toBeNull();
-  });
-
-  it("accepts 65535 (max valid)", () => {
-    stubPort("65535");
-    expect((new DebuggerServerManager("/ext", "/app") as any).readPortFile()).toBe(65535);
-  });
-
-  it("accepts 1 (min valid)", () => {
-    stubPort("1");
-    expect((new DebuggerServerManager("/ext", "/app") as any).readPortFile()).toBe(1);
+  it("rejects port above 65535 even with correct hash", () => {
+    const m = new DebuggerServerManager("/ext", "/app");
+    readFileSyncMock.mockReturnValue(portFileFor(m, 65536));
+    expect((m as any).readPortFile()).toBeNull();
   });
 });
 
@@ -117,12 +123,7 @@ describe("DebuggerServerManager — fork env in Codespaces", () => {
   beforeEach(() => {
     originalEnv = { ...process.env };
     forkMock.mockClear();
-    readFileSyncMock.mockReturnValue("5179");
-    // First fetch returns 401 so reuse is skipped; subsequent calls return 200
-    // so waitForPortFile() resolves promptly instead of running for 30 s.
-    vi.stubGlobal("fetch", vi.fn()
-      .mockResolvedValueOnce({ ok: false, status: 401 })
-      .mockResolvedValue({ ok: true }));
+    vi.stubGlobal("fetch", vi.fn().mockResolvedValue({ ok: true }));
   });
 
   afterEach(() => {
@@ -130,9 +131,18 @@ describe("DebuggerServerManager — fork env in Codespaces", () => {
     vi.unstubAllGlobals();
   });
 
+  function setupForSpawn(manager: DebuggerServerManager) {
+    // No port file initially → adoption skipped → fork runs.
+    // After fork, waitForPortFile() polls readPortFile() + isHealthyOnPort():
+    // set mock to the correct PORT:HASH format so it resolves on the first poll.
+    readFileSyncMock.mockImplementationOnce(() => { throw new Error("ENOENT"); });
+    readFileSyncMock.mockReturnValue(portFileFor(manager));
+  }
+
   it("sets FASTEDGE_EXPECTED_HOST when GITHUB_CODESPACES_PORT_FORWARDING_DOMAIN is set", async () => {
     process.env.GITHUB_CODESPACES_PORT_FORWARDING_DOMAIN = "app.github.dev";
     const manager = new DebuggerServerManager("/ext", "/workspace");
+    setupForSpawn(manager);
 
     await manager.start();
 
@@ -144,6 +154,7 @@ describe("DebuggerServerManager — fork env in Codespaces", () => {
   it("omits FASTEDGE_EXPECTED_HOST when GITHUB_CODESPACES_PORT_FORWARDING_DOMAIN is not set", async () => {
     delete process.env.GITHUB_CODESPACES_PORT_FORWARDING_DOMAIN;
     const manager = new DebuggerServerManager("/ext", "/workspace");
+    setupForSpawn(manager);
 
     await manager.start();
 

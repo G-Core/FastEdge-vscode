@@ -306,15 +306,18 @@ async function createMCPJson(context?: vscode.ExtensionContext) {
     try {
       const jsonStr = JSON.stringify(mcpJsonContent, null, 2);
       if (mcpJsonPath.scheme === "file") {
-        // Open/create with mode 0o600 so new files are never briefly world-readable.
-        // chmodSync after fixes pre-existing files that may already be at 0o644.
+        // Open/create the file. For new files, mode 0o600 applies immediately.
+        // For pre-existing files, fchmodSync on the fd locks down permissions before
+        // any credentials are written, closing the race that post-write chmod has.
         const fd = fs.openSync(
           mcpJsonPath.fsPath,
           fs.constants.O_WRONLY | fs.constants.O_CREAT | fs.constants.O_TRUNC,
           0o600,
         );
-        try { fs.writeSync(fd, jsonStr); } finally { fs.closeSync(fd); }
-        try { fs.chmodSync(mcpJsonPath.fsPath, 0o600); } catch { /* best effort */ }
+        try {
+          fs.fchmodSync(fd, 0o600);
+          fs.writeSync(fd, jsonStr);
+        } finally { fs.closeSync(fd); }
       } else {
         // Remote workspace (vscode-remote, Codespaces, etc.) — Node's fs.chmod
         // targets the local host, not the remote; accept best-effort permissions.
