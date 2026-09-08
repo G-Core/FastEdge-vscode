@@ -37,9 +37,9 @@ function portFileFor(manager: DebuggerServerManager, port = 5179): string {
   return `${port}:${createHash("sha256").update(manager.getToken()).digest("hex")}`;
 }
 
-// ── isHealthyOnPort — token-authenticated probe ───────────────────────────────
+// ── isHealthyOnPort — unauthenticated /health probe ──────────────────────────
 
-describe("isHealthyOnPort — token-authenticated probe", () => {
+describe("isHealthyOnPort — unauthenticated /health probe", () => {
   beforeEach(() => {
     vi.stubGlobal("fetch", vi.fn());
     forkMock.mockClear();

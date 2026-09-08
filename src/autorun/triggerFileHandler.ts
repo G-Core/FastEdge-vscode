@@ -91,7 +91,7 @@ export async function executeTriggerFile(
 
     // Read file content
     const content = await vscode.workspace.fs.readFile(uri);
-    const contentStr = content.toString().trim();
+    const contentStr = Buffer.from(content).toString("utf8").trim();
 
     if (!contentStr) {
       outputChannel.appendLine("Trigger file is empty, ignoring");

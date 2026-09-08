@@ -321,6 +321,8 @@ async function createMCPJson(context?: vscode.ExtensionContext) {
         } catch {
           // Directory doesn't exist yet — no symlink possible
         }
+        // Ensure .vscode/ exists before opening the file (O_CREAT does not create parents).
+        fs.mkdirSync(vscodeDirPath, { recursive: true });
         // O_NOFOLLOW atomically rejects any symlink at the file path itself,
         // eliminating the TOCTOU window that lstat+unlink+write has. On Windows
         // (where O_NOFOLLOW is unavailable) fall back to an explicit lstat check.
@@ -379,6 +381,10 @@ async function createMCPJson(context?: vscode.ExtensionContext) {
             }
           }
         } catch { /* .vscode doesn't exist yet — no symlink possible */ }
+        // Ensure .vscode/ exists (writeFile does not create parent directories).
+        try {
+          await vscode.workspace.fs.createDirectory(vscodeDirUri);
+        } catch { /* already exists — OK */ }
         // Remote workspace permissions are best-effort (Node's fs.chmod targets local host).
         await vscode.workspace.fs.writeFile(mcpJsonPath, Buffer.from(jsonStr));
       }
