@@ -348,7 +348,7 @@ async function createMCPJson(context?: vscode.ExtensionContext) {
           0o600,
         );
         try {
-          fs.fchmodSync(fd, 0o600);
+          try { fs.fchmodSync(fd, 0o600); } catch { /* best-effort: chmod unsupported on Windows/some FSes */ }
           fs.writeFileSync(fd, jsonStr);
         } finally { fs.closeSync(fd); }
       } else {
