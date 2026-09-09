@@ -43,7 +43,7 @@ function getActiveFileLanguage(activeFile: string): ExtLanguage | null {
  */
 function getProjectLanguage(activeFile: string): ExtLanguage | null {
   const buildRoot = resolveBuildRoot(activeFile);
-  if (!buildRoot) return null;
+  if (!buildRoot) {return null;}
 
   if (fs.existsSync(path.join(buildRoot, "Cargo.toml"))) {
     return "rust";
@@ -59,13 +59,13 @@ function getProjectLanguage(activeFile: string): ExtLanguage | null {
 
 async function compileActiveEditorsBinary(
   debugContext: DebugContext = "file",
-  logDebugConsole: LogToDebugConsole
+  logDebugConsole: LogToDebugConsole,
 ): Promise<BinaryInfo> {
   const activeFile = vscode.window.activeTextEditor?.document.uri.fsPath;
 
   if (!activeFile) {
     throw new Error(
-      "No active file detected. Only Rust, JavaScript, or AssemblyScript files are supported."
+      "No active file detected. Only Rust, JavaScript, or AssemblyScript files are supported.",
     );
   }
 
@@ -78,13 +78,17 @@ async function compileActiveEditorsBinary(
     throw new Error(
       debugContext === "workspace"
         ? "Could not detect project language. Ensure your project has a package.json or Cargo.toml."
-        : "Language not supported. Only Rust, JavaScript, or AssemblyScript files are supported."
+        : "Language not supported. Only Rust, JavaScript, or AssemblyScript files are supported.",
     );
   }
 
   if (activeFileLanguage === "javascript") {
     return {
-      path: await compileJavascriptBinary(activeFile, debugContext, logDebugConsole),
+      path: await compileJavascriptBinary(
+        activeFile,
+        debugContext,
+        logDebugConsole,
+      ),
       lang: activeFileLanguage,
     };
   } else if (activeFileLanguage === "rust") {
@@ -99,7 +103,7 @@ async function compileActiveEditorsBinary(
     };
   }
   throw new Error(
-    "Invalid language. Only Rust, JavaScript, or AssemblyScript files are supported."
+    "Invalid language. Only Rust, JavaScript, or AssemblyScript files are supported.",
   );
 }
 

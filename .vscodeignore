@@ -3,6 +3,7 @@ node_modules/**
 
 # Exclude test files
 tests/**
+test/**
 
 # Exclude build scripts
 scripts/**

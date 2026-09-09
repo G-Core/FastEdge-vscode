@@ -1,4 +1,6 @@
 import * as vscode from "vscode";
+import * as fs from "fs";
+import * as path from "path";
 
 import { MCPConfiguration } from "../types";
 import { isCodespace, setupCodespaceSecret } from "./codespaceSecrets";
@@ -35,7 +37,9 @@ function getDockerCommand(includeBaseOverride: boolean): {
   if (includeBaseOverride) {
     args.push("-e", "GCORE_API_BASE");
   }
-  args.push("ghcr.io/g-core/fastedge-mcp-server:latest");
+  // Version is read from mcp-server.version at build time and injected by esbuild.
+  // Update that file (not this line) when the MCP server releases a new version.
+  args.push(`ghcr.io/g-core/fastedge-mcp-server:${__MCP_SERVER_VERSION__}`);
   return { command: "docker", args };
 }
 
@@ -246,6 +250,7 @@ async function createMCPJson(context?: vscode.ExtensionContext) {
         prompt: "Enter your FastEdge API Key",
         placeHolder: defaultApiKey || "Your API key here...",
         value: defaultApiKey, // Pre-fill with saved value
+        password: true, // Mask input — mirrors setupCodespaceSecret behavior
         validateInput: (value) => {
           if (!value || value.trim().length === 0) {
             return "API Key is required";
@@ -300,10 +305,89 @@ async function createMCPJson(context?: vscode.ExtensionContext) {
     };
 
     try {
-      await vscode.workspace.fs.writeFile(
-        mcpJsonPath,
-        Buffer.from(JSON.stringify(mcpJsonContent, null, 2)),
-      );
+      const jsonStr = JSON.stringify(mcpJsonContent, null, 2);
+      if (mcpJsonPath.scheme === "file") {
+        // Verify the .vscode parent directory is not a symlink pointing outside the workspace.
+        const vscodeDirPath = path.dirname(mcpJsonPath.fsPath);
+        try {
+          const realParent = fs.realpathSync(vscodeDirPath);
+          const realRoot = fs.realpathSync(workspaceFolder.uri.fsPath);
+          if (realParent !== realRoot && !realParent.startsWith(realRoot + path.sep)) {
+            vscode.window.showErrorMessage(
+              "Cannot write mcp.json: .vscode directory is a symlink outside the workspace.",
+            );
+            return;
+          }
+        } catch {
+          // Directory doesn't exist yet — no symlink possible
+        }
+        // Ensure .vscode/ exists before opening the file (O_CREAT does not create parents).
+        fs.mkdirSync(vscodeDirPath, { recursive: true });
+        // O_NOFOLLOW atomically rejects any symlink at the file path itself,
+        // eliminating the TOCTOU window that lstat+unlink+write has. On Windows
+        // (where O_NOFOLLOW is unavailable) fall back to an explicit lstat check.
+        // The lstat path has a narrow TOCTOU window, but a static malicious workspace
+        // cannot exploit it without active intervention between the check and the open.
+        const O_NOFOLLOW: number = (fs.constants.O_NOFOLLOW as number | undefined) ?? 0;
+        if (O_NOFOLLOW === 0) {
+          try {
+            if (fs.lstatSync(mcpJsonPath.fsPath).isSymbolicLink()) {
+              vscode.window.showErrorMessage(
+                "Cannot write mcp.json: the file is a symbolic link.",
+              );
+              return;
+            }
+          } catch { /* file does not exist — OK */ }
+        }
+        // For new files, mode 0o600 applies immediately.
+        // For pre-existing files, fchmodSync on the fd locks down permissions before
+        // any credentials are written, closing the race that post-write chmod has.
+        const fd = fs.openSync(
+          mcpJsonPath.fsPath,
+          fs.constants.O_WRONLY | fs.constants.O_CREAT | fs.constants.O_TRUNC | O_NOFOLLOW,
+          0o600,
+        );
+        try {
+          try { fs.fchmodSync(fd, 0o600); } catch { /* best-effort: chmod unsupported on Windows/some FSes */ }
+          fs.writeFileSync(fd, jsonStr);
+        } finally { fs.closeSync(fd); }
+      } else {
+        // Remote workspace (vscode-remote, Codespaces, etc.) — Node's fs.lstat
+        // targets the local host, not the remote; use VS Code's virtual FS API to
+        // check for symlinks on the parent directory and target file before writing.
+        // Use readDirectory() (lstat semantics) rather than stat() (which follows
+        // symlinks and throws FileNotFound for dangling ones) so that both live and
+        // dangling symlinks on the .vscode dir and on mcp.json itself are detected.
+        const vscodeDirUri = vscode.Uri.joinPath(workspaceFolder.uri, ".vscode");
+        try {
+          const workspaceEntries = await vscode.workspace.fs.readDirectory(workspaceFolder.uri);
+          for (const [name, type] of workspaceEntries) {
+            if (name.toLowerCase() === ".vscode" && (type & vscode.FileType.SymbolicLink)) {
+              vscode.window.showErrorMessage(
+                "Cannot write mcp.json: .vscode directory is a symbolic link.",
+              );
+              return;
+            }
+          }
+        } catch { /* workspace root not readable — proceed */ }
+        try {
+          const vscodeDirEntries = await vscode.workspace.fs.readDirectory(vscodeDirUri);
+          for (const [name, type] of vscodeDirEntries) {
+            if (name.toLowerCase() === "mcp.json" && (type & vscode.FileType.SymbolicLink)) {
+              vscode.window.showErrorMessage(
+                "Cannot write mcp.json: mcp.json is a symbolic link.",
+              );
+              return;
+            }
+          }
+        } catch { /* .vscode doesn't exist yet — no symlink possible */ }
+        // Ensure .vscode/ exists (writeFile does not create parent directories).
+        try {
+          await vscode.workspace.fs.createDirectory(vscodeDirUri);
+        } catch { /* already exists — OK */ }
+        // Remote workspace permissions are best-effort (Node's fs.chmod targets local host).
+        await vscode.workspace.fs.writeFile(mcpJsonPath, Buffer.from(jsonStr));
+      }
     } catch (error: any) {
       vscode.window.showErrorMessage(
         `Failed to write mcp.json: ${error?.message || error}`,

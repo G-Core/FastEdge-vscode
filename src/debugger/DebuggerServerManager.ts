@@ -1,4 +1,5 @@
 import { fork, execFile, ChildProcess } from "child_process";
+import { randomBytes, createHash } from "crypto";
 import * as vscode from "vscode";
 import * as path from "path";
 import * as fs from "fs";
@@ -16,11 +17,18 @@ export class DebuggerServerManager {
   private serverProcess: ChildProcess | null = null;
   private port: number = 5179;
   private isStarting: boolean = false;
+  // Per-instance token: generated once, injected into the server via env and
+  // passed to the webview iframe via URL fragment so the frontend can auth.
+  private readonly token: string = randomBytes(16).toString("hex");
 
   constructor(
     private extensionPath: string,
     private appRoot: string
   ) {}
+
+  getToken(): string {
+    return this.token;
+  }
 
   private get portFilePath(): string {
     return path.join(this.appRoot, DEBUG_DIR, ".debug-port");
@@ -29,8 +37,17 @@ export class DebuggerServerManager {
   private readPortFile(): number | null {
     try {
       const raw = fs.readFileSync(this.portFilePath, "utf8").trim();
-      const port = parseInt(raw, 10);
-      return isNaN(port) ? null : port;
+      // Format: PORT:SHA256_OF_TOKEN — proves the server was spawned by this session.
+      // Legacy single-number format is rejected: can't verify server identity.
+      const sep = raw.indexOf(":");
+      if (sep === -1) {return null;}
+      const portStr = raw.substring(0, sep);
+      const storedHash = raw.substring(sep + 1);
+      if (!/^\d{1,5}$/.test(portStr)) {return null;}
+      const port = Number(portStr);
+      if (port < 1 || port > 65535) {return null;}
+      const expectedHash = createHash("sha256").update(this.token).digest("hex");
+      return storedHash === expectedHash ? port : null;
     } catch {
       return null;
     }
@@ -53,11 +70,14 @@ export class DebuggerServerManager {
 
   private async isHealthyOnPort(port: number): Promise<boolean> {
     try {
-      const response = await fetch(`http://localhost:${port}/health`, {
+      // Use the unauthenticated /health probe — sending our session token to an
+      // unverified endpoint would let a malicious listener steal it and impersonate
+      // the server. /health only tells us something is listening; subsequent authed
+      // requests will fail naturally if it's the wrong server.
+      const response = await fetch(`http://127.0.0.1:${port}/health`, {
         signal: AbortSignal.timeout(500),
       });
-      const data = await response.json();
-      return response.ok && data.status === "ok" && data.service === "fastedge-debugger";
+      return response.ok;
     } catch {
       return false;
     }
@@ -69,17 +89,29 @@ export class DebuggerServerManager {
    * Port selection is delegated to fastedge-test's auto-increment logic.
    */
   async start(): Promise<void> {
-    // Step 1: Check if a server is already running for this app via port file
-    const filePort = this.readPortFile();
-    if (filePort !== null) {
-      if (await this.isHealthyOnPort(filePort)) {
-        this.port = filePort;
-        console.log(`Reusing existing debugger server on port ${this.port} for ${this.appRoot}`);
-        return;
-      } else {
-        // Stale port file — clean it up
-        console.log(`Stale port file found for ${this.appRoot}, removing...`);
-        this.deletePortFile();
+    // Step 1: Check if a server is already running for this app via port file.
+    // In an untrusted workspace the port file is workspace-controlled, so ignore
+    // it and always spawn a fresh server that this session owns.
+    if (vscode.workspace.isTrusted) {
+      const filePort = this.readPortFile();
+      if (filePort !== null) {
+        if (await this.isHealthyOnPort(filePort)) {
+          // Only reuse servers we started in this extension host; otherwise the
+          // per-session token will not match and /api/* calls will fail auth.
+          if (this.serverProcess) {
+            this.port = filePort;
+            console.log(`Reusing existing debugger server on port ${this.port} for ${this.appRoot}`);
+            return;
+          }
+          console.log(
+            `Found existing debugger server on port ${filePort} for ${this.appRoot} but no owned process; spawning a fresh server...`,
+          );
+          this.deletePortFile();
+        } else {
+          // Stale port file — clean it up
+          console.log(`Stale port file found for ${this.appRoot}, removing...`);
+          this.deletePortFile();
+        }
       }
     }
 
@@ -116,6 +148,11 @@ export class DebuggerServerManager {
 
       // No PORT env var — let fastedge-test's startServer() resolve it via auto-increment.
       // WORKSPACE_PATH tells it where to write .fastedge-debug/.debug-port.
+      // In GitHub Codespaces the browser connects through a port-forwarded URL
+      // of the form <name>-<port>.<domain>. The server needs FASTEDGE_EXPECTED_HOST
+      // set to the forwarding domain so its suffix-match check allows the request
+      // (the full hostname cannot be known here because the server picks its own port).
+      const codespacesDomain = process.env.GITHUB_CODESPACES_PORT_FORWARDING_DOMAIN;
       this.serverProcess = fork(bundledServerPath, [], {
         cwd: path.dirname(bundledServerPath),
         execPath: process.execPath,
@@ -124,6 +161,9 @@ export class DebuggerServerManager {
           ...process.env,
           VSCODE_INTEGRATION: "true",
           WORKSPACE_PATH: this.appRoot,
+          FASTEDGE_DEBUG_TOKEN: this.token,
+          FASTEDGE_BIND_HOST: "127.0.0.1",
+          ...(codespacesDomain ? { FASTEDGE_EXPECTED_HOST: codespacesDomain } : {}),
         },
       });
 
@@ -219,7 +259,7 @@ export class DebuggerServerManager {
    * Get the debugger server URL
    */
   getUrl(): string {
-    return `http://localhost:${this.port}`;
+    return `http://127.0.0.1:${this.port}`;
   }
 
   /**
@@ -253,6 +293,7 @@ export class DebuggerServerManager {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
+          "x-fastedge-token": this.token,
         },
       });
 

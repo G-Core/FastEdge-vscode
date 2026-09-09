@@ -1,5 +1,6 @@
 import * as vscode from "vscode";
 import * as path from "path";
+import { randomBytes } from "crypto";
 import { readFile } from "fs/promises";
 import { DebuggerServerManager } from "./DebuggerServerManager";
 
@@ -12,7 +13,7 @@ export class DebuggerWebviewProvider {
 
   constructor(
     private context: vscode.ExtensionContext,
-    private serverManager: DebuggerServerManager
+    private serverManager: DebuggerServerManager,
   ) {}
 
   /**
@@ -47,7 +48,7 @@ export class DebuggerWebviewProvider {
           {
             enableScripts: true,
             retainContextWhenHidden: true,
-          }
+          },
         );
 
         this.currentDebuggerUrl = debuggerUrl;
@@ -58,7 +59,20 @@ export class DebuggerWebviewProvider {
         // Handle messages from the webview (forwarded from the debugger iframe)
         this.panel.webview.onDidReceiveMessage(async (message) => {
           if (message.command === "openExternal") {
-            await vscode.env.openExternal(vscode.Uri.parse(message.url));
+            let uri: vscode.Uri;
+            try {
+              uri = vscode.Uri.parse(message.url, true);
+            } catch {
+              return; // unparseable → refuse
+            }
+            // Only allow http/https — no vscode:, file:, or other OS handlers.
+            if (uri.scheme !== "https" && uri.scheme !== "http") {
+              vscode.window.showWarningMessage(
+                `FastEdge: refused to open a non-web link (${uri.scheme}:).`,
+              );
+              return;
+            }
+            await vscode.env.openExternal(uri);
           }
 
           if (message.command === "openFilePicker") {
@@ -74,9 +88,17 @@ export class DebuggerWebviewProvider {
               const content = await readFile(uris[0].fsPath, "utf-8");
               const fileName = path.basename(uris[0].fsPath);
               const configDir = path.dirname(uris[0].fsPath);
-              this.panel?.webview.postMessage({ command: "filePickerResult", content, fileName, configDir });
+              this.panel?.webview.postMessage({
+                command: "filePickerResult",
+                content,
+                fileName,
+                configDir,
+              });
             } else {
-              this.panel?.webview.postMessage({ command: "filePickerResult", canceled: true });
+              this.panel?.webview.postMessage({
+                command: "filePickerResult",
+                canceled: true,
+              });
             }
           }
 
@@ -97,25 +119,52 @@ export class DebuggerWebviewProvider {
               title: "Select .env files directory",
             });
             if (uris && uris.length > 0) {
-              this.panel?.webview.postMessage({ command: "folderPickerResult", folderPath: uris[0].fsPath });
+              this.panel?.webview.postMessage({
+                command: "folderPickerResult",
+                folderPath: uris[0].fsPath,
+              });
             } else {
-              this.panel?.webview.postMessage({ command: "folderPickerResult", canceled: true });
+              this.panel?.webview.postMessage({
+                command: "folderPickerResult",
+                canceled: true,
+              });
             }
           }
 
-          if (message.command === "openSavePicker") {
+          if (message.type === "openSavePicker") {
             const appRoot = this.serverManager.getAppRoot();
             const debugDir = path.join(appRoot, ".fastedge-debug");
-            const suggestedName = message.suggestedName ?? "fastedge-config.test.json";
             const uri = await vscode.window.showSaveDialog({
-              defaultUri: vscode.Uri.file(path.join(debugDir, suggestedName)),
+              defaultUri: vscode.Uri.file(
+                path.join(debugDir, "fastedge-config.test.json"),
+              ),
               filters: { "JSON Files": ["json"] },
               title: "Save FastEdge Config",
             });
             if (uri) {
-              this.panel?.webview.postMessage({ command: "savePickerResult", filePath: uri.fsPath });
+              try {
+                await vscode.workspace.fs.writeFile(
+                  uri,
+                  Buffer.from(message.config),
+                );
+                this.panel?.webview.postMessage({
+                  type: "savePickerResult",
+                  path: uri.fsPath,
+                  saved: true,
+                });
+              } catch {
+                this.panel?.webview.postMessage({
+                  type: "savePickerResult",
+                  path: null,
+                  saved: false,
+                });
+              }
             } else {
-              this.panel?.webview.postMessage({ command: "savePickerResult", canceled: true });
+              this.panel?.webview.postMessage({
+                type: "savePickerResult",
+                path: null,
+                saved: false,
+              });
             }
           }
         });
@@ -140,7 +189,7 @@ export class DebuggerWebviewProvider {
       }
     } catch (error) {
       vscode.window.showErrorMessage(
-        `Failed to show debugger: ${(error as Error).message}`
+        `Failed to show debugger: ${(error as Error).message}`,
       );
       throw error;
     }
@@ -153,20 +202,18 @@ export class DebuggerWebviewProvider {
     try {
       // Load via REST API using path-based loading — server is local so the
       // path is always accessible, and avoids the "binary.wasm" placeholder filename
-      const response = await fetch(
-        `${this.serverManager.getUrl()}/api/load`,
-        {
-          method: "POST",
-          headers: {
-            "Content-Type": "application/json",
-            "X-Source": "vscode",
-          },
-          body: JSON.stringify({
-            wasmPath,
-            dotenv: { enabled: true },
-          }),
-        }
-      );
+      const response = await fetch(`${this.serverManager.getUrl()}/api/load`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          "x-fastedge-token": this.serverManager.getToken(),
+          "X-Source": "vscode",
+        },
+        body: JSON.stringify({
+          wasmPath,
+          dotenv: { enabled: true },
+        }),
+      });
 
       if (!response.ok) {
         const error = await response.json();
@@ -177,11 +224,11 @@ export class DebuggerWebviewProvider {
       console.log(`WASM loaded successfully: ${result.wasmType}`);
 
       vscode.window.showInformationMessage(
-        `WASM loaded successfully (${result.wasmType})`
+        `WASM loaded successfully (${result.wasmType})`,
       );
     } catch (error) {
       vscode.window.showErrorMessage(
-        `Failed to load WASM: ${(error as Error).message}`
+        `Failed to load WASM: ${(error as Error).message}`,
       );
       throw error;
     }
@@ -202,10 +249,11 @@ export class DebuggerWebviewProvider {
           method: "POST",
           headers: {
             "Content-Type": "application/json",
+            "x-fastedge-token": this.serverManager.getToken(),
             "X-Source": "vscode",
           },
           body: JSON.stringify({ config }),
-        }
+        },
       );
 
       if (!response.ok) {
@@ -216,7 +264,7 @@ export class DebuggerWebviewProvider {
       console.log("Configuration updated successfully");
     } catch (error) {
       vscode.window.showErrorMessage(
-        `Failed to set config: ${(error as Error).message}`
+        `Failed to set config: ${(error as Error).message}`,
       );
       throw error;
     }
@@ -230,15 +278,22 @@ export class DebuggerWebviewProvider {
     const start = Date.now();
     while (Date.now() - start < timeoutMs) {
       try {
-        const response = await fetch(`${this.serverManager.getUrl()}/api/client-count`, {
-          signal: AbortSignal.timeout(2000),
-        });
+        const response = await fetch(
+          `${this.serverManager.getUrl()}/api/client-count`,
+          {
+            headers: {
+              "x-fastedge-token": this.serverManager.getToken(),
+              "X-Source": "vscode",
+            },
+            signal: AbortSignal.timeout(2000),
+          },
+        );
         const { count } = await response.json();
-        if (count > 0) return;
+        if (count > 0) {return;}
       } catch {
         // Server may not be ready yet — keep polling
       }
-      await new Promise(resolve => setTimeout(resolve, 50));
+      await new Promise((resolve) => setTimeout(resolve, 50));
     }
     // Timeout — proceed anyway, load is better than no load
   }
@@ -247,14 +302,21 @@ export class DebuggerWebviewProvider {
    * Get the webview HTML content
    */
   private getWebviewContent(debuggerUrl: string): string {
+    const nonce = randomBytes(16).toString("base64");
+    const frameOrigin = new URL(debuggerUrl).origin;
+    // Deliver the session token to the iframe via URL fragment — fragments are
+    // never sent in HTTP requests, so they don't appear in server logs, and only
+    // the same-origin iframe page can read location.hash.
+    const iframeUrl = `${debuggerUrl}#token=${encodeURIComponent(this.serverManager.getToken())}`;
 
     return `<!DOCTYPE html>
 <html lang="en">
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta http-equiv="Content-Security-Policy" content="default-src 'none'; frame-src ${frameOrigin}; style-src 'nonce-${nonce}'; script-src 'nonce-${nonce}';">
   <title>FastEdge Debugger</title>
-  <style>
+  <style nonce="${nonce}">
     body, html {
       margin: 0;
       padding: 0;
@@ -289,12 +351,14 @@ export class DebuggerWebviewProvider {
       <p>Starting server on port ${this.serverManager.getPort()}</p>
     </div>
   </div>
-  <iframe id="debugger-frame" src="${debuggerUrl}" style="display:none;"></iframe>
+  <iframe id="debugger-frame" src="${iframeUrl}" style="display:none;"></iframe>
 
-  <script>
+  <script nonce="${nonce}">
     const vscode = acquireVsCodeApi();
     const iframe = document.getElementById('debugger-frame');
     const loading = document.getElementById('loading');
+    const FRAME_ORIGIN = ${JSON.stringify(frameOrigin)};
+
     // Show iframe when loaded
     iframe.onload = function() {
       loading.style.display = 'none';
@@ -313,36 +377,30 @@ export class DebuggerWebviewProvider {
       }
     }, 5000);
 
-    // Forward messages from the debugger iframe to the extension host,
-    // and forward responses from the extension host back to the iframe.
+    // Forward messages between the debugger iframe and the extension host.
+    // Two sources post into this window:
+    //   (a) the iframe — commands like openExternal; must come from the iframe
+    //       window AND its origin.
+    //   (b) the extension host — picker results; source is the VS Code channel,
+    //       not the iframe, so a blanket origin check would drop these.
     window.addEventListener('message', function(event) {
-      if (event.data && event.data.command === 'openExternal') {
-        vscode.postMessage({ command: 'openExternal', url: event.data.url });
+      if (event.source === iframe.contentWindow) {
+        // (a) iframe command — verify origin before acting
+        if (event.origin !== FRAME_ORIGIN) { return; }
+        const cmd = event.data && event.data.command;
+        if (cmd === 'openExternal')    { vscode.postMessage({ command: 'openExternal', url: event.data.url }); }
+        else if (cmd === 'openFilePicker')   { vscode.postMessage({ command: 'openFilePicker' }); }
+        else if (cmd === 'getAppRoot')       { vscode.postMessage({ command: 'getAppRoot' }); }
+        else if (cmd === 'openFolderPicker') { vscode.postMessage({ command: 'openFolderPicker' }); }
+        else if (event.data && event.data.type === 'openSavePicker') { vscode.postMessage({ type: 'openSavePicker', config: event.data.config }); }
+        return;
       }
-      if (event.data && event.data.command === 'openFilePicker') {
-        vscode.postMessage({ command: 'openFilePicker' });
-      }
-      if (event.data && event.data.command === 'getAppRoot') {
-        vscode.postMessage({ command: 'getAppRoot' });
-      }
-      if (event.data && event.data.command === 'openFolderPicker') {
-        vscode.postMessage({ command: 'openFolderPicker' });
-      }
-      if (event.data && event.data.command === 'openSavePicker') {
-        vscode.postMessage({ command: 'openSavePicker', suggestedName: event.data.suggestedName });
-      }
-      // Forward extension host responses back to the iframe
-      if (event.data && event.data.command === 'filePickerResult') {
-        iframe.contentWindow.postMessage(event.data, '*');
-      }
-      if (event.data && event.data.command === 'appRootResult') {
-        iframe.contentWindow.postMessage(event.data, '*');
-      }
-      if (event.data && event.data.command === 'folderPickerResult') {
-        iframe.contentWindow.postMessage(event.data, '*');
-      }
-      if (event.data && event.data.command === 'savePickerResult') {
-        iframe.contentWindow.postMessage(event.data, '*');
+      // (b) extension host responses — relay to the iframe at its exact origin
+      const hostCmd = event.data && event.data.command;
+      if (hostCmd === 'filePickerResult' || hostCmd === 'appRootResult' ||
+          hostCmd === 'folderPickerResult' || hostCmd === 'savePickerResult' ||
+          (event.data && event.data.type === 'savePickerResult')) {
+        iframe.contentWindow?.postMessage(event.data, FRAME_ORIGIN);
       }
     });
   </script>
@@ -355,12 +413,23 @@ export class DebuggerWebviewProvider {
    * Posts a filePickerResult message, which ConfigButtons already handles.
    * Waits for the React app to connect via WebSocket before posting.
    */
-  async sendConfig(content: string, fileName: string, configDir?: string): Promise<void> {
+  async sendConfig(
+    content: string,
+    fileName: string,
+    configDir?: string,
+  ): Promise<void> {
     await this.waitForWebSocketClient();
     if (!this.panel) {
-      throw new Error("Debugger panel was closed before the config could be sent.");
+      throw new Error(
+        "Debugger panel was closed before the config could be sent.",
+      );
     }
-    this.panel.webview.postMessage({ command: "filePickerResult", content, fileName, configDir });
+    this.panel.webview.postMessage({
+      command: "filePickerResult",
+      content,
+      fileName,
+      configDir,
+    });
   }
 
   /**

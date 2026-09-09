@@ -73,6 +73,10 @@ Use this tree to find relevant documentation for your task:
 → Read: `features/MCP_INTEGRATION.md`
 → Read: `features/COMMANDS.md` (mcpJson command)
 
+**Task: Bump the pinned MCP server Docker image version**
+→ Edit: `mcp-server.version` (one line — the only file to change)
+→ Read: `features/MCP_INTEGRATION.md` (explains the build-time injection)
+
 **Task: Add new configuration option**
 → Read: `architecture/CONFIGURATION_SYSTEM.md`
 → Read: `BUNDLED_DEBUGGER.md` (fastedge-config.test.json section)
@@ -134,7 +138,7 @@ Use this tree to find relevant documentation for your task:
 | **DOTENV_SYSTEM.md** | Dotenv file handling | Dotenv loading issues |
 | **CROSS_PLATFORM.md** | Linux/macOS/Windows support, CI matrix, spawn rules | Any platform-specific work or new process spawning |
 | **LAUNCH_CONFIG.md** | Launch.json generation | Launch config changes |
-| **MCP_INTEGRATION.md** | MCP server configuration | MCP feature work |
+| **MCP_INTEGRATION.md** | MCP server config, image version pinning, how to bump | MCP feature work or bumping the server version |
 | **AUTORUN_SYSTEM.md** | File watching, auto-trigger | Auto-run functionality |
 | **CODESPACE_SECRETS.md** | GitHub Codespaces integration | Codespaces features |
 
@@ -234,7 +238,7 @@ See `SEARCH_GUIDE.md` for more patterns.
    - Run debugger (current file or package entry)
    - Setup Codespace secrets
 
-5. **Configuration** (`src/dotenv/`, `src/utils/resolveAppRoot.ts`)
+5. **Configuration** (`src/utils/resolveAppRoot.ts`)
    - Dotenv file auto-discovery from `configRoot`
    - `.fastedge-debug/` directory as app root marker; `fastedge-config.test.json` as runtime config store
    - `resolveConfigRoot()` (finds `.fastedge-debug/`) / `resolveBuildRoot()` for per-app isolation

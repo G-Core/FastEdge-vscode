@@ -82,7 +82,7 @@ export function initializeTriggerFileHandler(
 /**
  * Execute command from trigger file
  */
-async function executeTriggerFile(
+export async function executeTriggerFile(
   uri: vscode.Uri,
   outputChannel: vscode.OutputChannel,
 ): Promise<void> {
@@ -91,7 +91,7 @@ async function executeTriggerFile(
 
     // Read file content
     const content = await vscode.workspace.fs.readFile(uri);
-    const contentStr = content.toString().trim();
+    const contentStr = Buffer.from(content).toString("utf8").trim();
 
     if (!contentStr) {
       outputChannel.appendLine("Trigger file is empty, ignoring");
@@ -125,7 +125,30 @@ async function executeTriggerFile(
       return;
     }
 
-    // Execute command with timeout protection
+    // Never auto-execute in untrusted workspaces — a workspace-controlled file
+    // writing the trigger file would get a silent privileged command run.
+    if (!vscode.workspace.isTrusted) {
+      outputChannel.appendLine(`Skipping execution in untrusted workspace: ${commandId}`);
+      await vscode.workspace.fs.delete(uri);
+      return;
+    }
+
+    // Require explicit user confirmation — the trigger file is workspace-
+    // authored, so execution without a click is an unintended privilege.
+    const ok = await vscode.window.showWarningMessage(
+      `This workspace is asking to run "${commandId}". Only allow this if you trust the workspace.`,
+      { modal: true },
+      "Run",
+      "Ignore",
+    );
+    if (ok !== "Run") {
+      await vscode.workspace.fs.delete(uri);
+      return;
+    }
+
+    // Execute command with timeout protection.
+    // commandArgs from the file are never forwarded — the allowlisted command
+    // takes no arguments, and workspace-controlled args would be a privilege path.
     outputChannel.appendLine(`Executing command: ${commandId}`);
     let timeoutHandle: NodeJS.Timeout | undefined;
     const timeoutPromise = new Promise((_, reject) => {
@@ -135,9 +158,7 @@ async function executeTriggerFile(
       );
     });
 
-    const executePromise = commandArgs
-      ? vscode.commands.executeCommand(commandId, ...commandArgs)
-      : vscode.commands.executeCommand(commandId);
+    const executePromise = vscode.commands.executeCommand(commandId);
 
     try {
       await Promise.race([executePromise, timeoutPromise]);
