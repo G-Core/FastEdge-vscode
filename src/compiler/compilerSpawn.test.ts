@@ -18,6 +18,16 @@ import { compileRustAndFindBinary } from "./rustBuild";
 // ---------------------------------------------------------------------------
 const PAYLOAD = "index.js; touch /tmp/VSCODE_PWNED #";
 
+/**
+ * The same idea as PAYLOAD, but for a value that becomes a real directory on
+ * disk. Restricted to characters NTFS actually allows — no `"` and no `/`,
+ * which Windows rejects outright and treats as a separator respectively — so
+ * the fixture is creatable on every CI platform. `;` and `&` are the
+ * metacharacters that matter here: both separate commands under `sh`, and `&`
+ * does under `cmd.exe`.
+ */
+const DIR_PAYLOAD = "app; touch PWNED & echo #";
+
 const noop = () => {};
 
 /**
@@ -106,7 +116,7 @@ describe("compiler spawns are not shell-parsed", () => {
     const root = mkProject({ name: "as-app" });
     tmpRoots.push(root);
     // A directory name a hostile repo can commit.
-    const appDir = path.join(root, 'app"; touch /tmp/PWNED; #');
+    const appDir = path.join(root, DIR_PAYLOAD);
     fs.mkdirSync(path.join(appDir, ".fastedge-debug"), { recursive: true });
     fs.writeFileSync(path.join(appDir, "package.json"), "{}");
     fs.writeFileSync(path.join(appDir, "asconfig.json"), "{}");
@@ -126,7 +136,7 @@ describe("compiler spawns are not shell-parsed", () => {
     expect(path.basename(args[0])).toBe(path.basename(binPath));
     expect(options.shell).toBeFalsy();
     const outFile = args[args.indexOf("--outFile") + 1];
-    expect(outFile).toContain('"; touch');
+    expect(outFile).toContain("; touch PWNED &");
     expect(outFile).toBe(path.join(appDir, ".fastedge-debug", "app.wasm"));
   });
 
