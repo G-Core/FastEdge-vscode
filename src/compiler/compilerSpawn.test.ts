@@ -18,6 +18,16 @@ import { compileRustAndFindBinary } from "./rustBuild";
 // ---------------------------------------------------------------------------
 const PAYLOAD = "index.js; touch /tmp/VSCODE_PWNED #";
 
+/**
+ * The same idea as PAYLOAD, but for a value that becomes a real directory on
+ * disk. Restricted to characters NTFS actually allows — no `"` and no `/`,
+ * which Windows rejects outright and treats as a separator respectively — so
+ * the fixture is creatable on every CI platform. `;` and `&` are the
+ * metacharacters that matter here: both separate commands under `sh`, and `&`
+ * does under `cmd.exe`.
+ */
+const DIR_PAYLOAD = "app; touch PWNED & echo #";
+
 const noop = () => {};
 
 /**
@@ -45,9 +55,19 @@ function fakeChild(exitCode = 0) {
   return child;
 }
 
+/**
+ * A temp dir with symlinks resolved. macOS `os.tmpdir()` is `/var/...`, a
+ * symlink to `/private/var/...`; require.resolve (and so resolvePackageBin)
+ * returns the real path, so expectations built from the raw mkdtemp path
+ * would not match.
+ */
+function mkTmpRoot(): string {
+  return fs.realpathSync(fs.mkdtempSync(path.join(os.tmpdir(), "fastedge-spawn-")));
+}
+
 /** Minimal project with a locally installed build tool. */
 function mkProject(pkg: Record<string, unknown>): string {
-  const root = fs.mkdtempSync(path.join(os.tmpdir(), "fastedge-spawn-"));
+  const root = mkTmpRoot();
   fs.writeFileSync(path.join(root, "package.json"), JSON.stringify(pkg));
   return root;
 }
@@ -96,7 +116,7 @@ describe("compiler spawns are not shell-parsed", () => {
     const root = mkProject({ name: "as-app" });
     tmpRoots.push(root);
     // A directory name a hostile repo can commit.
-    const appDir = path.join(root, 'app"; touch /tmp/PWNED; #');
+    const appDir = path.join(root, DIR_PAYLOAD);
     fs.mkdirSync(path.join(appDir, ".fastedge-debug"), { recursive: true });
     fs.writeFileSync(path.join(appDir, "package.json"), "{}");
     fs.writeFileSync(path.join(appDir, "asconfig.json"), "{}");
@@ -116,12 +136,12 @@ describe("compiler spawns are not shell-parsed", () => {
     expect(path.basename(args[0])).toBe(path.basename(binPath));
     expect(options.shell).toBeFalsy();
     const outFile = args[args.indexOf("--outFile") + 1];
-    expect(outFile).toContain('"; touch');
+    expect(outFile).toContain("; touch PWNED &");
     expect(outFile).toBe(path.join(appDir, ".fastedge-debug", "app.wasm"));
   });
 
   it("rust: a .cargo/config.toml target stays one literal argv element", async () => {
-    const root = fs.mkdtempSync(path.join(os.tmpdir(), "fastedge-spawn-"));
+    const root = mkTmpRoot();
     tmpRoots.push(root);
     fs.writeFileSync(path.join(root, "Cargo.toml"), "[package]\nname='x'\n");
     fs.mkdirSync(path.join(root, ".cargo"), { recursive: true });

@@ -2,7 +2,7 @@ name: "Setup Node.js"
 description: "Sets up Node.js environment and installs dependencies."
 inputs:
   node_version:
-    description: "Node.js version to use, e.g. 20.x"
+    description: "Node.js version to use, e.g. 24.x"
     required: false
     default: "24.12.0"
   pnpm_version:

@@ -1,14 +1,14 @@
 {
   "name": "fastedge",
   "displayName": "FastEdge Launcher",
-  "version": "0.2.7-rc1",
+  "version": "0.2.8",
   "publisher": "g-corelabssa",
   "description": "Launcher for FastEdge apps",
   "icon": "images/fastedge.png",
   "repository": "https://github.com/G-Core/FastEdge-vscode",
   "engines": {
     "vscode": "^1.106.0",
-    "node": "20 - 24.x.x",
+    "node": "22 - 24.x.x",
     "npm": "^9 || ^10"
   },
   "categories": [
@@ -27,7 +27,7 @@
     "build": "npm run check-types && node esbuild/build-ext.js --prod",
     "package": "vsce package --no-dependencies",
     "lint": "eslint src --ext ts",
-    "test": "vitest run src/**/*.test.ts",
+    "test": "vitest run --dir src",
     "test:integration": "vitest run test/integration",
     "fixtures:install": "npm --prefix test/fixtures/js-app install && npm --prefix test/fixtures/as-app install"
   },
@@ -153,20 +153,20 @@
     ]
   },
   "devDependencies": {
-    "@types/node": "^25.0.10",
+    "@types/node": "^25.9.6",
     "@types/vscode": "^1.106.0",
-    "@typescript-eslint/eslint-plugin": "^8.58.1",
-    "@typescript-eslint/parser": "^8.58.1",
+    "@typescript-eslint/eslint-plugin": "^8.70.0",
+    "@typescript-eslint/parser": "^8.70.0",
     "@vscode/vsce": "^3.9.2",
-    "esbuild": "^0.28.1",
-    "eslint": "^9.39.4",
+    "esbuild": "^0.28.2",
+    "eslint": "^9.39.5",
     "typescript": "^5.9.3",
-    "vite": "^6.4.2",
-    "vitest": "^4.1.4"
+    "vite": "^6.4.3",
+    "vitest": "^4.1.11"
   },
   "dependencies": {
     "jsonc-parser": "^3.3.1",
-    "toml": "^3.0.0",
+    "toml": "^5.0.0",
     "tree-kill": "^1.2.2"
   }
 }
