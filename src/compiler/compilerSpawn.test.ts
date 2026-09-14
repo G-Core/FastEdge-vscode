@@ -45,9 +45,19 @@ function fakeChild(exitCode = 0) {
   return child;
 }
 
+/**
+ * A temp dir with symlinks resolved. macOS `os.tmpdir()` is `/var/...`, a
+ * symlink to `/private/var/...`; require.resolve (and so resolvePackageBin)
+ * returns the real path, so expectations built from the raw mkdtemp path
+ * would not match.
+ */
+function mkTmpRoot(): string {
+  return fs.realpathSync(fs.mkdtempSync(path.join(os.tmpdir(), "fastedge-spawn-")));
+}
+
 /** Minimal project with a locally installed build tool. */
 function mkProject(pkg: Record<string, unknown>): string {
-  const root = fs.mkdtempSync(path.join(os.tmpdir(), "fastedge-spawn-"));
+  const root = mkTmpRoot();
   fs.writeFileSync(path.join(root, "package.json"), JSON.stringify(pkg));
   return root;
 }
@@ -121,7 +131,7 @@ describe("compiler spawns are not shell-parsed", () => {
   });
 
   it("rust: a .cargo/config.toml target stays one literal argv element", async () => {
-    const root = fs.mkdtempSync(path.join(os.tmpdir(), "fastedge-spawn-"));
+    const root = mkTmpRoot();
     tmpRoots.push(root);
     fs.writeFileSync(path.join(root, "Cargo.toml"), "[package]\nname='x'\n");
     fs.mkdirSync(path.join(root, ".cargo"), { recursive: true });
