@@ -123,6 +123,10 @@ The F5 handler also accepts `"entrypoint": "workspace"` for backward compatibili
 
 Adds FastEdge MCP (Model Context Protocol) server configuration to workspace for Claude Code integration.
 
+> **Outdated below.** The command now writes `.vscode/mcp.json` with a Docker
+> invocation and offers browser sign-in or an API key. See
+> `MCP_INTEGRATION.md`, which is current.
+
 ### Generated Configuration
 
 **`.mcp.json`** (workspace root):

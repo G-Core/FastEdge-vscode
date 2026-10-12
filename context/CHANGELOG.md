@@ -13,6 +13,36 @@ See `SEARCH_GUIDE.md` for more search patterns.
 
 ---
 
+## [2026-10-12] - Generate mcp.json: sign in with your Gcore account
+
+### Overview
+"FastEdge (Generate mcp.json)" now defaults to browser sign-in instead of an API key, using the MCP server's session login (FastEdge-mcp-server 0.3.0). The API key flow is still offered and its output is unchanged.
+
+### 🎯 What Was Completed
+
+#### 1. Sign-in choice
+- Quick pick: "Sign in with your Gcore account" (recommended) or "Use an API key"
+- Sign-in config: `-v fastedge-session:/run/fastedge:ro`, `-e FASTEDGE_SESSION`, no `GCORE_API_KEY`, no `env` block unless `fastedge.apiUrl` overrides the origin
+- No security notices or `.gitignore` prompt for sign-in (nothing secret in the file)
+- The API key flow moved into `promptForApiKey()` unchanged
+
+#### 2. `fastedge.apiUrl` validation
+- Now a bare `https` origin only, matching the MCP server, which refuses a path, query or fragment at startup
+
+**Files Modified:**
+- `src/commands/mcpJson.ts` - choice, `getDockerCommand(includeBaseOverride, signIn)`, `promptForApiKey()`
+- `src/commands/mcpJson.test.ts` - API key argv pinned exactly; sign-in argv
+- `README.md`, `package.json`, `context/features/MCP_INTEGRATION.md`
+
+### 🧪 Testing
+`npx vitest run src/commands/mcpJson.test.ts`. End to end needs a 0.3.0 image: generate with sign-in, start the server, ask Copilot for a FastEdge API call, approve in the browser.
+
+### 📝 Notes
+- Release only after FastEdge-mcp-server 0.3.0 is published, then bump `mcp-server.version`. The 0.2.9 image has no session login, so a sign-in config would only report "key required".
+- Codespaces: the browser callback targets `127.0.0.1` on the container's host, so the README points remote users at the API key.
+
+---
+
 ## [2026-08-25] - Security: OS command injection (CWE-78) in the compilers
 
 ### Overview

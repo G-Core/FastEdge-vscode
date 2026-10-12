@@ -106,7 +106,7 @@ Available from the Command Palette (Ctrl+Shift+P):
 | **Debug: FastEdge App (Current File)** | Build the active file and start the debugger |
 | **Debug: FastEdge App (Package Entry)** | Build from `package.json` main field and start the debugger |
 | **FastEdge: Initialize workspace** | Create `.vscode/launch.json` with default configuration |
-| **FastEdge (Generate mcp.json)** | Add the [FastEdge MCP Server](https://github.com/G-Core/FastEdge-mcp-server) to your workspace |
+| **FastEdge (Generate mcp.json)** | Add the [FastEdge MCP Server](https://github.com/G-Core/FastEdge-mcp-server) to your workspace (see [AI agents (MCP)](#ai-agents-mcp)) |
 | **FastEdge (Setup Codespace Secrets)** | Configure GitHub Codespaces secrets for FastEdge |
 
 #### Explorer context menu
@@ -117,6 +117,15 @@ Right-click actions in the file explorer:
 |---------|-----------|-------------|
 | **FastEdge: Load in Debugger** | `.wasm` files | Load a pre-compiled WASM binary directly into the debugger |
 | **FastEdge: Load Config in Debugger** | `*test.json` files | Load a test configuration file into the debugger |
+
+## AI agents (MCP)
+
+**FastEdge (Generate mcp.json)** adds the FastEdge MCP server to `.vscode/mcp.json` (Docker required). It asks how the server reaches your Gcore account:
+
+- **Sign in with your Gcore account** (recommended): no key goes into `mcp.json`. On the first API call your agent offers to sign you in: you approve in your browser in the Gcore portal, and the MCP server gets a time-limited API token, held by its token broker (the agent never sees it) (8 hours by default, 7 days at most). The token is cached as plaintext in the `fastedge-session` Docker volume until it expires. Inside the container only the MCP server's token broker can read it, but anyone who can run Docker containers on this machine can read it too. To keep nothing usable on disk instead, choose **Only for this MCP server session** on the approval page: the token is then encrypted to the running MCP server and you approve again the next time it starts. The volume is shared with the FastEdge plugins for Claude Code, Codex and Cursor, so signing in once covers them all.
+- **Use an API key**: the existing flow. The key is written to `mcp.json` (or, in Codespaces, read from a Codespace secret), so keep the file out of version control.
+
+In Codespaces or other remote setups the browser sign-in may not reach the container; use an API key there.
 
 ## Runtime Configuration
 
@@ -151,7 +160,7 @@ For more information on how the extension locates and uses dotenv files, see [DO
 | Setting | Description |
 |---------|-------------|
 | `fastedge.cliVersion` | The version of the bundled debugger (read-only) |
-| `fastedge.apiUrl` | Default FastEdge API URL for MCP server configuration |
+| `fastedge.apiUrl` | Gcore API origin for the generated MCP config (advanced; leave at the default) |
 
 To view the bundled debugger version:
 1. Open Settings (Ctrl+, or Cmd+,)

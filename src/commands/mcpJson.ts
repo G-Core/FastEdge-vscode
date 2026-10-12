@@ -17,8 +17,15 @@ const DEFAULT_API_URL = "https://api.gcore.com";
  * (`$VAR` / `%VAR%`); a bare `-e NAME` makes docker forward the value from
  * its own environment instead, which the MCP client supplies via the "env"
  * block below.
+ *
+ * `signIn` mounts the shared `fastedge-session` volume read-only and passes no
+ * key: the server's token broker uses the browser sign-in instead. Without it,
+ * the output is the API key config, unchanged.
  */
-function getDockerCommand(includeBaseOverride: boolean): {
+function getDockerCommand(
+  includeBaseOverride: boolean,
+  signIn = false,
+): {
   command: string;
   args: string[];
 } {
@@ -29,10 +36,10 @@ function getDockerCommand(includeBaseOverride: boolean): {
     "--pull=always",
     "-v",
     "${workspaceFolder}:/workspace",
+    ...(signIn ? ["-v", "fastedge-session:/run/fastedge:ro"] : []),
     "-e",
     "WORKSPACE_ROOT=/workspace",
-    "-e",
-    "GCORE_API_KEY",
+    ...(signIn ? ["-e", "FASTEDGE_SESSION"] : ["-e", "GCORE_API_KEY"]),
   ];
   if (includeBaseOverride) {
     args.push("-e", "GCORE_API_BASE");
@@ -90,6 +97,122 @@ async function addToGitignore(workspaceFolder: vscode.WorkspaceFolder) {
       "Created .gitignore and added .vscode/mcp.json",
     );
   }
+}
+
+const SIGN_IN_CHOICE = "Sign in with your Gcore account";
+const API_KEY_CHOICE = "Use an API key";
+
+/** True for browser sign-in (the default), false for an API key, undefined when cancelled. */
+async function chooseSignIn(): Promise<boolean | undefined> {
+  const choice = await vscode.window.showQuickPick(
+    [
+      {
+        label: SIGN_IN_CHOICE,
+        description: "Recommended",
+        detail: "No key in mcp.json. Your agent walks you through approving access in the Gcore portal.",
+      },
+      {
+        label: API_KEY_CHOICE,
+        detail: "Paste an API token from the Gcore portal. It is written to mcp.json.",
+      },
+    ],
+    { placeHolder: "How should the FastEdge MCP server reach your Gcore account?" },
+  );
+  return choice ? choice.label === SIGN_IN_CHOICE : undefined;
+}
+
+/** The existing API key flow: Codespace secret or masked prompt. Undefined when cancelled. */
+async function promptForApiKey(
+  context?: vscode.ExtensionContext,
+): Promise<string | undefined> {
+  // Get API key from secure storage (VS Code's secret storage)
+  const envApiKeyPlaceholder = "${env:GCORE_API_KEY}";
+  let defaultApiKey = "";
+  if (context?.secrets) {
+    defaultApiKey = (await context.secrets.get("fastedge.apiKey")) || "";
+  }
+
+  // Check if running in Codespace and if secret is set
+  const inCodespace = isCodespace();
+  let usePlainMCPToken = true;
+  if (inCodespace) {
+    const useSecretSetup = await vscode.window.showInformationMessage(
+      "🌐 Codespace Detected\n\nFor better security in Codespaces, we recommend using environment variables instead of storing API keys in mcp.json.\n\nWould you like to set up GCORE_API_KEY as a Codespace secret?",
+      { modal: true },
+      "Set Up Secret",
+      "Continue with mcp.json",
+      "Cancel",
+    );
+
+    if (useSecretSetup === "Cancel") {
+      return;
+    } else if (useSecretSetup === "Set Up Secret") {
+      await setupCodespaceSecret(context);
+      usePlainMCPToken = false;
+      defaultApiKey = envApiKeyPlaceholder;
+    }
+  }
+
+  let apiKey: string | undefined = defaultApiKey;
+
+  if (usePlainMCPToken) {
+    const securityNotice =
+      "🔐 Security Notice\n\nThis will create an mcp.json file containing your API credentials.\n\nThe file will be created in .vscode/mcp.json and should not be committed to version control.";
+
+    // Security notice before proceeding - using modal dialog for prominence
+    const proceed = await vscode.window.showInformationMessage(
+      securityNotice,
+      { modal: true },
+      "Continue",
+      "Cancel",
+    );
+
+    if (proceed !== "Continue") {
+      return;
+    }
+
+    // Prompt user for FASTEDGE_API_KEY
+    apiKey = await vscode.window.showInputBox({
+      prompt: "Enter your FastEdge API Key",
+      placeHolder: defaultApiKey || "Your API key here...",
+      value: defaultApiKey, // Pre-fill with saved value
+      password: true, // Mask input — mirrors setupCodespaceSecret behavior
+      validateInput: (value) => {
+        if (!value || value.trim().length === 0) {
+          return "API Key is required";
+        }
+        return;
+      },
+    });
+
+    if (!apiKey) {
+      vscode.window.showErrorMessage(
+        "API Key is required to configure MCP server.",
+      );
+      return;
+    }
+  }
+
+  // API URL is no longer prompted (see apiBaseOverride above).
+
+  // Offer to remember the API key when it differs from the stored default.
+  const apiKeyChanged = apiKey !== defaultApiKey;
+
+  if (apiKeyChanged) {
+    const saveAsDefault = await vscode.window.showQuickPick(["Yes", "No"], {
+      placeHolder: "Save this API key as the default for future use?",
+      canPickMany: false,
+    });
+
+    if (saveAsDefault === "Yes" && context?.secrets) {
+      await context.secrets.store("fastedge.apiKey", apiKey);
+      vscode.window.showInformationMessage(
+        "Default API key updated successfully.",
+      );
+    }
+  }
+
+  return apiKey;
 }
 
 async function createMCPJson(context?: vscode.ExtensionContext) {
@@ -186,107 +309,44 @@ async function createMCPJson(context?: vscode.ExtensionContext) {
     let apiBaseOverride = "";
     if (configuredApiUrl && configuredApiUrl !== DEFAULT_API_URL) {
       try {
+        // The MCP server refuses anything but a bare https origin at startup.
         const parsedUrl = new URL(configuredApiUrl);
-        if (parsedUrl.protocol !== "http:" && parsedUrl.protocol !== "https:") {
+        if (parsedUrl.protocol !== "https:") {
           throw new Error(`Unsupported protocol: ${parsedUrl.protocol}`);
+        }
+        if (
+          parsedUrl.pathname !== "/" ||
+          configuredApiUrl.includes("?") ||
+          configuredApiUrl.includes("#")
+        ) {
+          throw new Error("only an origin is allowed, with no path, query or fragment");
         }
         apiBaseOverride = configuredApiUrl;
       } catch (error: any) {
         vscode.window.showErrorMessage(
-          `Invalid fastedge.apiUrl setting: "${configuredApiUrl}" is not a valid http(s) URL (${error?.message || error}). Update the setting or remove it to use the default.`,
+          `Invalid fastedge.apiUrl setting: "${configuredApiUrl}" is not a valid https origin (${error?.message || error}). Update the setting or remove it to use the default.`,
         );
         return;
       }
     }
 
-    // Get API key from secure storage (VS Code's secret storage)
-    const envApiKeyPlaceholder = "${env:GCORE_API_KEY}";
-    let defaultApiKey = "";
-    if (context?.secrets) {
-      defaultApiKey = (await context.secrets.get("fastedge.apiKey")) || "";
+    const signIn = await chooseSignIn();
+    if (signIn === undefined) {
+      return;
     }
-
-    // Check if running in Codespace and if secret is set
-    const inCodespace = isCodespace();
-    let usePlainMCPToken = true;
-    if (inCodespace) {
-      const useSecretSetup = await vscode.window.showInformationMessage(
-        "🌐 Codespace Detected\n\nFor better security in Codespaces, we recommend using environment variables instead of storing API keys in mcp.json.\n\nWould you like to set up GCORE_API_KEY as a Codespace secret?",
-        { modal: true },
-        "Set Up Secret",
-        "Continue with mcp.json",
-        "Cancel",
-      );
-
-      if (useSecretSetup === "Cancel") {
-        return;
-      } else if (useSecretSetup === "Set Up Secret") {
-        await setupCodespaceSecret(context);
-        usePlainMCPToken = false;
-        defaultApiKey = envApiKeyPlaceholder;
-      }
-    }
-
-    let apiKey: string | undefined = defaultApiKey;
-
-    if (usePlainMCPToken) {
-      const securityNotice =
-        "🔐 Security Notice\n\nThis will create an mcp.json file containing your API credentials.\n\nThe file will be created in .vscode/mcp.json and should not be committed to version control.";
-
-      // Security notice before proceeding - using modal dialog for prominence
-      const proceed = await vscode.window.showInformationMessage(
-        securityNotice,
-        { modal: true },
-        "Continue",
-        "Cancel",
-      );
-
-      if (proceed !== "Continue") {
-        return;
-      }
-
-      // Prompt user for FASTEDGE_API_KEY
-      apiKey = await vscode.window.showInputBox({
-        prompt: "Enter your FastEdge API Key",
-        placeHolder: defaultApiKey || "Your API key here...",
-        value: defaultApiKey, // Pre-fill with saved value
-        password: true, // Mask input — mirrors setupCodespaceSecret behavior
-        validateInput: (value) => {
-          if (!value || value.trim().length === 0) {
-            return "API Key is required";
-          }
-          return;
-        },
-      });
-
+    let apiKey: string | undefined;
+    if (!signIn) {
+      apiKey = await promptForApiKey(context);
       if (!apiKey) {
-        vscode.window.showErrorMessage(
-          "API Key is required to configure MCP server.",
-        );
         return;
       }
     }
 
-    // API URL is no longer prompted (see apiBaseOverride above).
-
-    // Offer to remember the API key when it differs from the stored default.
-    const apiKeyChanged = apiKey !== defaultApiKey;
-
-    if (apiKeyChanged) {
-      const saveAsDefault = await vscode.window.showQuickPick(["Yes", "No"], {
-        placeHolder: "Save this API key as the default for future use?",
-        canPickMany: false,
-      });
-
-      if (saveAsDefault === "Yes" && context?.secrets) {
-        await context.secrets.store("fastedge.apiKey", apiKey);
-        vscode.window.showInformationMessage(
-          "Default API key updated successfully.",
-        );
-      }
-    }
-
-    const dockerConfig = getDockerCommand(Boolean(apiBaseOverride));
+    const dockerConfig = getDockerCommand(Boolean(apiBaseOverride), signIn);
+    const env = {
+      ...(signIn ? {} : { GCORE_API_KEY: apiKey }),
+      ...(apiBaseOverride ? { GCORE_API_BASE: apiBaseOverride } : {}),
+    };
 
     const mcpJsonContent = {
       ...existingMCPJson,
@@ -296,10 +356,7 @@ async function createMCPJson(context?: vscode.ExtensionContext) {
           type: "stdio",
           command: dockerConfig.command,
           args: dockerConfig.args,
-          env: {
-            GCORE_API_KEY: apiKey,
-            ...(apiBaseOverride ? { GCORE_API_BASE: apiBaseOverride } : {}),
-          },
+          ...(Object.keys(env).length ? { env } : {}),
         },
       },
     };
@@ -391,6 +448,14 @@ async function createMCPJson(context?: vscode.ExtensionContext) {
     } catch (error: any) {
       vscode.window.showErrorMessage(
         `Failed to write mcp.json: ${error?.message || error}`,
+      );
+      return;
+    }
+
+    if (signIn) {
+      // Nothing secret in the file, so no security notices.
+      vscode.window.showInformationMessage(
+        "Generated mcp.json. Start fastedge-assistant and ask your agent to use FastEdge: on the first API call it walks you through signing in with your Gcore account in the browser.",
       );
       return;
     }

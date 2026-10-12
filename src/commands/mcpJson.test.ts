@@ -82,3 +82,33 @@ describe("getDockerCommand", () => {
     }
   });
 });
+
+describe("getDockerCommand: API key vs sign-in", () => {
+  const image = `ghcr.io/g-core/fastedge-mcp-server:${__MCP_SERVER_VERSION__}`;
+  const keyArgs = [
+    "run", "--rm", "-i", "--pull=always",
+    "-v", "${workspaceFolder}:/workspace",
+    "-e", "WORKSPACE_ROOT=/workspace",
+    "-e", "GCORE_API_KEY",
+  ];
+
+  it("keeps the API key config exactly as before", () => {
+    expect(getDockerCommand(false).args).toEqual([...keyArgs, image]);
+    expect(getDockerCommand(true).args).toEqual([...keyArgs, "-e", "GCORE_API_BASE", image]);
+    expect(getDockerCommand(true, false)).toEqual(getDockerCommand(true));
+  });
+
+  it("sign-in mounts the session volume read-only and passes no key", () => {
+    const { args } = getDockerCommand(false, true);
+    expect(args).toEqual([
+      "run", "--rm", "-i", "--pull=always",
+      "-v", "${workspaceFolder}:/workspace",
+      "-v", "fastedge-session:/run/fastedge:ro",
+      "-e", "WORKSPACE_ROOT=/workspace",
+      "-e", "FASTEDGE_SESSION",
+      image,
+    ]);
+    expect(args).not.toContain("GCORE_API_KEY");
+    expect(getDockerCommand(true, true).args.slice(-3)).toEqual(["-e", "GCORE_API_BASE", image]);
+  });
+});
