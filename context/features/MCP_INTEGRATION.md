@@ -11,10 +11,12 @@ use FastEdge tools from inside the workspace.
 Command: **FastEdge (Generate mcp.json)** → `src/commands/mcpJson.ts`
 
 1. Reads any existing `.vscode/mcp.json` and merges the new server entry in.
-   Validates `fastedge.apiUrl`: a bare `https` origin only (the server refuses
-   a path, query or fragment at startup).
+   Validates `fastedge.apiUrl` (`apiOriginFrom`): a bare `https` origin only, written
+   as the normalised origin (the server refuses credentials, a path, query or
+   fragment at startup).
 2. Asks **Sign in with your Gcore account** (default) or **Use an API key**.
-   Sign-in writes the config below with no key and skips steps 3–6; the
+   Sign-in writes the config below with no key, skipping the API-key steps 3–4,
+   the security notices and the `.gitignore` offer in step 6; the
    server's own `auth_required` / `fastedge-auth-status` guidance drives the
    browser login (`login` container, shared `fastedge-session` volume).
    The API key path continues:
