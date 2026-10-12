@@ -4,7 +4,7 @@ import { describe, it, expect, vi } from "vitest";
 // under test here.
 vi.mock("vscode", () => ({ workspace: {}, window: {}, Uri: {} }));
 
-import { getDockerCommand } from "./mcpJson";
+import { apiOriginFrom, getDockerCommand } from "./mcpJson";
 
 // ---------------------------------------------------------------------------
 // CI cannot run this end to end: GitHub's windows-latest and macos-latest
@@ -110,5 +110,25 @@ describe("getDockerCommand: API key vs sign-in", () => {
     ]);
     expect(args).not.toContain("GCORE_API_KEY");
     expect(getDockerCommand(true, true).args.slice(-3)).toEqual(["-e", "GCORE_API_BASE", image]);
+  });
+});
+
+describe("apiOriginFrom", () => {
+  it("emits the bare origin, trimmed and without a trailing slash", () => {
+    expect(apiOriginFrom("https://api.preprod.world")).toBe("https://api.preprod.world");
+    expect(apiOriginFrom("  https://api.preprod.world/ ")).toBe("https://api.preprod.world");
+  });
+
+  it.each([
+    ["http://api.preprod.world", /protocol/],
+    ["https://user:pass@api.preprod.world", /credentials/],
+    ["https://user@api.preprod.world", /credentials/],
+    ["https://api.preprod.world/v1", /only an origin/],
+    ["https://api.preprod.world/?x=1", /only an origin/],
+    ["https://api.preprod.world/#x", /only an origin/],
+    ["https://api.preprod.world?", /only an origin/],
+    ["not a url", /Invalid URL/],
+  ])("refuses %s", (setting, reason) => {
+    expect(() => apiOriginFrom(setting)).toThrow(reason);
   });
 });

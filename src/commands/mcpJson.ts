@@ -50,6 +50,24 @@ function getDockerCommand(
   return { command: "docker", args };
 }
 
+/**
+ * The `fastedge.apiUrl` setting as the bare https origin the MCP server accepts (it refuses
+ * anything else at startup). Throws with the reason when the setting can't be one.
+ */
+function apiOriginFrom(setting: string): string {
+  const url = new URL(setting.trim());
+  if (url.protocol !== "https:") {
+    throw new Error(`Unsupported protocol: ${url.protocol}`);
+  }
+  if (url.username || url.password) {
+    throw new Error("credentials aren't allowed in the URL");
+  }
+  if (url.pathname !== "/" || url.search || url.hash || setting.includes("?") || setting.includes("#")) {
+    throw new Error("only an origin is allowed, with no path, query or fragment");
+  }
+  return url.origin;
+}
+
 async function addToGitignore(workspaceFolder: vscode.WorkspaceFolder) {
   const gitignorePath = vscode.Uri.joinPath(workspaceFolder.uri, ".gitignore");
   const mcpJsonPattern = ".vscode/mcp.json";
@@ -309,19 +327,7 @@ async function createMCPJson(context?: vscode.ExtensionContext) {
     let apiBaseOverride = "";
     if (configuredApiUrl && configuredApiUrl !== DEFAULT_API_URL) {
       try {
-        // The MCP server refuses anything but a bare https origin at startup.
-        const parsedUrl = new URL(configuredApiUrl);
-        if (parsedUrl.protocol !== "https:") {
-          throw new Error(`Unsupported protocol: ${parsedUrl.protocol}`);
-        }
-        if (
-          parsedUrl.pathname !== "/" ||
-          configuredApiUrl.includes("?") ||
-          configuredApiUrl.includes("#")
-        ) {
-          throw new Error("only an origin is allowed, with no path, query or fragment");
-        }
-        apiBaseOverride = configuredApiUrl;
+        apiBaseOverride = apiOriginFrom(configuredApiUrl);
       } catch (error: any) {
         vscode.window.showErrorMessage(
           `Invalid fastedge.apiUrl setting: "${configuredApiUrl}" is not a valid https origin (${error?.message || error}). Update the setting or remove it to use the default.`,
@@ -485,4 +491,4 @@ async function createMCPJson(context?: vscode.ExtensionContext) {
   }
 }
 
-export { createMCPJson, getDockerCommand };
+export { apiOriginFrom, createMCPJson, getDockerCommand };
