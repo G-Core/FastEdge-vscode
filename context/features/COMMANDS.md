@@ -121,35 +121,18 @@ The F5 handler also accepts `"entrypoint": "workspace"` for backward compatibili
 
 ### Purpose
 
-Adds FastEdge MCP (Model Context Protocol) server configuration to workspace for Claude Code integration.
-
-### Generated Configuration
-
-**`.mcp.json`** (workspace root):
-```json
-{
-  "mcpServers": {
-    "fastedge-assistant": {
-      "command": "npx",
-      "args": ["-y", "@gcoredev/fastedge-mcp-server"],
-      "env": {
-        "FASTEDGE_API_TOKEN": "user-provided-token",
-        "FASTEDGE_API_URL": "https://api.gcore.com"
-      }
-    }
-  }
-}
-```
-
-If `.mcp.json` already exists, it reads the file, adds `fastedge-assistant`, and preserves other servers.
+Adds the `fastedge-assistant` MCP server to `.vscode/mcp.json` for AI agents in VS Code (Copilot and
+others), as a Docker invocation of the FastEdge MCP server image pinned in `mcp-server.version`.
 
 ### User Experience
 
-1. Run command from palette
-2. Prompt for API token (password input)
-3. If cancelled: exits
-4. `.mcp.json` written (or updated)
-5. Success message shown
+1. Run the command from the palette.
+2. Choose **Sign in with your Gcore account** (default) or **Use an API key**.
+3. Sign-in: the config has no key; the agent offers portal sign-in on the first API call.
+   API key: the existing key prompt (or Codespace secret), then the `.gitignore` offer.
+4. An existing `.vscode/mcp.json` is merged; other servers are kept.
+
+Details, the generated config for each choice and the security notes: `MCP_INTEGRATION.md`.
 
 ---
 

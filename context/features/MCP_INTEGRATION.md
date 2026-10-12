@@ -11,15 +11,24 @@ use FastEdge tools from inside the workspace.
 Command: **FastEdge (Generate mcp.json)** → `src/commands/mcpJson.ts`
 
 1. Reads any existing `.vscode/mcp.json` and merges the new server entry in.
-2. Detects Codespaces (`CODESPACE_NAME` env): offers `gh secret set` path
+   Validates `fastedge.apiUrl` (`apiOriginFrom`): a bare `https` origin only, written
+   as the normalised origin (the server refuses credentials, a path, query or
+   fragment at startup).
+2. Asks **Sign in with your Gcore account** (default) or **Use an API key**.
+   Sign-in writes the config below with no key, skipping the API-key steps 3–4,
+   the security notices and the `.gitignore` offer in step 6; the
+   server's own `auth_required` / `fastedge-auth-status` guidance drives the
+   browser login (`login` container, shared `fastedge-session` volume).
+   The API key path continues:
+3. Detects Codespaces (`CODESPACE_NAME` env): offers `gh secret set` path
    (stores key as a Codespace secret, emits `${env:GCORE_API_KEY}` in the
    file) or falls back to inline key with a security notice.
-3. Prompts for the API key (**masked input**, `password: true`).
-4. Writes the file; sets `chmod 0600` on local `file://` URIs (no-op on
+4. Prompts for the API key (**masked input**, `password: true`).
+5. Writes the file; sets `chmod 0600` on local `file://` URIs (no-op on
    Windows / remote providers).
-5. Offers to add `.vscode/mcp.json` to `.gitignore`.
+6. Offers to add `.vscode/mcp.json` to `.gitignore`.
 
-The generated entry looks like:
+The API key entry (unchanged from 0.2.x; a test pins it) looks like:
 
 ```json
 {
@@ -37,6 +46,24 @@ The generated entry looks like:
   }
 }
 ```
+
+The sign-in entry has no key and no `env` block (only `GCORE_API_BASE` when
+`fastedge.apiUrl` overrides it; otherwise the server uses the user's saved
+default environment, then prod):
+
+```json
+"args": ["run", "--rm", "-i", "--pull=always",
+         "-v", "${workspaceFolder}:/workspace",
+         "-v", "fastedge-session:/run/fastedge:ro",
+         "-e", "WORKSPACE_ROOT=/workspace",
+         "-e", "FASTEDGE_SESSION",
+         "ghcr.io/g-core/fastedge-mcp-server:<version>"]
+```
+
+The volume is `:ro` and shared with the FastEdge plugins; only the login
+commands the server prints mount it writable. `-e GCORE_API_KEY` is left out
+on purpose, so a stray shell key can't silently override the user's choice.
+Sign-in needs an MCP server image with session login (0.3.0 or later).
 
 ---
 
@@ -102,4 +129,4 @@ file uses `${env:GCORE_API_KEY}` instead of an inline key.
 
 ---
 
-**Last Updated**: 2026-09-01
+**Last Updated**: 2026-10-12
