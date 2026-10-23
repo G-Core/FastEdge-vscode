@@ -1,5 +1,6 @@
 import { spawn } from "child_process";
 import fs from "fs";
+import { createRequire } from "module";
 import path from "path";
 
 import { DebugContext, LogToDebugConsole } from "../types";
@@ -9,6 +10,22 @@ import { resolvePackageBin } from "../utils/resolveBin";
 const BINARY_NAME = "app.wasm";
 const SDK_PACKAGE = "@gcoredev/fastedge-sdk-js";
 const BUILD_BIN = "fastedge-build";
+const BUILD_CONFIG = path.join(".fastedge", "build-config.js");
+// First SDK whose `fastedge-build -c <config> -o <path>` writes to <path>
+const CONFIG_OUTPUT_SDK = [2, 7];
+
+/** Whether the project's SDK can build its config into the debug output path. */
+const sdkBuildsConfigToOutput = (buildRoot: string) => {
+  const require = createRequire(path.join(buildRoot, "package.json"));
+  const { version } = JSON.parse(
+    fs.readFileSync(require.resolve(`${SDK_PACKAGE}/package.json`), "utf8")
+  );
+  const [major, minor] = String(version).split(".").map(Number);
+  return (
+    major > CONFIG_OUTPUT_SDK[0] ||
+    (major === CONFIG_OUTPUT_SDK[0] && minor >= CONFIG_OUTPUT_SDK[1])
+  );
+};
 
 const makeDebugDirectory = (appRoot: string) =>
   new Promise<string>((resolve, reject) => {
@@ -85,20 +102,33 @@ export function compileJavascriptBinary(
       const configRoot = resolveConfigRoot(activeFilePath) ?? buildRoot;
       const binPath = await makeDebugDirectory(configRoot);
 
-      const jsEntryPoint =
-        debugContext === "file"
-          ? activeFilePath
-          : resolvePackageEntryPoint(
-              buildRoot,
-              await getPackageJsonEntryPoint(buildRoot)
-            );
-
       // Launched via process.execPath with an argv array — never a shell.
       // See utils/resolveBin.ts for why npx is not used.
       const buildBin = resolvePackageBin(buildRoot, SDK_PACKAGE, BUILD_BIN);
+      const outputPath = `${binPath}/${BINARY_NAME}`;
+      const configPath = path.join(buildRoot, BUILD_CONFIG);
+      const hasBuildConfig = fs.existsSync(configPath);
+
+      // A workspace build of a project with a build config builds from it, so config-only
+      // steps (static asset manifest, Wasm components, its entry point) run.
+      let buildArgs: string[];
+      if (debugContext !== "file" && hasBuildConfig && sdkBuildsConfigToOutput(buildRoot)) {
+        logDebugConsole(`Building from ${BUILD_CONFIG}\n`);
+        buildArgs = ["--config", configPath, "--output", outputPath];
+      } else {
+        const jsEntryPoint =
+          debugContext === "file"
+            ? activeFilePath
+            : resolvePackageEntryPoint(
+                buildRoot,
+                await getPackageJsonEntryPoint(buildRoot)
+              );
+        buildArgs = [jsEntryPoint, outputPath];
+      }
+
       const jsBuild = spawn(
         process.execPath,
-        [buildBin, jsEntryPoint, `${binPath}/${BINARY_NAME}`],
+        [buildBin, ...buildArgs],
         {
           stdio: ["ignore", "pipe", "pipe"],
           cwd: buildRoot,
@@ -124,14 +154,19 @@ export function compileJavascriptBinary(
 
       jsBuild.on("close", (code: number) => {
         if (code !== 0) {
-          reject(new Error(`build exited with code ${code}: ${stderr}`));
+          const hint =
+            debugContext === "file" && hasBuildConfig
+              ? `\nThis project has ${BUILD_CONFIG}. To build the project from it, run the ` +
+                'workspace build: press F5 with package.json open, or set "entrypoint": ' +
+                '"package" in launch.json.'
+              : "";
+          reject(new Error(`build exited with code ${code}: ${stderr}${hint}`));
           return;
         }
         // A zero exit code is not proof of a binary. fastedge-build reports
         // "Build success!!" and exits 0 while writing nothing when NODE_ENV is
         // set to "test". Without this check the debugger goes on to load a
         // stale binary, or none at all, and the real failure stays invisible.
-        const outputPath = `${binPath}/${BINARY_NAME}`;
         if (!fs.existsSync(outputPath)) {
           reject(
             new Error(
