@@ -83,7 +83,9 @@ The `entrypoint` field controls how the build finds your source code:
 | Value | Behavior |
 |-------|----------|
 | `"file"` (default) | Builds the currently active editor file |
-| `"package"` | Builds from the `"main"` field in `package.json` (JavaScript only) |
+| `"package"` | Builds the project. JavaScript projects with `.fastedge/build-config.js` and `@gcoredev/fastedge-sdk-js` 2.7.0 or later are built from that config; otherwise from the `"main"` field in `package.json` (JavaScript only) |
+
+Static sites and apps that import Wasm components need steps that only a build from `.fastedge/build-config.js` runs, so debug them with `"package"`, or press F5 with `package.json` open. `"file"` still builds just the active file, for example a small app inside a larger project.
 
 These are the only configuration values read from launch.json. Runtime arguments (env vars, headers, etc.) are configured separately — see [Runtime Configuration](#runtime-configuration) below.
 

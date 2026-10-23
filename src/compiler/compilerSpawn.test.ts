@@ -72,12 +72,12 @@ function mkProject(pkg: Record<string, unknown>): string {
   return root;
 }
 
-function installTool(root: string, name: string, binName: string): string {
+function installTool(root: string, name: string, binName: string, version = "1.0.0"): string {
   const pkgDir = path.join(root, "node_modules", ...name.split("/"));
   fs.mkdirSync(path.join(pkgDir, "bin"), { recursive: true });
   fs.writeFileSync(
     path.join(pkgDir, "package.json"),
-    JSON.stringify({ name, version: "1.0.0", bin: { [binName]: `./bin/${binName}.js` } }),
+    JSON.stringify({ name, version, bin: { [binName]: `./bin/${binName}.js` } }),
   );
   const binPath = path.join(pkgDir, "bin", `${binName}.js`);
   fs.writeFileSync(binPath, "");
@@ -196,5 +196,58 @@ describe("package.json main containment", () => {
       compileJavascriptBinary(path.join(root, "index.js"), "workspace", noop),
     ).rejects.toThrow(/Add "@gcoredev\/fastedge-sdk-js" as a development dependency/);
     expect(spawnMock).not.toHaveBeenCalled();
+  });
+});
+
+describe("javascript build config", () => {
+  /** Project with .fastedge/build-config.js and the SDK at `version`. */
+  function mkConfigProject(version: string, pkg: Record<string, unknown> = { name: "app" }) {
+    const root = mkProject(pkg);
+    tmpRoots.push(root);
+    fs.mkdirSync(path.join(root, ".fastedge"));
+    fs.writeFileSync(path.join(root, ".fastedge", "build-config.js"), "export const config = {};");
+    installTool(root, "@gcoredev/fastedge-sdk-js", "fastedge-build", version);
+    return root;
+  }
+
+  it("workspace build uses the config with SDK 2.7.0, without needing main", async () => {
+    const root = mkConfigProject("2.7.0");
+    spawnMock.mockImplementation((...call: unknown[]) =>
+      fakeSuccessfulBuild(call[1] as string[]),
+    );
+
+    await compileJavascriptBinary(path.join(root, "index.js"), "workspace", noop);
+
+    const [, args] = spawnMock.mock.calls[0];
+    expect(args.slice(1)).toEqual([
+      "--config",
+      path.join(root, ".fastedge", "build-config.js"),
+      "--output",
+      `${path.join(root, ".fastedge-debug")}/app.wasm`,
+    ]);
+  });
+
+  it("workspace build uses main with an SDK older than 2.7.0", async () => {
+    const root = mkConfigProject("2.6.0", { name: "app", main: "src/index.js" });
+    spawnMock.mockImplementation((...call: unknown[]) =>
+      fakeSuccessfulBuild(call[1] as string[]),
+    );
+
+    await compileJavascriptBinary(path.join(root, "index.js"), "workspace", noop);
+
+    const [, args] = spawnMock.mock.calls[0];
+    expect(args[1]).toBe(path.join(root, "src/index.js"));
+  });
+
+  it("file build keeps the active file and points to the workspace build on failure", async () => {
+    const root = mkConfigProject("2.7.0");
+    const active = path.join(root, "src", "index.ts");
+    spawnMock.mockImplementation(() => fakeChild(1));
+
+    await expect(compileJavascriptBinary(active, "file", noop)).rejects.toThrow(
+      /has \.fastedge[/\\]build-config\.js\. To build the project from it/,
+    );
+    const [, args] = spawnMock.mock.calls[0];
+    expect(args[1]).toBe(active);
   });
 });
