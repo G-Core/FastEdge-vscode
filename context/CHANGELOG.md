@@ -13,6 +13,30 @@ See `SEARCH_GUIDE.md` for more search patterns.
 
 ---
 
+## [2026-10-23] - JS workspace build uses .fastedge/build-config.js
+
+### Overview
+A JavaScript workspace build (`"entrypoint": "package"`, or F5 with package.json open) of a project with `.fastedge/build-config.js` now runs `fastedge-build --config <config> --output .fastedge-debug/app.wasm` when the project's `@gcoredev/fastedge-sdk-js` is 2.7.0 or later. Static sites and apps that import Wasm components need the config-only build steps, which the `<entry> <output>` build skipped.
+
+### 🎯 What Was Completed
+
+#### 1. Config build (workspace mode only)
+- File mode is unchanged: it still builds the active file. When that build fails in a project with a build config, the error ends with a hint to use the workspace build.
+- SDK older than 2.7.0, or no config: the workspace build uses package.json `main` as before.
+
+**Files Modified:**
+- src/compiler/jsBuild.ts - config detection, SDK version check, hint
+- src/compiler/compilerSpawn.test.ts - three cases; `installTool` takes a version
+- package.json, README.md - `entrypoint` description
+
+### 🧪 Testing
+`pnpm test`. Real build: the SDK's examples/component-imports, installed from npm, built in workspace mode.
+
+### 📝 Notes
+Decision: option B. The config wins only in workspace mode, so F5 on a file keeps building that file (for example a small app inside a larger project).
+
+---
+
 ## [2026-10-12] - Generate mcp.json: sign in with your Gcore account
 
 ### Overview

@@ -121,7 +121,7 @@
             "properties": {
               "entrypoint": {
                 "type": "string",
-                "description": "Entrypoint for building the app. \"file\" builds the active editor file; \"package\" builds the package.json main field (JS only).",
+                "description": "Entrypoint for building the app. \"file\" builds the active editor file; \"package\" builds the project: from .fastedge/build-config.js when it exists (JS, @gcoredev/fastedge-sdk-js 2.7.0 or later), otherwise the package.json main field (JS only).",
                 "enum": [
                   "file",
                   "package"
