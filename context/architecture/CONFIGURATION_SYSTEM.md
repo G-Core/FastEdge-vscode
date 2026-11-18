@@ -21,7 +21,7 @@ The extension itself reads only one launch config field: **`"entrypoint"`** (`"f
 
 **Role**: Primary config file for a FastEdge app. Serves as the **runtime config store** — env vars, secrets, headers, port, memory limits.
 
-**Note**: The per-app isolation marker is the `.fastedge-debug/` directory, not this file. `resolveConfigRoot()` walks up from the active file to find `.fastedge-debug/`; the directory containing it becomes the `configRoot`.
+**Note**: The per-app isolation marker is the `.fastedge-debug/` directory, not this file. See App Root Resolution below for how the debugger root (`configRoot`) is found.
 
 **Location**: Any directory in the project, typically inside `.fastedge-debug/`. The config file is **not** auto-created; only the `.fastedge-debug/` directory is created automatically on first debug. Users create the config via the debugger UI's save dialog.
 
@@ -33,12 +33,14 @@ The extension itself reads only one launch config field: **`"entrypoint"`** (`"f
 
 ## App Root Resolution
 
-Two separate utilities in `src/utils/resolveAppRoot.ts`:
+Two roots, from `src/utils/resolveAppRoot.ts`:
 
-| Function | Walks up for | Used by |
-|----------|-------------|---------|
-| `resolveConfigRoot(startPath)` | `.fastedge-debug/` directory | Port anchor, panel isolation, WASM output dir |
-| `resolveBuildRoot(startPath)` | `package.json` or `Cargo.toml` | Build CWD, entrypoint resolution |
+| Root | Found by | Used by |
+|------|----------|---------|
+| Debugger root (`configRoot`) | `debuggerRootFor(file)` (`src/utils/debuggerRoot.ts`) → `resolveDebuggerRoot(file, workspaceFolder)`: the nearest `.fastedge-debug/` folder, else the nearest `package.json` / `Cargo.toml` folder, searching **no higher than the VS Code workspace folder** holding the file, else that workspace folder | The server's `WORKSPACE_PATH` (every path it reads is confined to it), port anchor, panel isolation, WASM output dir |
+| Build root | `resolveBuildRoot(file)`: the nearest `package.json` / `Cargo.toml`, with no limit | Build CWD, entrypoint resolution |
+
+The debugger never reaches above the folder the user opened: opening `app/proto/` with no marker inside it gives `app/proto/` as the root, even when `app/` has `.fastedge-debug/`. A file outside every workspace folder (picked through a file dialog) is searched without a limit. The build root has no limit because a build may need a manifest above the opened folder.
 
 These are deliberately separate — in a monorepo the `package.json` may be several levels above the app's own `fastedge-config.test.json`.
 

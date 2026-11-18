@@ -235,6 +235,27 @@ export class DebuggerWebviewProvider {
   }
 
   /**
+   * Load a resource file (multi-app) into the debugger, as an agent would. The page switches to
+   * Multi-app and opens the file when the server broadcasts the load, so wait for it first.
+   */
+  async loadResource(configPath: string): Promise<void> {
+    await this.waitForWebSocketClient();
+    const response = await fetch(`${this.serverManager.getUrl()}/api/resource/load`, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        "x-fastedge-token": this.serverManager.getToken(),
+        "X-Source": "vscode",
+      },
+      body: JSON.stringify({ configPath }),
+    });
+    if (!response.ok) {
+      const { error } = await response.json().catch(() => ({ error: response.statusText }));
+      throw new Error(typeof error === "string" ? error : JSON.stringify(error));
+    }
+  }
+
+  /**
    * Set configuration (environment variables, secrets, properties)
    */
   async setConfig(config: {

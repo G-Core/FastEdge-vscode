@@ -2,7 +2,7 @@ import { describe, it, expect, beforeEach, afterEach } from "vitest";
 import * as fs from "fs";
 import * as os from "os";
 import * as path from "path";
-import { resolveConfigRoot, resolveBuildRoot, ensureDebugDir } from "./resolveAppRoot";
+import { resolveConfigRoot, resolveBuildRoot, resolveDebuggerRoot, ensureDebugDir } from "./resolveAppRoot";
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -291,5 +291,59 @@ describe("config root vs build root split (workspace-1)", () => {
     expect(resolveConfigRoot(path.join(secondApp, "index.js"))).toBe(secondApp);
     expect(resolveBuildRoot(path.join(firstApp, "index.js"))).toBe(tmp);
     expect(resolveBuildRoot(path.join(secondApp, "index.js"))).toBe(tmp);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// resolveDebuggerRoot: the search stops at the workspace folder
+//
+//   tmp/                      ← package.json, .fastedge-debug/ (outside the opened folder)
+//   └── opened/               ← the VS Code workspace folder (the boundary)
+//       └── wasm/app.wasm
+// ---------------------------------------------------------------------------
+
+describe("resolveDebuggerRoot", () => {
+  it("never goes above the workspace folder: no match inside it gives the folder itself", () => {
+    touch(path.join(tmp, "package.json"));
+    mkDebugDir(tmp);
+    const opened = path.join(tmp, "opened");
+    const wasm = path.join(opened, "wasm", "app.wasm");
+    touch(wasm);
+
+    expect(resolveDebuggerRoot(wasm, opened)).toBe(opened);
+  });
+
+  it("finds .fastedge-debug/ inside the workspace folder first", () => {
+    const opened = path.join(tmp, "opened");
+    const app = path.join(opened, "app");
+    mkDebugDir(app);
+    touch(path.join(opened, "package.json"));
+    touch(path.join(app, "src", "index.js"));
+
+    expect(resolveDebuggerRoot(path.join(app, "src", "index.js"), opened)).toBe(app);
+  });
+
+  it("finds a package.json / Cargo.toml inside the workspace folder next", () => {
+    const opened = path.join(tmp, "opened");
+    const crate = path.join(opened, "crate");
+    touch(path.join(crate, "Cargo.toml"));
+    touch(path.join(crate, "src", "lib.rs"));
+
+    expect(resolveDebuggerRoot(path.join(crate, "src", "lib.rs"), opened)).toBe(crate);
+  });
+
+  it("checks the workspace folder itself", () => {
+    const opened = path.join(tmp, "opened");
+    mkDebugDir(opened);
+    touch(path.join(opened, "a", "b", "app.wasm"));
+
+    expect(resolveDebuggerRoot(path.join(opened, "a", "b", "app.wasm"), opened)).toBe(opened);
+  });
+
+  it("without a workspace folder, walks up without a limit", () => {
+    touch(path.join(tmp, "package.json"));
+    touch(path.join(tmp, "x", "app.wasm"));
+
+    expect(resolveDebuggerRoot(path.join(tmp, "x", "app.wasm"))).toBe(tmp);
   });
 });

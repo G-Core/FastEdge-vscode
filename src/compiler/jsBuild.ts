@@ -4,7 +4,8 @@ import { createRequire } from "module";
 import path from "path";
 
 import { DebugContext, LogToDebugConsole } from "../types";
-import { resolveConfigRoot, resolveBuildRoot } from "../utils/resolveAppRoot";
+import { resolveBuildRoot } from "../utils/resolveAppRoot";
+import { debuggerRootFor } from "../utils/debuggerRoot";
 import { resolvePackageBin } from "../utils/resolveBin";
 
 const BINARY_NAME = "app.wasm";
@@ -99,7 +100,7 @@ export function compileJavascriptBinary(
       // WASM output goes to configRoot (= WORKSPACE_PATH) so the debugger server
       // can serve it. Falls back to buildRoot when no .fastedge-debug/ dir
       // exists (caller should have created it, but guard defensively).
-      const configRoot = resolveConfigRoot(activeFilePath) ?? buildRoot;
+      const configRoot = debuggerRootFor(activeFilePath) ?? buildRoot;
       const binPath = await makeDebugDirectory(configRoot);
 
       // Launched via process.execPath with an argv array — never a shell.

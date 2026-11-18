@@ -3,7 +3,8 @@ import * as fs from "fs";
 import * as path from "path";
 import { LogToDebugConsole } from "../types";
 import { rustConfigWasiTarget } from "./rustConfig";
-import { resolveConfigRoot, resolveBuildRoot } from "../utils/resolveAppRoot";
+import { resolveBuildRoot } from "../utils/resolveAppRoot";
+import { debuggerRootFor } from "../utils/debuggerRoot";
 
 export function compileRustAndFindBinary(
   activeFilePath: string,
@@ -25,7 +26,7 @@ export function compileRustAndFindBinary(
     // server can serve it via /api/workspace-wasm. Falls back to build root
     // when no .fastedge-debug/ dir exists (should have been created by the
     // caller, but guard defensively).
-    const configRoot = resolveConfigRoot(activeFilePath) ?? buildRoot;
+    const configRoot = debuggerRootFor(activeFilePath) ?? buildRoot;
 
     const target = rustConfigWasiTarget(logDebugConsole, activeFilePath);
     logDebugConsole("wasm build target: " + target + "\n", "stderr");

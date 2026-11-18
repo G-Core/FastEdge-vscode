@@ -3,7 +3,8 @@ import * as path from "path";
 import { readFile } from "fs/promises";
 import { DebuggerServerManager, DebuggerWebviewProvider } from "../debugger";
 import { compileActiveEditorsBinary } from "../compiler";
-import { resolveConfigRoot, resolveBuildRoot } from "../utils/resolveAppRoot";
+import { resolveBuildRoot } from "../utils/resolveAppRoot";
+import { debuggerRootFor } from "../utils/debuggerRoot";
 import { DebugContext } from "../types";
 
 type AppDebuggerFactory = (appRoot: string) => {
@@ -78,10 +79,9 @@ async function buildAndDebug(debugContext: DebugContext): Promise<void> {
     return;
   }
 
-  // Resolve per-app identity anchor. Prefer an existing .fastedge-debug/ dir,
-  // otherwise anchor to the build root (next to package.json / Cargo.toml).
-  // The server's writePortFile() creates .fastedge-debug/ on startup.
-  const portAnchor = resolveConfigRoot(activeFilePath) ?? buildRoot;
+  // Resolve per-app identity anchor: the debugger root (resolveDebuggerRoot), within
+  // the workspace folder. The server's writePortFile() creates .fastedge-debug/ on startup.
+  const portAnchor = debuggerRootFor(activeFilePath) ?? buildRoot;
 
   const { manager, provider } = debuggerFactory(portAnchor);
 
@@ -171,7 +171,7 @@ async function loadWasmInDebugger(uri?: vscode.Uri): Promise<void> {
 
   const wasmPath = uri.fsPath;
   const wasmDir = path.dirname(wasmPath);
-  const appRoot = resolveConfigRoot(wasmPath) ?? resolveBuildRoot(wasmPath) ?? wasmDir;
+  const appRoot = debuggerRootFor(wasmPath) ?? wasmDir;
 
   const { provider } = debuggerFactory(appRoot);
 
@@ -208,7 +208,7 @@ async function loadConfigInDebugger(uri?: vscode.Uri): Promise<void> {
 
   const configPath = uri.fsPath;
   const configDir = path.dirname(configPath);
-  const appRoot = resolveConfigRoot(configPath) ?? resolveBuildRoot(configPath) ?? configDir;
+  const appRoot = debuggerRootFor(configPath) ?? configDir;
 
   const { provider } = debuggerFactory(appRoot);
 
@@ -216,11 +216,26 @@ async function loadConfigInDebugger(uri?: vscode.Uri): Promise<void> {
     // Start server and open panel (no WASM yet)
     await provider.showDebugger();
 
-    // Read config and send to the React app via the existing filePickerResult path
     const content = await readFile(configPath, "utf-8");
-    await provider.sendConfig(content, path.basename(configPath), configDir);
+    if (isResourceConfig(content)) {
+      // A resource (multi-app) file: load it on the server; the page switches to Multi-app.
+      await provider.loadResource(configPath);
+    } else {
+      // A single-app config: the React app's filePickerResult path applies it.
+      await provider.sendConfig(content, path.basename(configPath), configDir);
+    }
   } catch (error) {
     vscode.window.showErrorMessage(`Failed to load config: ${(error as Error).message}`);
+  }
+}
+
+/** A resource file names its apps (`apps`); a single-app config never has that field. */
+function isResourceConfig(content: string): boolean {
+  try {
+    const parsed = JSON.parse(content);
+    return typeof parsed?.apps === "object" && parsed.apps !== null;
+  } catch {
+    return false; // invalid JSON: the single-app path reports it
   }
 }
 
