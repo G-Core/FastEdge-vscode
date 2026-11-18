@@ -272,6 +272,10 @@ describe("DebuggerServerManager — allowed folders", () => {
     await manager.start();
     expect(forkMock).toHaveBeenCalledTimes(2);
     expect(JSON.parse(forkMock.mock.calls[1][2].env.FASTEDGE_ALLOWED_FOLDERS)).toEqual(["/lib/wasm", "/other"]);
+
+    // The first server exits late (after a forced stop): the new one stays managed.
+    servers[servers.length - 2].handlers.exit(null, "SIGKILL");
+    expect(manager.isRunning()).toBe(true);
   });
 });
 

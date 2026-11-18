@@ -253,6 +253,8 @@ export class DebuggerServerManager {
 
       this.serverProcess.on("exit", (code: number | null, signal: string | null) => {
         console.log(`Debugger server exited with code ${code}, signal ${signal}`);
+        // A server replaced after a slow (force-killed) stop exits late: leave its successor alone.
+        if (this.serverProcess && this.serverProcess !== server) {return;}
         this.serverProcess = null;
         this.deletePortFile();
       });
