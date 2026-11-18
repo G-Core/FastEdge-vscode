@@ -64,6 +64,9 @@ jobs:
           test -f dist/debugger/server.js || { echo "❌ Missing server.js"; exit 1; }
           test -d dist/debugger/frontend || { echo "❌ Missing frontend"; exit 1; }
           test -d dist/debugger/fastedge-cli || { echo "❌ Missing fastedge-cli"; exit 1; }
+          # The extension passes the app's folder as FASTEDGE_APP_ROOT; an older debugger ignores it,
+          # writes its port file elsewhere and the debugger never starts for nested apps.
+          grep -q FASTEDGE_APP_ROOT dist/debugger/server.js || { echo "❌ Debugger too old: no FASTEDGE_APP_ROOT support. Release fastedge-test first, or set debugger_version."; exit 1; }
 
           echo "Checking CLI binary..."
           ls -lh dist/debugger/fastedge-cli/
