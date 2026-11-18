@@ -340,6 +340,17 @@ describe("resolveDebuggerRoot", () => {
     expect(resolveDebuggerRoot(path.join(opened, "a", "b", "app.wasm"), opened)).toBe(opened);
   });
 
+  it("stops at the workspace folder even when its path is not written like the file's (trailing separator)", () => {
+    touch(path.join(tmp, "package.json"));
+    mkDebugDir(tmp);
+    const opened = path.join(tmp, "opened");
+    const wasm = path.join(opened, "wasm", "app.wasm");
+    touch(wasm);
+
+    const root = resolveDebuggerRoot(wasm, opened + path.sep);
+    expect(root && path.relative(opened, root)).toBe("");
+  });
+
   it("without a workspace folder, walks up without a limit", () => {
     touch(path.join(tmp, "package.json"));
     touch(path.join(tmp, "x", "app.wasm"));

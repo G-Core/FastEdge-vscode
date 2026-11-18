@@ -12,6 +12,16 @@ function startDir(startPath: string): string {
 }
 
 /**
+ * True when the walk has reached `stopAt` (or is beside or above it): it ends there. Compared with
+ * `path.relative`, so a trailing separator or (on Windows) different letter case still matches.
+ */
+function atOrPast(dir: string, stopAt?: string): boolean {
+  if (!stopAt) {return false;}
+  const rel = path.relative(stopAt, dir);
+  return rel === "" || rel === ".." || rel.startsWith(`..${path.sep}`) || path.isAbsolute(rel);
+}
+
+/**
  * Walk up from a file (or directory) path to find the per-app debug root.
  *
  * Returns the first directory containing a `.fastedge-debug/` folder, or null
@@ -30,7 +40,7 @@ export function resolveConfigRoot(startPath: string, stopAt?: string): string | 
       // .fastedge-debug doesn't exist in this directory — continue walking up
     }
     const parent = path.dirname(dir);
-    if (parent === dir || dir === stopAt) {return null;}
+    if (parent === dir || atOrPast(dir, stopAt)) {return null;}
     dir = parent;
   }
 }
@@ -53,7 +63,7 @@ export function resolveBuildRoot(startPath: string, stopAt?: string): string | n
       return dir;
     }
     const parent = path.dirname(dir);
-    if (parent === dir || dir === stopAt) {
+    if (parent === dir || atOrPast(dir, stopAt)) {
       return null;
     }
     dir = parent;
