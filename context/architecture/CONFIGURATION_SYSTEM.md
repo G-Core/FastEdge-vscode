@@ -37,8 +37,10 @@ Two roots, from `src/utils/resolveAppRoot.ts`:
 
 | Root | Found by | Used by |
 |------|----------|---------|
-| Debugger root (`configRoot`) | `debuggerRootFor(file)` (`src/utils/debuggerRoot.ts`) → `resolveDebuggerRoot(file, workspaceFolder)`: the nearest `.fastedge-debug/` folder, else the nearest `package.json` / `Cargo.toml` folder, searching **no higher than the VS Code workspace folder** holding the file, else that workspace folder | The server's `WORKSPACE_PATH` (every path it reads is confined to it), port anchor, panel isolation, WASM output dir |
+| Debugger root (`configRoot`) | `debuggerRootFor(file)` (`src/utils/debuggerRoot.ts`) → `resolveDebuggerRoot(file, workspaceFolder)`: the nearest `.fastedge-debug/` folder, else the nearest `package.json` / `Cargo.toml` folder, searching **no higher than the VS Code workspace folder** holding the file, else that workspace folder | The server's app root (`FASTEDGE_APP_ROOT`), port anchor, panel isolation, WASM output dir |
 | Build root | `resolveBuildRoot(file)`: the nearest `package.json` / `Cargo.toml`, with no limit | Build CWD, entrypoint resolution |
+
+The server gets both: `WORKSPACE_PATH` = the VS Code workspace folder holding the debugger root (the limit on every path it reads, and where resource files live, so a resource can use apps from sibling folders), and `FASTEDGE_APP_ROOT` = the debugger root (`DebuggerServerManager`, set from `extension.ts`). A debugger root outside every workspace folder is both.
 
 The debugger never reaches above the folder the user opened: opening `app/proto/` with no marker inside it gives `app/proto/` as the root, even when `app/` has `.fastedge-debug/`. A file outside every workspace folder (picked through a file dialog) is searched without a limit. The build root has no limit because a build may need a manifest above the opened folder.
 

@@ -33,7 +33,9 @@ function getOrCreateForAppRoot(appRoot: string): {
   }
 
   if (!serverManagers.has(appRoot)) {
-    const manager = new DebuggerServerManager(extensionContext.extensionPath, appRoot);
+    // The workspace root: the VS Code folder holding the app (else the app root itself).
+    const workspaceRoot = vscode.workspace.getWorkspaceFolder(vscode.Uri.file(appRoot))?.uri.fsPath ?? appRoot;
+    const manager = new DebuggerServerManager(extensionContext.extensionPath, appRoot, workspaceRoot);
     const provider = new DebuggerWebviewProvider(extensionContext, manager);
     serverManagers.set(appRoot, manager);
     webviewProviders.set(appRoot, provider);

@@ -23,7 +23,10 @@ export class DebuggerServerManager {
 
   constructor(
     private extensionPath: string,
-    private appRoot: string
+    /** The app's folder: home of .fastedge-debug/ (port file, app.wasm, config). */
+    private appRoot: string,
+    /** The VS Code workspace folder holding it: the limit on what the server reads. */
+    private workspaceRoot: string = appRoot,
   ) {}
 
   getToken(): string {
@@ -147,7 +150,8 @@ export class DebuggerServerManager {
       console.log(`Starting debugger server for ${this.appRoot}...`);
 
       // No PORT env var — let fastedge-test's startServer() resolve it via auto-increment.
-      // WORKSPACE_PATH tells it where to write .fastedge-debug/.debug-port.
+      // WORKSPACE_PATH is the limit on what it reads (resources may use sibling apps);
+      // FASTEDGE_APP_ROOT is where it writes .fastedge-debug/.debug-port.
       // In GitHub Codespaces the browser connects through a port-forwarded URL
       // of the form <name>-<port>.<domain>. The server needs FASTEDGE_EXPECTED_HOST
       // set to the forwarding domain so its suffix-match check allows the request
@@ -160,7 +164,8 @@ export class DebuggerServerManager {
         env: {
           ...process.env,
           VSCODE_INTEGRATION: "true",
-          WORKSPACE_PATH: this.appRoot,
+          WORKSPACE_PATH: this.workspaceRoot,
+          FASTEDGE_APP_ROOT: this.appRoot,
           FASTEDGE_DEBUG_TOKEN: this.token,
           FASTEDGE_BIND_HOST: "127.0.0.1",
           ...(codespacesDomain ? { FASTEDGE_EXPECTED_HOST: codespacesDomain } : {}),

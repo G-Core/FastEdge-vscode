@@ -169,7 +169,7 @@ const port = await this.waitForPortFile();
 - Before: Single `resolveAppRoot()` used for both build CWD and per-app identity — `fastedge-config.test.json` could override the build root incorrectly
 - After: `resolveConfigRoot()` finds the per-app anchor; `resolveBuildRoot()` finds where build commands run
 - Example — workspace-1: `first-app/fastedge-config.test.json` → configRoot = `first-app/`; `package.json` at workspace root → buildRoot = `workspace-1/`
-- WASM output (`<configRoot>/.fastedge-debug/app.wasm`) is written to configRoot's `.fastedge-debug/` so the server can find it via `WORKSPACE_PATH`
+- WASM output (`<configRoot>/.fastedge-debug/app.wasm`) is written to configRoot's `.fastedge-debug/` so the server can find it via `FASTEDGE_APP_ROOT` (the app root)
 
 **6. Wait for WebSocket client before loading WASM (March 2026)**
 - Before: extension called `POST /api/load` immediately after creating the webview panel → `wasm_loaded` event fired before UI WebSocket connected → UI missed it, stayed blank

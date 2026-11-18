@@ -151,6 +151,28 @@ describe("DebuggerServerManager — fork env in Codespaces", () => {
     expect(forkEnv.FASTEDGE_EXPECTED_HOST).toBe("app.github.dev");
   });
 
+  it("passes the workspace root and the app root", async () => {
+    const manager = new DebuggerServerManager("/ext", "/ws/apps/convert", "/ws");
+    setupForSpawn(manager);
+
+    await manager.start();
+
+    const forkEnv = forkMock.mock.calls[0][2].env as Record<string, string>;
+    expect(forkEnv.WORKSPACE_PATH).toBe("/ws");
+    expect(forkEnv.FASTEDGE_APP_ROOT).toBe("/ws/apps/convert");
+  });
+
+  it("without a workspace root, both roots are the app root", async () => {
+    const manager = new DebuggerServerManager("/ext", "/workspace");
+    setupForSpawn(manager);
+
+    await manager.start();
+
+    const forkEnv = forkMock.mock.calls[0][2].env as Record<string, string>;
+    expect(forkEnv.WORKSPACE_PATH).toBe("/workspace");
+    expect(forkEnv.FASTEDGE_APP_ROOT).toBe("/workspace");
+  });
+
   it("omits FASTEDGE_EXPECTED_HOST when GITHUB_CODESPACES_PORT_FORWARDING_DOMAIN is not set", async () => {
     delete process.env.GITHUB_CODESPACES_PORT_FORWARDING_DOMAIN;
     const manager = new DebuggerServerManager("/ext", "/workspace");
