@@ -65,7 +65,7 @@
             "type": "string"
           },
           "default": [],
-          "markdownDescription": "Folders outside the workspace the FastEdge debugger may read (never write), e.g. a folder of prebuilt `.wasm` apps. Absolute paths (`~/` allowed). The first time a load reads from one, you are asked to allow it for that debugger session. User settings only: a workspace cannot add folders. Takes effect when the debugger next starts.",
+          "markdownDescription": "Folders outside the workspace the FastEdge debugger may read (never write), e.g. a folder of prebuilt `.wasm` apps. Absolute paths (`~/` allowed). The first time a load reads from one, you are asked to allow it for that debugger session.\n\n**Keep this list narrow.** Once you allow a folder, every config the debugger loads in that session can read it, including one from a repository you just cloned, and a loaded app can send what it reads over the network. Never list your home folder, or a folder holding keys, credentials or `.env` secrets.\n\nUser settings only: a workspace cannot add folders. Takes effect when the debugger next starts.",
           "scope": "application"
         }
       }
