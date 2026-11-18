@@ -1,7 +1,10 @@
-import { describe, it, expect, beforeAll, afterAll } from "vitest";
+import { describe, it, expect, beforeAll, afterAll, vi } from "vitest";
 import { execFileSync } from "child_process";
 import * as fs from "fs";
 import * as path from "path";
+
+// The compilers find the app root through VS Code's workspace folders; outside VS Code there are none.
+vi.mock("vscode", () => ({ workspace: { getWorkspaceFolder: () => undefined }, Uri: { file: (p: string) => ({ fsPath: p }) } }));
 
 import { compileJavascriptBinary } from "../../src/compiler/jsBuild";
 import { compileAssemblyScriptBinary } from "../../src/compiler/asBuild";
