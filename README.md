@@ -163,6 +163,7 @@ For more information on how the extension locates and uses dotenv files, see [DO
 |---------|-------------|
 | `fastedge.cliVersion` | The version of the bundled debugger (read-only) |
 | `fastedge.apiUrl` | Gcore API origin for the generated MCP config (advanced; leave at the default) |
+| `fastedge.debugger.allowedFolders` | Folders outside the workspace the debugger may read (never write), such as a folder of prebuilt `.wasm` apps. User settings only. The first time the debugger reads one, VS Code asks whether to allow it for that debugger session; the debugger page lists them, with an **Ask to read it** button to approve one up front. |
 
 To view the bundled debugger version:
 1. Open Settings (Ctrl+, or Cmd+,)

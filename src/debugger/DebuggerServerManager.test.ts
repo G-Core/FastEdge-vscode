@@ -1,9 +1,15 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import { createHash } from "crypto";
 
+const settings = vi.hoisted(() => ({ inspect: { globalValue: undefined, workspaceValue: undefined } as Record<string, unknown> }));
+const showWarningMessage = vi.hoisted(() => vi.fn());
+const workspace = vi.hoisted(() => ({
+  isTrusted: true,
+  getConfiguration: () => ({ inspect: () => settings.inspect }),
+}));
 vi.mock("vscode", () => ({
-  workspace: { isTrusted: true },
-  window: { showErrorMessage: vi.fn() },
+  workspace,
+  window: { showErrorMessage: vi.fn(), showWarningMessage },
 }));
 
 const readFileSyncMock = vi.fn(() => "5179");
@@ -15,16 +21,23 @@ vi.mock("fs", () => ({
 
 // Capture the fork env without actually spawning a process.
 const forkMock = vi.fn();
+const servers: any[] = [];
+const lastServer = () => servers[servers.length - 1];
 vi.mock("child_process", () => ({
   fork: (...args: any[]) => {
     forkMock(...args);
+    const handlers: Record<string, (arg: unknown) => void> = {};
     const emitter = {
       stdout: { on: vi.fn() },
       stderr: { on: vi.fn() },
-      on: vi.fn(),
+      on: vi.fn((event: string, handler: (arg: unknown) => void) => (handlers[event] = handler)),
+      handlers,
+      connected: true,
+      send: vi.fn(),
       killed: false,
       kill: vi.fn(),
     };
+    servers.push(emitter);
     return emitter;
   },
   execFile: vi.fn(),
@@ -185,3 +198,61 @@ describe("DebuggerServerManager — fork env in Codespaces", () => {
     expect(forkEnv.FASTEDGE_EXPECTED_HOST).toBeUndefined();
   });
 });
+
+// ── allowed folders ──────────────────────────────────────────────────────────
+
+describe("DebuggerServerManager — allowed folders", () => {
+  beforeEach(() => {
+    forkMock.mockClear();
+    showWarningMessage.mockReset();
+    workspace.isTrusted = true;
+    settings.inspect = { globalValue: undefined, workspaceValue: undefined };
+    vi.stubGlobal("fetch", vi.fn().mockResolvedValue({ ok: true }));
+  });
+  afterEach(() => vi.unstubAllGlobals());
+
+  async function start(): Promise<Record<string, string>> {
+    const manager = new DebuggerServerManager("/ext", "/ws");
+    readFileSyncMock.mockImplementationOnce(() => { throw new Error("ENOENT"); });
+    readFileSyncMock.mockReturnValue(portFileFor(manager));
+    await manager.start();
+    return forkMock.mock.calls[0][2].env;
+  }
+
+  it("passes the user setting, never a workspace's value", async () => {
+    settings.inspect = { globalValue: ["/lib/wasm", "~/apps"], workspaceValue: ["/etc"] };
+    const folders = JSON.parse((await start()).FASTEDGE_ALLOWED_FOLDERS);
+    expect(folders).toEqual(["/lib/wasm", require("path").join(require("os").homedir(), "apps")]);
+  });
+
+  it("passes none when only a workspace sets it, or in Restricted Mode", async () => {
+    settings.inspect = { globalValue: undefined, workspaceValue: ["/etc"] };
+    expect((await start()).FASTEDGE_ALLOWED_FOLDERS).toBe("[]");
+    forkMock.mockClear();
+    workspace.isTrusted = false;
+    settings.inspect = { globalValue: ["/lib/wasm"] };
+    expect((await start()).FASTEDGE_ALLOWED_FOLDERS).toBe("[]");
+  });
+
+  it("asks the user in a modal dialog and sends the answer back to the server", async () => {
+    await start();
+    const server = lastServer();
+    showWarningMessage.mockResolvedValueOnce("Allow for this session");
+    server.handlers.message({ type: "fastedge:approve-folder", id: "a1", folder: "/lib/wasm" });
+    await vi.waitFor(() => expect(server.send).toHaveBeenCalledWith({ type: "fastedge:folder-approval", id: "a1", approved: true }));
+    expect(showWarningMessage.mock.calls[0][0]).toContain("/lib/wasm");
+    expect(showWarningMessage.mock.calls[0][1]).toMatchObject({ modal: true });
+
+    showWarningMessage.mockResolvedValueOnce(undefined); // dismissed
+    server.handlers.message({ type: "fastedge:approve-folder", id: "a2", folder: "/other" });
+    await vi.waitFor(() => expect(server.send).toHaveBeenCalledWith({ type: "fastedge:folder-approval", id: "a2", approved: false }));
+  });
+
+  it("ignores other messages", async () => {
+    await start();
+    lastServer().handlers.message({ type: "something-else", id: "x", folder: "/lib" });
+    lastServer().handlers.message({ type: "fastedge:approve-folder", folder: 42 });
+    expect(showWarningMessage).not.toHaveBeenCalled();
+  });
+});
+

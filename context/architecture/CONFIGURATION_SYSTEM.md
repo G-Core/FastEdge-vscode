@@ -87,8 +87,9 @@ All other launch.json properties (`port`, `env`, `secrets`, `headers`, etc.) are
 |---------|------|-------------|
 | `fastedge.cliVersion` | string (read-only) | Bundled FastEdge-run version, shown in Settings UI |
 | `fastedge.apiUrl` | string | Default API URL used by `Generate mcp.json` command |
+| `fastedge.debugger.allowedFolders` | string[] (`application` scope) | The debugger's allowed folders: read-only folders outside the workspace |
 
-Neither setting affects debug execution.
+`fastedge.debugger.allowedFolders` is passed to the debugger server as `FASTEDGE_ALLOWED_FOLDERS` (a JSON array, always set, `~` expanded) when it starts. Only the user setting is read (`inspect().globalValue`): the `application` scope already keeps it out of a workspace's `.vscode/settings.json`, and no folders are passed in an untrusted workspace. The server asks before its first read of each folder in a session by sending `{ type: "fastedge:approve-folder", id, folder }` over the fork's IPC channel; `DebuggerServerManager` shows a modal warning and replies `{ type: "fastedge:folder-approval", id, approved }`. Nothing on the server's HTTP API can approve a folder.
 
 ---
 

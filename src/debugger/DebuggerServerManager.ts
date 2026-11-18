@@ -3,8 +3,49 @@ import { randomBytes, createHash } from "crypto";
 import * as vscode from "vscode";
 import * as path from "path";
 import * as fs from "fs";
+import * as os from "os";
 
 const DEBUG_DIR = ".fastedge-debug";
+
+/** The server asks the user to approve an allowed folder (fastedge-test's allowed folders). */
+const APPROVAL_REQUEST = "fastedge:approve-folder";
+const APPROVAL_REPLY = "fastedge:folder-approval";
+
+/**
+ * The user's allowed folders: folders outside the workspace the debugger may read once the user
+ * approves each in a session. Only the user setting counts (`globalValue`): the setting is
+ * application-scoped, so a workspace's `.vscode/settings.json` cannot set it, and it is not read
+ * from there even if it tried. None in an untrusted workspace (Restricted Mode).
+ */
+export function allowedFolders(): string[] {
+  if (!vscode.workspace.isTrusted) {return [];}
+  const configured = vscode.workspace.getConfiguration("fastedge").inspect<unknown>("debugger.allowedFolders")?.globalValue;
+  if (!Array.isArray(configured)) {return [];}
+  return configured
+    .filter((f): f is string => typeof f === "string" && f.trim() !== "")
+    .map((f) => (/^~([\\/]|$)/.test(f) ? path.join(os.homedir(), f.slice(1)) : f));
+}
+
+/**
+ * Asks the user, in a modal dialog, whether the debugger may read `folder` for this session.
+ * The server reads it only after this answer, which arrives over the private IPC channel: nothing
+ * on the debugger's HTTP API can approve a folder.
+ */
+async function approveFolder(folder: string): Promise<boolean> {
+  const allow = "Allow for this session";
+  const choice = await vscode.window.showWarningMessage(
+    `Let the FastEdge debugger read ${folder}?`,
+    {
+      modal: true,
+      detail:
+        "It is outside this workspace, in your fastedge.debugger.allowedFolders setting. Until the debugger stops, " +
+        "every config it loads can read files there, and a loaded app can send what it reads over the network. " +
+        "Allow it only if you trust the code in this workspace.",
+    },
+    allow,
+  );
+  return choice === allow;
+}
 
 /**
  * Manages the lifecycle of the fastedge-debugger server for a specific app root.
@@ -168,6 +209,8 @@ export class DebuggerServerManager {
           FASTEDGE_APP_ROOT: this.appRoot,
           FASTEDGE_DEBUG_TOKEN: this.token,
           FASTEDGE_BIND_HOST: "127.0.0.1",
+          // Always set, so a value inherited from the environment never counts.
+          FASTEDGE_ALLOWED_FOLDERS: JSON.stringify(allowedFolders()),
           ...(codespacesDomain ? { FASTEDGE_EXPECTED_HOST: codespacesDomain } : {}),
         },
       });
@@ -178,6 +221,17 @@ export class DebuggerServerManager {
 
       this.serverProcess.stderr?.on("data", (data: any) => {
         console.error(`[Debugger Server Error] ${data.toString()}`);
+      });
+
+      // The server asks before reading an allowed folder; answer with the user's choice.
+      const server = this.serverProcess;
+      server.on("message", (message: unknown) => {
+        const m = message as { type?: unknown; id?: unknown; folder?: unknown };
+        if (m?.type !== APPROVAL_REQUEST || typeof m.id !== "string" || typeof m.folder !== "string") {return;}
+        const { id, folder } = m;
+        void approveFolder(folder).then((approved) => {
+          if (server.connected) {server.send({ type: APPROVAL_REPLY, id, approved });}
+        });
       });
 
       this.serverProcess.on("error", (error: Error) => {
