@@ -61,6 +61,8 @@ export class DebuggerServerManager {
   // Per-instance token: generated once, injected into the server via env and
   // passed to the webview iframe via URL fragment so the frontend can auth.
   private readonly token: string = randomBytes(16).toString("hex");
+  /** The allowed folders the running server was given (JSON), to restart it when the setting changes. */
+  private allowedAtStart = "";
 
   constructor(
     private extensionPath: string,
@@ -133,6 +135,13 @@ export class DebuggerServerManager {
    * Port selection is delegated to fastedge-test's auto-increment logic.
    */
   async start(): Promise<void> {
+    // The server reads its allowed folders once, at start: a changed setting needs a new server.
+    const allowed = JSON.stringify(allowedFolders());
+    if (this.serverProcess && allowed !== this.allowedAtStart) {
+      console.log(`Allowed folders changed: restarting the debugger server for ${this.appRoot}`);
+      await this.stop();
+    }
+
     // Step 1: Check if a server is already running for this app via port file.
     // In an untrusted workspace the port file is workspace-controlled, so ignore
     // it and always spawn a fresh server that this session owns.
@@ -198,6 +207,7 @@ export class DebuggerServerManager {
       // set to the forwarding domain so its suffix-match check allows the request
       // (the full hostname cannot be known here because the server picks its own port).
       const codespacesDomain = process.env.GITHUB_CODESPACES_PORT_FORWARDING_DOMAIN;
+      this.allowedAtStart = allowed;
       this.serverProcess = fork(bundledServerPath, [], {
         cwd: path.dirname(bundledServerPath),
         execPath: process.execPath,
@@ -210,7 +220,7 @@ export class DebuggerServerManager {
           FASTEDGE_DEBUG_TOKEN: this.token,
           FASTEDGE_BIND_HOST: "127.0.0.1",
           // Always set, so a value inherited from the environment never counts.
-          FASTEDGE_ALLOWED_FOLDERS: JSON.stringify(allowedFolders()),
+          FASTEDGE_ALLOWED_FOLDERS: allowed,
           ...(codespacesDomain ? { FASTEDGE_EXPECTED_HOST: codespacesDomain } : {}),
         },
       });
@@ -227,7 +237,7 @@ export class DebuggerServerManager {
       const server = this.serverProcess;
       server.on("message", (message: unknown) => {
         const m = message as { type?: unknown; id?: unknown; folder?: unknown };
-        if (m?.type !== APPROVAL_REQUEST || typeof m.id !== "string" || typeof m.folder !== "string") {return;}
+        if (m?.type !== APPROVAL_REQUEST || typeof m.id !== "string" || !m.id || typeof m.folder !== "string" || !m.folder.trim()) {return;}
         const { id, folder } = m;
         void approveFolder(folder).then((approved) => {
           if (server.connected) {server.send({ type: APPROVAL_REPLY, id, approved });}

@@ -36,6 +36,7 @@ vi.mock("child_process", () => ({
       send: vi.fn(),
       killed: false,
       kill: vi.fn(),
+      once: (event: string, cb: () => void) => event === "exit" && cb(),
     };
     servers.push(emitter);
     return emitter;
@@ -252,7 +253,25 @@ describe("DebuggerServerManager — allowed folders", () => {
     await start();
     lastServer().handlers.message({ type: "something-else", id: "x", folder: "/lib" });
     lastServer().handlers.message({ type: "fastedge:approve-folder", folder: 42 });
+    lastServer().handlers.message({ type: "fastedge:approve-folder", id: "", folder: "/lib" });
+    lastServer().handlers.message({ type: "fastedge:approve-folder", id: "x", folder: " " });
     expect(showWarningMessage).not.toHaveBeenCalled();
+  });
+
+  it("reuses the server while the setting is unchanged, and starts a new one when it changes", async () => {
+    settings.inspect = { globalValue: ["/lib/wasm"] };
+    const manager = new DebuggerServerManager("/ext", "/ws");
+    readFileSyncMock.mockImplementationOnce(() => { throw new Error("ENOENT"); });
+    readFileSyncMock.mockReturnValue(portFileFor(manager));
+    await manager.start();
+    await manager.start();
+    expect(forkMock).toHaveBeenCalledTimes(1);
+
+    settings.inspect = { globalValue: ["/lib/wasm", "/other"] };
+    readFileSyncMock.mockImplementationOnce(() => { throw new Error("ENOENT"); }); // stop() removed the port file
+    await manager.start();
+    expect(forkMock).toHaveBeenCalledTimes(2);
+    expect(JSON.parse(forkMock.mock.calls[1][2].env.FASTEDGE_ALLOWED_FOLDERS)).toEqual(["/lib/wasm", "/other"]);
   });
 });
 
