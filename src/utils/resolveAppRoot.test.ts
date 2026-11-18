@@ -351,6 +351,18 @@ describe("resolveDebuggerRoot", () => {
     expect(root && path.relative(opened, root)).toBe("");
   });
 
+  it("a start outside the boundary finds nothing there, and falls back to the boundary", () => {
+    const opened = path.join(tmp, "opened");
+    const elsewhere = path.join(tmp, "elsewhere");
+    mkDebugDir(elsewhere);
+    touch(path.join(elsewhere, "package.json"));
+    touch(path.join(elsewhere, "app.wasm"));
+
+    expect(resolveConfigRoot(path.join(elsewhere, "app.wasm"), opened)).toBeNull();
+    expect(resolveBuildRoot(path.join(elsewhere, "app.wasm"), opened)).toBeNull();
+    expect(resolveDebuggerRoot(path.join(elsewhere, "app.wasm"), opened)).toBe(opened);
+  });
+
   it("without a workspace folder, walks up without a limit", () => {
     touch(path.join(tmp, "package.json"));
     touch(path.join(tmp, "x", "app.wasm"));

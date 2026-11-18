@@ -17,8 +17,14 @@ function startDir(startPath: string): string {
  */
 function atOrPast(dir: string, stopAt?: string): boolean {
   if (!stopAt) {return false;}
+  return path.relative(stopAt, dir) === "" || outside(dir, stopAt);
+}
+
+/** True when `dir` is above or beside `stopAt`: never searched. */
+function outside(dir: string, stopAt?: string): boolean {
+  if (!stopAt) {return false;}
   const rel = path.relative(stopAt, dir);
-  return rel === "" || rel === ".." || rel.startsWith(`..${path.sep}`) || path.isAbsolute(rel);
+  return rel === ".." || rel.startsWith(`..${path.sep}`) || path.isAbsolute(rel);
 }
 
 /**
@@ -30,6 +36,7 @@ function atOrPast(dir: string, stopAt?: string): boolean {
  */
 export function resolveConfigRoot(startPath: string, stopAt?: string): string | null {
   let dir = startDir(startPath);
+  if (outside(dir, stopAt)) {return null;}
 
   while (true) {
     try {
@@ -54,6 +61,7 @@ export function resolveConfigRoot(startPath: string, stopAt?: string): string | 
  */
 export function resolveBuildRoot(startPath: string, stopAt?: string): string | null {
   let dir = startDir(startPath);
+  if (outside(dir, stopAt)) {return null;}
 
   while (true) {
     if (
