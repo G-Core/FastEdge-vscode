@@ -320,6 +320,21 @@ describe("resolveDebuggerRoot", () => {
     expect(resolveDebuggerRoot(path.join(hello, "hello.wasm"), opened)).toBe(hello);
   });
 
+  it("under a .fastedge-debug/ further up, loose .wasm files share it until a folder gets a marker", () => {
+    const opened = path.join(tmp, "opened");
+    mkDebugDir(opened);
+    const cache = path.join(opened, "other", "cache");
+    const hello = path.join(opened, "other", "hello");
+    touch(path.join(cache, "cache.wasm"));
+    touch(path.join(hello, "hello.wasm"));
+
+    expect(resolveDebuggerRoot(path.join(cache, "cache.wasm"), opened)).toBe(opened);
+    expect(resolveDebuggerRoot(path.join(hello, "hello.wasm"), opened)).toBe(opened);
+
+    touch(path.join(hello, "package.json"));
+    expect(resolveDebuggerRoot(path.join(hello, "hello.wasm"), opened)).toBe(hello);
+  });
+
   it("a package.json / Cargo.toml nearer than a .fastedge-debug/ further up wins", () => {
     const opened = path.join(tmp, "opened");
     mkDebugDir(opened);
