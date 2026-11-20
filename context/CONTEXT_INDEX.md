@@ -241,7 +241,7 @@ See `SEARCH_GUIDE.md` for more patterns.
 5. **Configuration** (`src/utils/resolveAppRoot.ts`)
    - Dotenv file auto-discovery from `configRoot`
    - `.fastedge-debug/` directory as app root marker; `fastedge-config.test.json` as runtime config store
-   - `resolveConfigRoot()` (finds `.fastedge-debug/`) / `resolveBuildRoot()` for per-app isolation
+   - `resolveDebuggerRoot()` (nearest `.fastedge-debug/`, `package.json` or `Cargo.toml`) / `resolveBuildRoot()` for per-app isolation
 
 ### Key Terms
 

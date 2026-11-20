@@ -52,7 +52,7 @@ Multiple apps open simultaneously each get their own server on separate ports (5
 - Real-time logs via WebSocket
 
 **3. Extension Integration**
-- `src/utils/resolveAppRoot.ts` - Two functions: `resolveConfigRoot()` (finds `.fastedge-debug/` directory) and `resolveBuildRoot()` (finds `package.json` / `Cargo.toml`). `ensureDebugDir()` creates the `.fastedge-debug/` directory when none exists (third-app case).
+- `src/utils/resolveAppRoot.ts` - `resolveDebuggerRoot()` (the nearest folder with `.fastedge-debug/`, `package.json` or `Cargo.toml`, within the workspace folder; else the file's own folder) and `resolveBuildRoot()` (finds `package.json` / `Cargo.toml`). `ensureDebugDir()` creates the `.fastedge-debug/` directory when none exists (third-app case). See `architecture/CONFIGURATION_SYSTEM.md` § App Root Resolution.
 - `DebuggerServerManager.ts` - Manages server lifecycle **per app root** — one instance per app
 - `extension.ts` - Maintains `Map<appRoot, DebuggerServerManager>` and `Map<appRoot, DebuggerWebviewProvider>`
 - Uses `child_process.fork()` to spawn server

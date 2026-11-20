@@ -2,7 +2,7 @@ import { describe, it, expect, beforeEach, afterEach } from "vitest";
 import * as fs from "fs";
 import * as os from "os";
 import * as path from "path";
-import { resolveConfigRoot, resolveBuildRoot, resolveDebuggerRoot, ensureDebugDir } from "./resolveAppRoot";
+import { resolveBuildRoot, resolveDebuggerRoot, ensureDebugDir } from "./resolveAppRoot";
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -68,17 +68,17 @@ afterEach(() => {
 });
 
 // ---------------------------------------------------------------------------
-// resolveConfigRoot
+// resolveDebuggerRoot: which marker is nearest
 // ---------------------------------------------------------------------------
 
-describe("resolveConfigRoot", () => {
+describe("resolveDebuggerRoot — nearest marker", () => {
   it("returns the dir containing .fastedge-debug/ (workspace-1 first-app)", () => {
     const configDir = path.join(tmp, "first-app");
     mkDebugDir(configDir);
     touch(path.join(configDir, "index.js"));
     touch(path.join(tmp, "package.json"));
 
-    const result = resolveConfigRoot(path.join(configDir, "index.js"));
+    const result = resolveDebuggerRoot(path.join(configDir, "index.js"));
     expect(result).toBe(configDir);
   });
 
@@ -88,7 +88,7 @@ describe("resolveConfigRoot", () => {
     mkDebugDir(srcDir);
     touch(path.join(tmp, "package.json"));
 
-    const result = resolveConfigRoot(path.join(srcDir, "index.js"));
+    const result = resolveDebuggerRoot(path.join(srcDir, "index.js"));
     expect(result).toBe(srcDir);
   });
 
@@ -97,26 +97,21 @@ describe("resolveConfigRoot", () => {
     touch(path.join(tmp, "package.json"));
     mkDebugDir(tmp);
 
-    const result = resolveConfigRoot(path.join(tmp, "src", "index.js"));
+    const result = resolveDebuggerRoot(path.join(tmp, "src", "index.js"));
     expect(result).toBe(tmp);
   });
 
-  it("returns null when no .fastedge-debug/ exists (third-app)", () => {
+  it("returns the package.json folder when no .fastedge-debug/ exists (third-app)", () => {
     touch(path.join(tmp, "src", "index.js"));
     touch(path.join(tmp, "package.json"));
 
-    const result = resolveConfigRoot(path.join(tmp, "src", "index.js"));
-    expect(result).toBeNull();
-  });
-
-  it("returns null when startPath does not exist", () => {
-    const result = resolveConfigRoot(path.join(tmp, "nonexistent", "file.js"));
-    expect(result).toBeNull();
+    const result = resolveDebuggerRoot(path.join(tmp, "src", "index.js"), tmp);
+    expect(result).toBe(tmp);
   });
 
   it("works when startPath is a directory", () => {
     mkDebugDir(tmp);
-    const result = resolveConfigRoot(tmp);
+    const result = resolveDebuggerRoot(tmp);
     expect(result).toBe(tmp);
   });
 });
@@ -203,7 +198,7 @@ describe("ensureDebugDir", () => {
     expect(fs.existsSync(path.join(dirPath, "app.wasm"))).toBe(true);
   });
 
-  it("after ensureDebugDir at activeFile dir, resolveConfigRoot finds that dir", () => {
+  it("after ensureDebugDir at activeFile dir, resolveDebuggerRoot finds that dir", () => {
     // Simulates the third-app flow: no debug dir found, so we create one
     // co-located with the active file (not at the build root).
     const srcDir = path.join(tmp, "src");
@@ -213,7 +208,7 @@ describe("ensureDebugDir", () => {
     // Caller creates debug dir next to the active file
     ensureDebugDir(srcDir);
 
-    const result = resolveConfigRoot(path.join(srcDir, "index.js"));
+    const result = resolveDebuggerRoot(path.join(srcDir, "index.js"));
     expect(result).toBe(srcDir);  // srcDir, not tmp
   });
 });
@@ -222,13 +217,14 @@ describe("ensureDebugDir", () => {
 // .fastedge-debug exists as a file (not a directory)
 // ---------------------------------------------------------------------------
 
-describe("resolveConfigRoot — .fastedge-debug is a file", () => {
-  it("skips a file named .fastedge-debug and returns null when no directory marker exists", () => {
-    touch(path.join(tmp, ".fastedge-debug")); // file, not directory
-    touch(path.join(tmp, "index.js"));
+describe("resolveDebuggerRoot — .fastedge-debug is a file", () => {
+  it("skips a file named .fastedge-debug: with no marker, the file's own folder", () => {
+    const child = path.join(tmp, "app");
+    touch(path.join(child, ".fastedge-debug")); // file, not directory
+    touch(path.join(child, "index.js"));
 
-    const result = resolveConfigRoot(path.join(tmp, "index.js"));
-    expect(result).toBeNull();
+    const result = resolveDebuggerRoot(path.join(child, "index.js"), tmp);
+    expect(result).toBe(child);
   });
 
   it("skips a file named .fastedge-debug and finds the real directory marker above", () => {
@@ -237,7 +233,7 @@ describe("resolveConfigRoot — .fastedge-debug is a file", () => {
     touch(path.join(child, "index.js"));
     mkDebugDir(tmp); // real directory marker one level up
 
-    const result = resolveConfigRoot(path.join(child, "index.js"));
+    const result = resolveDebuggerRoot(path.join(child, "index.js"), tmp);
     expect(result).toBe(tmp);
   });
 });
@@ -274,7 +270,7 @@ describe("config root vs build root split (workspace-1)", () => {
     touch(path.join(tmp, "package.json"));
 
     const activeFile = path.join(appDir, "index.js");
-    expect(resolveConfigRoot(activeFile)).toBe(appDir);
+    expect(resolveDebuggerRoot(activeFile)).toBe(appDir);
     expect(resolveBuildRoot(activeFile)).toBe(tmp);
   });
 
@@ -287,8 +283,8 @@ describe("config root vs build root split (workspace-1)", () => {
     mkDebugDir(secondApp);
     touch(path.join(tmp, "package.json"));
 
-    expect(resolveConfigRoot(path.join(firstApp, "index.js"))).toBe(firstApp);
-    expect(resolveConfigRoot(path.join(secondApp, "index.js"))).toBe(secondApp);
+    expect(resolveDebuggerRoot(path.join(firstApp, "index.js"))).toBe(firstApp);
+    expect(resolveDebuggerRoot(path.join(secondApp, "index.js"))).toBe(secondApp);
     expect(resolveBuildRoot(path.join(firstApp, "index.js"))).toBe(tmp);
     expect(resolveBuildRoot(path.join(secondApp, "index.js"))).toBe(tmp);
   });
@@ -303,14 +299,64 @@ describe("config root vs build root split (workspace-1)", () => {
 // ---------------------------------------------------------------------------
 
 describe("resolveDebuggerRoot", () => {
-  it("never goes above the workspace folder: no match inside it gives the folder itself", () => {
+  it("never goes above the workspace folder: no match inside it gives the file's own folder", () => {
     touch(path.join(tmp, "package.json"));
     mkDebugDir(tmp);
     const opened = path.join(tmp, "opened");
     const wasm = path.join(opened, "wasm", "app.wasm");
     touch(wasm);
 
-    expect(resolveDebuggerRoot(wasm, opened)).toBe(opened);
+    expect(resolveDebuggerRoot(wasm, opened)).toBe(path.join(opened, "wasm"));
+  });
+
+  it("loose .wasm files in sibling folders get a root each", () => {
+    const opened = path.join(tmp, "opened");
+    const cache = path.join(opened, "other", "cache");
+    const hello = path.join(opened, "other", "hello");
+    touch(path.join(cache, "cache.wasm"));
+    touch(path.join(hello, "hello.wasm"));
+
+    expect(resolveDebuggerRoot(path.join(cache, "cache.wasm"), opened)).toBe(cache);
+    expect(resolveDebuggerRoot(path.join(hello, "hello.wasm"), opened)).toBe(hello);
+  });
+
+  it("under a .fastedge-debug/ further up, loose .wasm files share it until a folder gets a marker", () => {
+    const opened = path.join(tmp, "opened");
+    mkDebugDir(opened);
+    const cache = path.join(opened, "other", "cache");
+    const hello = path.join(opened, "other", "hello");
+    touch(path.join(cache, "cache.wasm"));
+    touch(path.join(hello, "hello.wasm"));
+
+    expect(resolveDebuggerRoot(path.join(cache, "cache.wasm"), opened)).toBe(opened);
+    expect(resolveDebuggerRoot(path.join(hello, "hello.wasm"), opened)).toBe(opened);
+
+    touch(path.join(hello, "package.json"));
+    expect(resolveDebuggerRoot(path.join(hello, "hello.wasm"), opened)).toBe(hello);
+  });
+
+  it("a package.json / Cargo.toml nearer than a .fastedge-debug/ further up wins", () => {
+    const opened = path.join(tmp, "opened");
+    mkDebugDir(opened);
+    const crate = path.join(opened, "storage", "probe");
+    touch(path.join(crate, "Cargo.toml"));
+    touch(path.join(crate, "src", "lib.rs"));
+    const pkg = path.join(opened, "other", "hello");
+    touch(path.join(pkg, "package.json"));
+    touch(path.join(pkg, "hello.wasm"));
+
+    expect(resolveDebuggerRoot(path.join(crate, "src", "lib.rs"), opened)).toBe(crate);
+    expect(resolveDebuggerRoot(path.join(pkg, "hello.wasm"), opened)).toBe(pkg);
+  });
+
+  it("a file inside .fastedge-debug/ belongs to the folder holding it", () => {
+    const opened = path.join(tmp, "opened");
+    const resource = path.join(opened, "flows", "convert");
+    mkDebugDir(resource);
+    touch(path.join(resource, ".fastedge-debug", "app-origin.test.json"));
+    touch(path.join(resource, "req", "Cargo.toml"));
+
+    expect(resolveDebuggerRoot(path.join(resource, ".fastedge-debug", "app-origin.test.json"), opened)).toBe(resource);
   });
 
   it("finds .fastedge-debug/ inside the workspace folder first", () => {
@@ -348,7 +394,7 @@ describe("resolveDebuggerRoot", () => {
     touch(wasm);
 
     const root = resolveDebuggerRoot(wasm, opened + path.sep);
-    expect(root && path.relative(opened, root)).toBe("");
+    expect(root && path.relative(opened, root)).toBe("wasm");
   });
 
   it("a start outside the boundary finds nothing there, and falls back to the boundary", () => {
@@ -358,7 +404,6 @@ describe("resolveDebuggerRoot", () => {
     touch(path.join(elsewhere, "package.json"));
     touch(path.join(elsewhere, "app.wasm"));
 
-    expect(resolveConfigRoot(path.join(elsewhere, "app.wasm"), opened)).toBeNull();
     expect(resolveBuildRoot(path.join(elsewhere, "app.wasm"), opened)).toBeNull();
     expect(resolveDebuggerRoot(path.join(elsewhere, "app.wasm"), opened)).toBe(opened);
   });
