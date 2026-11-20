@@ -152,7 +152,7 @@ FastEdge-vscode/
 │   │   └── index.ts
 │   │
 │   ├── utils/
-│   │   ├── resolveAppRoot.ts               # resolveConfigRoot / resolveBuildRoot
+│   │   ├── resolveAppRoot.ts               # resolveDebuggerRoot / resolveBuildRoot
 │   │   └── resolveAppRoot.test.ts
 │   │
 │   ├── commands/                           # VS Code commands
@@ -201,7 +201,7 @@ FastEdge-vscode/
 ### Debug Session Flow
 
 1. User presses F5 or runs `Debug: FastEdge App (Current File / Package Entry)`
-2. App roots resolved: `resolveConfigRoot()` + `resolveBuildRoot()` from active file
+2. App roots resolved: `debuggerRootFor()` (→ `resolveDebuggerRoot()`) + `resolveBuildRoot()` from active file
 3. Compilation:
    - Rust: `cargo build --target wasm32-wasip1` from `buildRoot`
    - JS: `fastedge-build` from `buildRoot`, output to `<configRoot>/.fastedge-debug/app.wasm`
