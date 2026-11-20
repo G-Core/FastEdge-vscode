@@ -20,12 +20,18 @@ Supports both **HTTP apps** and **CDN apps** across three languages:
 The extension compiles your code into a WASM binary using language-specific build tools, then serves it locally using a **bundled debugger** — no external tools required.
 
 A webview panel opens inside VS Code where you can:
-- Build requests (URL, method, headers, body)
-- Send them to your running app
-- Inspect the response (status, headers, body)
+- Build requests (URL, method, headers, body) and send them to your app
+- Inspect the response, and for CDN apps what each hook received and changed
+- Use a local cache and Edge KV, browse and edit them in the Storage Explorer
+- Choose where the request comes from and which edge location runs the app
+- Run several CDN apps on one resource (multi-app), with rules and an origin
 - Load and save test configurations
 
-Each app gets its own isolated server instance on a port in the range **5179–5188**, so you can debug multiple apps in the same workspace simultaneously.
+![The debugger with a CDN app reading Edge KV](https://raw.githubusercontent.com/G-Core/fastedge-test/main/docs/images/debugger-single-app.png)
+
+The [Debugger Guide](https://github.com/G-Core/fastedge-test/blob/main/docs/DEBUGGER_GUIDE.md) walks through every panel.
+
+Each app gets its own debugger panel and server. An app is the nearest folder above your file that holds `.fastedge-debug/`, `package.json` or `Cargo.toml` (searching no higher than the folder you opened); a loose `.wasm` with none of these gets its own folder. That folder is the **app root**: the debugger writes `.fastedge-debug/` there and reads `fastedge-config.test.json` and dotenv files from it. Servers take the first free port from **5179** (up to 5228), so you can debug several apps at once.
 
 ## Prerequisites
 
@@ -106,7 +112,7 @@ Available from the Command Palette (Ctrl+Shift+P):
 | Command | Description |
 |---------|-------------|
 | **Debug: FastEdge App (Current File)** | Build the active file and start the debugger |
-| **Debug: FastEdge App (Package Entry)** | Build from `package.json` main field and start the debugger |
+| **Debug: FastEdge App (Package Entry)** | Build the project (see `"package"` above) and start the debugger |
 | **FastEdge: Initialize workspace** | Create `.vscode/launch.json` with default configuration |
 | **FastEdge (Generate mcp.json)** | Add the [FastEdge MCP Server](https://github.com/G-Core/FastEdge-mcp-server) to your workspace (see [AI agents (MCP)](#ai-agents-mcp)) |
 | **FastEdge (Setup Codespace Secrets)** | Configure GitHub Codespaces secrets for FastEdge |
