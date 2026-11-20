@@ -4,7 +4,7 @@ import { tmpdir } from "os";
 import { join, relative, isAbsolute } from "path";
 
 // Changed in place: the mock module keeps this array.
-const folders = vi.hoisted(() => ({ list: [] as string[], objects: [] as { uri: { fsPath: string } }[] }));
+const folders = vi.hoisted(() => ({ list: [] as string[], objects: [] as { uri: { fsPath: string } }[], match: undefined as string | undefined }));
 const setFolders = (paths: string[]) => {
   folders.list.splice(0, Infinity, ...paths);
   folders.objects.splice(0, Infinity, ...paths.map((fsPath) => ({ uri: { fsPath } })));
@@ -15,6 +15,7 @@ vi.mock("vscode", () => ({
     workspaceFolders: folders.objects,
     // As VS Code: by the path as written.
     getWorkspaceFolder: (uri: { fsPath: string }) => {
+      if (folders.match) {return { uri: { fsPath: folders.match } };}
       const fsPath = folders.list.find((f) => {
         const rel = relative(f, uri.fsPath);
         return !rel.startsWith("..") && !isAbsolute(rel);
@@ -59,5 +60,28 @@ describe("debuggerRootFor", () => {
     symlinkSync(join(base, "real", "proj"), join(base, "link"), "junction");
     setFolders([join(base, "link")]);
     expect(debuggerRootFor(file)).toBe(join(base, "link", "app"));
+  });
+
+  it("takes the deepest workspace folder that holds the file by real path, whatever their order", () => {
+    mkdirSync(join(base, "real", "proj", ".fastedge-debug"), { recursive: true }); // the outer folder's marker
+    const file = app(join(base, "real", "proj", "nested", "app"));
+    symlinkSync(join(base, "real", "proj"), join(base, "link"), "junction");
+    symlinkSync(join(base, "real", "proj", "nested"), join(base, "nested-link"), "junction");
+    setFolders([join(base, "link"), join(base, "nested-link")]);
+    expect(debuggerRootFor(file)).toBe(join(base, "nested-link", "app"));
+  });
+
+  it("searches in the folder's spelling when VS Code matched a differently spelled path", () => {
+    const file = app(join(base, "real", "proj", "app"));
+    symlinkSync(join(base, "real", "proj"), join(base, "link"), "junction");
+    // VS Code matched the file to the folder (as for other letter case on macOS) though the path,
+    // as written, is not under it.
+    setFolders([join(base, "link")]);
+    folders.match = join(base, "link");
+    try {
+      expect(debuggerRootFor(file)).toBe(join(base, "link", "app"));
+    } finally {
+      folders.match = undefined;
+    }
   });
 });
