@@ -169,7 +169,7 @@ const port = await this.waitForPortFile();
 - Before: Single `resolveAppRoot()` used for both build CWD and per-app identity — `fastedge-config.test.json` could override the build root incorrectly
 - After: `resolveConfigRoot()` finds the per-app anchor; `resolveBuildRoot()` finds where build commands run
 - Example — workspace-1: `first-app/fastedge-config.test.json` → configRoot = `first-app/`; `package.json` at workspace root → buildRoot = `workspace-1/`
-- WASM output (`<configRoot>/.fastedge-debug/app.wasm`) is written to configRoot's `.fastedge-debug/` so the server can find it via `WORKSPACE_PATH`
+- WASM output (`<configRoot>/.fastedge-debug/app.wasm`) is written to configRoot's `.fastedge-debug/` so the server can find it via `FASTEDGE_APP_ROOT` (the app root)
 
 **6. Wait for WebSocket client before loading WASM (March 2026)**
 - Before: extension called `POST /api/load` immediately after creating the webview panel → `wasm_loaded` event fired before UI WebSocket connected → UI missed it, stayed blank
@@ -336,9 +336,11 @@ The extension provides debug commands and explorer context menu commands. Server
 Right-click files in the VSCode file explorer to load them directly into the debugger without a build step:
 
 - **FastEdge: Load in Debugger** — appears on `.wasm` files. Resolves app root from the file's directory, starts the server, and loads the binary directly (skips compile step). Useful for loading pre-built WASM binaries.
-- **FastEdge: Load Config in Debugger** — appears on `*test.json` files (e.g. `fastedge-config.test.json`). Opens the debugger for that app, then sends the config content via the existing `filePickerResult` message path that `ConfigButtons` already handles. Auto-loads WASM if `wasm.path` is set in the config.
+- **FastEdge: Load Config in Debugger** — appears on `*test.json` files. Opens the debugger for that app, then:
+  - a **resource file** (multi-app: it has `apps`) is loaded on the server through `POST /api/resource/load`, as an agent would. The page switches to Multi-app on the `resource_loaded` event and opens the file.
+  - a **single-app config** (e.g. `fastedge-config.test.json`) is sent through the `filePickerResult` message that `ConfigButtons` handles. Auto-loads WASM if `wasm.path` is set.
 
-**Implementation**: `src/commands/runDebugger.ts` — `loadWasmInDebugger()` and `loadConfigInDebugger()`. The config command uses `provider.sendConfig()` which waits for the React app's WebSocket to connect (same `waitForWebSocketClient` poll) before posting the message, avoiding the timing problem that affects initial WASM loads.
+**Implementation**: `src/commands/runDebugger.ts` — `loadWasmInDebugger()` and `loadConfigInDebugger()`. Both `provider.sendConfig()` and `provider.loadResource()` wait for the React app's WebSocket to connect (`waitForWebSocketClient`) first, so the page receives the message or the `resource_loaded` event.
 
 ---
 

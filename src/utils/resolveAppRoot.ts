@@ -12,14 +12,31 @@ function startDir(startPath: string): string {
 }
 
 /**
+ * True when the walk has reached `stopAt` (or is beside or above it): it ends there. Compared with
+ * `path.relative`, so a trailing separator or (on Windows) different letter case still matches.
+ */
+function atOrPast(dir: string, stopAt?: string): boolean {
+  if (!stopAt) {return false;}
+  return path.relative(stopAt, dir) === "" || outside(dir, stopAt);
+}
+
+/** True when `dir` is above or beside `stopAt`: never searched. */
+function outside(dir: string, stopAt?: string): boolean {
+  if (!stopAt) {return false;}
+  const rel = path.relative(stopAt, dir);
+  return rel === ".." || rel.startsWith(`..${path.sep}`) || path.isAbsolute(rel);
+}
+
+/**
  * Walk up from a file (or directory) path to find the per-app debug root.
  *
  * Returns the first directory containing a `.fastedge-debug/` folder, or null
  * if none is found. This is the anchor for per-app identity (.debug-port,
  * app.wasm, config — all inside `.fastedge-debug/`).
  */
-export function resolveConfigRoot(startPath: string): string | null {
+export function resolveConfigRoot(startPath: string, stopAt?: string): string | null {
   let dir = startDir(startPath);
+  if (outside(dir, stopAt)) {return null;}
 
   while (true) {
     try {
@@ -30,7 +47,7 @@ export function resolveConfigRoot(startPath: string): string | null {
       // .fastedge-debug doesn't exist in this directory — continue walking up
     }
     const parent = path.dirname(dir);
-    if (parent === dir) {return null;}
+    if (parent === dir || atOrPast(dir, stopAt)) {return null;}
     dir = parent;
   }
 }
@@ -42,8 +59,9 @@ export function resolveConfigRoot(startPath: string): string | null {
  * This is where build commands (e.g. fastedge-build) must be run.
  * Returns null only if no build manifest is found up to the filesystem root.
  */
-export function resolveBuildRoot(startPath: string): string | null {
+export function resolveBuildRoot(startPath: string, stopAt?: string): string | null {
   let dir = startDir(startPath);
+  if (outside(dir, stopAt)) {return null;}
 
   while (true) {
     if (
@@ -53,11 +71,23 @@ export function resolveBuildRoot(startPath: string): string | null {
       return dir;
     }
     const parent = path.dirname(dir);
-    if (parent === dir) {
+    if (parent === dir || atOrPast(dir, stopAt)) {
       return null;
     }
     dir = parent;
   }
+}
+
+/**
+ * The debugger's root for a file: the server's workspace (`WORKSPACE_PATH`, which confines every
+ * path it reads) and the home of `.fastedge-debug/`. The nearest `.fastedge-debug/` folder, else
+ * the nearest `package.json` / `Cargo.toml` folder, searching no higher than `boundary` (the VS
+ * Code workspace folder holding the file), else `boundary` itself: the debugger never reaches
+ * above the folder the user opened. Without a boundary (a file outside every workspace folder)
+ * the search is unbounded and may find nothing.
+ */
+export function resolveDebuggerRoot(filePath: string, boundary?: string): string | null {
+  return resolveConfigRoot(filePath, boundary) ?? resolveBuildRoot(filePath, boundary) ?? boundary ?? null;
 }
 
 /**

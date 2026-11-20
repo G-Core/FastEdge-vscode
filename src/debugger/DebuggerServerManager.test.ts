@@ -1,9 +1,15 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import { createHash } from "crypto";
 
+const settings = vi.hoisted(() => ({ inspect: { globalValue: undefined, workspaceValue: undefined } as Record<string, unknown> }));
+const showWarningMessage = vi.hoisted(() => vi.fn());
+const workspace = vi.hoisted(() => ({
+  isTrusted: true,
+  getConfiguration: () => ({ inspect: () => settings.inspect }),
+}));
 vi.mock("vscode", () => ({
-  workspace: { isTrusted: true },
-  window: { showErrorMessage: vi.fn() },
+  workspace,
+  window: { showErrorMessage: vi.fn(), showWarningMessage },
 }));
 
 const readFileSyncMock = vi.fn(() => "5179");
@@ -15,16 +21,24 @@ vi.mock("fs", () => ({
 
 // Capture the fork env without actually spawning a process.
 const forkMock = vi.fn();
+const servers: any[] = [];
+const lastServer = () => servers[servers.length - 1];
 vi.mock("child_process", () => ({
   fork: (...args: any[]) => {
     forkMock(...args);
+    const handlers: Record<string, (arg: unknown) => void> = {};
     const emitter = {
       stdout: { on: vi.fn() },
       stderr: { on: vi.fn() },
-      on: vi.fn(),
+      on: vi.fn((event: string, handler: (arg: unknown) => void) => (handlers[event] = handler)),
+      handlers,
+      connected: true,
+      send: vi.fn(),
       killed: false,
       kill: vi.fn(),
+      once: (event: string, cb: () => void) => event === "exit" && cb(),
     };
+    servers.push(emitter);
     return emitter;
   },
   execFile: vi.fn(),
@@ -151,6 +165,28 @@ describe("DebuggerServerManager — fork env in Codespaces", () => {
     expect(forkEnv.FASTEDGE_EXPECTED_HOST).toBe("app.github.dev");
   });
 
+  it("passes the workspace root and the app root", async () => {
+    const manager = new DebuggerServerManager("/ext", "/ws/apps/convert", "/ws");
+    setupForSpawn(manager);
+
+    await manager.start();
+
+    const forkEnv = forkMock.mock.calls[0][2].env as Record<string, string>;
+    expect(forkEnv.WORKSPACE_PATH).toBe("/ws");
+    expect(forkEnv.FASTEDGE_APP_ROOT).toBe("/ws/apps/convert");
+  });
+
+  it("without a workspace root, both roots are the app root", async () => {
+    const manager = new DebuggerServerManager("/ext", "/workspace");
+    setupForSpawn(manager);
+
+    await manager.start();
+
+    const forkEnv = forkMock.mock.calls[0][2].env as Record<string, string>;
+    expect(forkEnv.WORKSPACE_PATH).toBe("/workspace");
+    expect(forkEnv.FASTEDGE_APP_ROOT).toBe("/workspace");
+  });
+
   it("omits FASTEDGE_EXPECTED_HOST when GITHUB_CODESPACES_PORT_FORWARDING_DOMAIN is not set", async () => {
     delete process.env.GITHUB_CODESPACES_PORT_FORWARDING_DOMAIN;
     const manager = new DebuggerServerManager("/ext", "/workspace");
@@ -161,5 +197,139 @@ describe("DebuggerServerManager — fork env in Codespaces", () => {
     expect(forkMock).toHaveBeenCalled();
     const forkEnv = forkMock.mock.calls[0][2].env as Record<string, string>;
     expect(forkEnv.FASTEDGE_EXPECTED_HOST).toBeUndefined();
+  });
+});
+
+// ── allowed folders ──────────────────────────────────────────────────────────
+
+describe("DebuggerServerManager — allowed folders", () => {
+  beforeEach(() => {
+    forkMock.mockClear();
+    showWarningMessage.mockReset();
+    workspace.isTrusted = true;
+    settings.inspect = { globalValue: undefined, workspaceValue: undefined };
+    vi.stubGlobal("fetch", vi.fn().mockResolvedValue({ ok: true }));
+  });
+  afterEach(() => vi.unstubAllGlobals());
+
+  async function start(): Promise<Record<string, string>> {
+    const manager = new DebuggerServerManager("/ext", "/ws");
+    readFileSyncMock.mockImplementationOnce(() => { throw new Error("ENOENT"); });
+    readFileSyncMock.mockReturnValue(portFileFor(manager));
+    await manager.start();
+    return forkMock.mock.calls[0][2].env;
+  }
+
+  it("passes the user setting, never a workspace's value", async () => {
+    settings.inspect = { globalValue: ["/lib/wasm", "~/apps"], workspaceValue: ["/etc"] };
+    const folders = JSON.parse((await start()).FASTEDGE_ALLOWED_FOLDERS);
+    expect(folders).toEqual(["/lib/wasm", require("path").join(require("os").homedir(), "apps")]);
+  });
+
+  it("passes none when only a workspace sets it, or in Restricted Mode", async () => {
+    settings.inspect = { globalValue: undefined, workspaceValue: ["/etc"] };
+    expect((await start()).FASTEDGE_ALLOWED_FOLDERS).toBe("[]");
+    forkMock.mockClear();
+    workspace.isTrusted = false;
+    settings.inspect = { globalValue: ["/lib/wasm"] };
+    expect((await start()).FASTEDGE_ALLOWED_FOLDERS).toBe("[]");
+  });
+
+  it("asks the user in a modal dialog and sends the answer back to the server", async () => {
+    await start();
+    const server = lastServer();
+    showWarningMessage.mockResolvedValueOnce("Allow for this session");
+    server.handlers.message({ type: "fastedge:approve-folder", id: "a1", folder: "/lib/wasm" });
+    await vi.waitFor(() => expect(server.send).toHaveBeenCalledWith({ type: "fastedge:folder-approval", id: "a1", approved: true }));
+    expect(showWarningMessage.mock.calls[0][0]).toContain("/lib/wasm");
+    expect(showWarningMessage.mock.calls[0][1]).toMatchObject({ modal: true });
+
+    showWarningMessage.mockResolvedValueOnce(undefined); // dismissed
+    server.handlers.message({ type: "fastedge:approve-folder", id: "a2", folder: "/other" });
+    await vi.waitFor(() => expect(server.send).toHaveBeenCalledWith({ type: "fastedge:folder-approval", id: "a2", approved: false }));
+  });
+
+  it("ignores other messages", async () => {
+    await start();
+    lastServer().handlers.message({ type: "something-else", id: "x", folder: "/lib" });
+    lastServer().handlers.message({ type: "fastedge:approve-folder", folder: 42 });
+    lastServer().handlers.message({ type: "fastedge:approve-folder", id: "", folder: "/lib" });
+    lastServer().handlers.message({ type: "fastedge:approve-folder", id: "x", folder: " " });
+    expect(showWarningMessage).not.toHaveBeenCalled();
+  });
+
+  it("reuses the server while the setting is unchanged, and starts a new one when it changes", async () => {
+    settings.inspect = { globalValue: ["/lib/wasm"] };
+    const manager = new DebuggerServerManager("/ext", "/ws");
+    readFileSyncMock.mockImplementationOnce(() => { throw new Error("ENOENT"); });
+    readFileSyncMock.mockReturnValue(portFileFor(manager));
+    await manager.start();
+    await manager.start();
+    expect(forkMock).toHaveBeenCalledTimes(1);
+
+    settings.inspect = { globalValue: ["/lib/wasm", "/other"] };
+    readFileSyncMock.mockImplementationOnce(() => { throw new Error("ENOENT"); }); // stop() removed the port file
+    await manager.start();
+    expect(forkMock).toHaveBeenCalledTimes(2);
+    expect(JSON.parse(forkMock.mock.calls[1][2].env.FASTEDGE_ALLOWED_FOLDERS)).toEqual(["/lib/wasm", "/other"]);
+
+    // The first server exits late (after a forced stop): the new one stays managed.
+    servers[servers.length - 2].handlers.exit(null, "SIGKILL");
+    expect(manager.isRunning()).toBe(true);
+  });
+
+  it("a start while another is starting waits for it, even after the setting changed", async () => {
+    settings.inspect = { globalValue: ["/lib/wasm"] };
+    const manager = new DebuggerServerManager("/ext", "/ws");
+    readFileSyncMock.mockImplementationOnce(() => { throw new Error("ENOENT"); });
+    readFileSyncMock.mockReturnValue(portFileFor(manager));
+    const first = manager.start();
+    settings.inspect = { globalValue: ["/lib/wasm", "/other"] };
+    await Promise.all([first, manager.start()]);
+    expect(forkMock).toHaveBeenCalledTimes(1);
+    expect(lastServer().kill).not.toHaveBeenCalled();
+  });
+
+  it("a start while a restart waits for the old server to exit shares that restart: one new server", async () => {
+    settings.inspect = { globalValue: ["/lib/wasm"] };
+    const manager = new DebuggerServerManager("/ext", "/ws");
+    readFileSyncMock.mockImplementationOnce(() => { throw new Error("ENOENT"); });
+    readFileSyncMock.mockReturnValue(portFileFor(manager));
+    await manager.start();
+    let exit = () => {};
+    lastServer().once = (event: string, cb: () => void) => { if (event === "exit") {exit = cb;} }; // stop() pending
+
+    settings.inspect = { globalValue: ["/lib/wasm", "/other"] };
+    // stop() removed the port file; the new server writes it only after the old one has exited.
+    let written = false;
+    readFileSyncMock.mockImplementation(() => {
+      if (!written) {throw new Error("ENOENT");}
+      return portFileFor(manager);
+    });
+    try {
+      const restarting = manager.start();
+      const second = manager.start();
+      await new Promise((r) => setTimeout(r, 10));
+      exit();
+      await new Promise((r) => setTimeout(r, 10));
+      written = true;
+      await Promise.all([restarting, second]);
+      expect(forkMock).toHaveBeenCalledTimes(2);
+    } finally {
+      readFileSyncMock.mockImplementation(() => "5179");
+    }
+  });
+
+  it("a stop while a start is in flight stops the server that start forks", async () => {
+    const manager = new DebuggerServerManager("/ext", "/ws");
+    readFileSyncMock.mockReturnValue(portFileFor(manager));
+    // A stale port file: the start awaits its health check before it forks.
+    vi.mocked(fetch).mockResolvedValueOnce({ ok: false } as Response);
+    const starting = manager.start();
+    const stopping = manager.stop();
+    await Promise.all([starting, stopping]);
+    expect(forkMock).toHaveBeenCalledTimes(1);
+    expect(lastServer().kill).toHaveBeenCalled();
+    expect(manager.isRunning()).toBe(false);
   });
 });

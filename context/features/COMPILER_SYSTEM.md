@@ -28,7 +28,7 @@ All three compilers use two root concepts resolved by `src/utils/resolveAppRoot.
 
 **`resolveBuildRoot(activeFilePath)`** — walks up from the active file to find the nearest directory containing `package.json` or `Cargo.toml`. This is where build commands run (CWD for spawned processes).
 
-**`resolveConfigRoot(activeFilePath)`** — walks up to find the nearest directory containing `.fastedge-debug/`. This is the per-app anchor: the debugger server's `WORKSPACE_PATH`, and where `.fastedge-debug/app.wasm` is written. Falls back to `buildRoot` if not found.
+**`debuggerRootFor(activeFilePath)`** — the debugger root, searched no higher than the VS Code workspace folder (see `architecture/CONFIGURATION_SYSTEM.md`, App Root Resolution). This is the per-app anchor: the debugger server's app root (`FASTEDGE_APP_ROOT`; its `WORKSPACE_PATH` is the workspace folder), and where `.fastedge-debug/app.wasm` is written. Falls back to `buildRoot` if not found.
 
 The separation of build root vs config root is what allows multiple apps in the same workspace to have isolated debug ports without interfering with each other.
 

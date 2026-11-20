@@ -7,6 +7,8 @@ import * as path from "path";
 // Must be hoisted above the compiler imports so they pick up the mock.
 const spawnMock = vi.hoisted(() => vi.fn());
 vi.mock("child_process", () => ({ spawn: spawnMock }));
+// No workspace folder: the debugger root search is unbounded, as before.
+vi.mock("vscode", () => ({ workspace: { getWorkspaceFolder: () => undefined }, Uri: { file: (p: string) => ({ fsPath: p }) } }));
 
 import { compileJavascriptBinary } from "./jsBuild";
 import { compileAssemblyScriptBinary } from "./asBuild";

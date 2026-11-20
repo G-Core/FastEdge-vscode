@@ -1,0 +1,7 @@
+# Rust 1.100+ links crt1-reactor.o into wasm32-wasip1 cdylibs, which defines `_initialize`;
+# proxy_wasm::main! (0.2.5) defines it too, so the link fails. Unpin after a proxy-wasm release
+# with proxy-wasm/proxy-wasm-rust-sdk#389.
+[toolchain]
+channel = "1.99.0"
+targets = ["wasm32-wasip1"]
+profile = "minimal"
