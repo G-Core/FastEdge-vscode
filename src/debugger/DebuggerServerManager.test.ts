@@ -277,5 +277,16 @@ describe("DebuggerServerManager — allowed folders", () => {
     servers[servers.length - 2].handlers.exit(null, "SIGKILL");
     expect(manager.isRunning()).toBe(true);
   });
-});
 
+  it("a start while another is starting waits for it, even after the setting changed", async () => {
+    settings.inspect = { globalValue: ["/lib/wasm"] };
+    const manager = new DebuggerServerManager("/ext", "/ws");
+    readFileSyncMock.mockImplementationOnce(() => { throw new Error("ENOENT"); });
+    readFileSyncMock.mockReturnValue(portFileFor(manager));
+    const first = manager.start();
+    settings.inspect = { globalValue: ["/lib/wasm", "/other"] };
+    await Promise.all([first, manager.start()]);
+    expect(forkMock).toHaveBeenCalledTimes(1);
+    expect(lastServer().kill).not.toHaveBeenCalled();
+  });
+});

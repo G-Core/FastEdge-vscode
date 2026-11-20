@@ -135,6 +135,18 @@ export class DebuggerServerManager {
    * Port selection is delegated to fastedge-test's auto-increment logic.
    */
   async start(): Promise<void> {
+    // Concurrent call guard (same manager instance only). First, so a changed setting below
+    // never stops a server that another call is still starting.
+    if (this.isStarting) {
+      console.log("Debugger server is already starting");
+      await this.waitForPortFile(30000);
+      const resolvedPort = this.readPortFile();
+      if (resolvedPort !== null) {
+        this.port = resolvedPort;
+      }
+      return;
+    }
+
     // The server reads its allowed folders once, at start: a changed setting needs a new server.
     const allowed = JSON.stringify(allowedFolders());
     if (this.serverProcess && allowed !== this.allowedAtStart) {
@@ -166,17 +178,6 @@ export class DebuggerServerManager {
           this.deletePortFile();
         }
       }
-    }
-
-    // Step 2: Concurrent call guard (same manager instance only)
-    if (this.isStarting) {
-      console.log("Debugger server is already starting");
-      await this.waitForPortFile(30000);
-      const resolvedPort = this.readPortFile();
-      if (resolvedPort !== null) {
-        this.port = resolvedPort;
-      }
-      return;
     }
 
     this.isStarting = true;
