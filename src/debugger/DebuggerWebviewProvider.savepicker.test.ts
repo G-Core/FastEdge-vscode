@@ -57,6 +57,7 @@ const fakeServer = {
   getToken: () => "tok",
   getAppRoot: () => "/project",
   getUrl: () => "http://localhost:5179",
+  getForkCount: () => 1,
 } as any;
 
 const fakeContext = { subscriptions: [] } as any;

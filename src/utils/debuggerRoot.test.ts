@@ -25,7 +25,7 @@ vi.mock("vscode", () => ({
   },
 }));
 
-import { debuggerRootFor } from "./debuggerRoot";
+import { debuggerRootFor, inWorkspaceSpelling } from "./debuggerRoot";
 
 const app = (dir: string) => {
   mkdirSync(join(dir, "src"), { recursive: true });
@@ -83,5 +83,12 @@ describe("debuggerRootFor", () => {
     } finally {
       folders.match = undefined;
     }
+  });
+
+  it("gives a file in its workspace folder's spelling (the server checks paths against it)", () => {
+    const file = app(join(base, "real", "proj", "app"));
+    symlinkSync(join(base, "real", "proj"), join(base, "link"), "junction");
+    setFolders([join(base, "link")]);
+    expect(inWorkspaceSpelling(file)).toEqual({ file: join(base, "link", "app", "src", "index.ts"), folder: join(base, "link") });
   });
 });

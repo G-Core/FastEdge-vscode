@@ -59,6 +59,8 @@ export class DebuggerServerManager {
   private port: number = 5179;
   /** The start in flight: concurrent callers share it (and its restart for a changed setting). */
   private starting: Promise<void> | null = null;
+  /** Servers forked so far: a new one (e.g. after a settings restart) may reuse the old port. */
+  private forks = 0;
   // Per-instance token: generated once, injected into the server via env and
   // passed to the webview iframe via URL fragment so the frontend can auth.
   private readonly token: string = randomBytes(16).toString("hex");
@@ -202,6 +204,7 @@ export class DebuggerServerManager {
     // (the full hostname cannot be known here because the server picks its own port).
     const codespacesDomain = process.env.GITHUB_CODESPACES_PORT_FORWARDING_DOMAIN;
     this.allowedAtStart = allowed;
+    this.forks++;
     this.serverProcess = fork(bundledServerPath, [], {
       cwd: path.dirname(bundledServerPath),
       execPath: process.execPath,
@@ -321,6 +324,11 @@ export class DebuggerServerManager {
   async restart(): Promise<void> {
     await this.stop();
     await this.start();
+  }
+
+  /** Servers started so far: the panel reloads when this changes, even on an unchanged URL. */
+  getForkCount(): number {
+    return this.forks;
   }
 
   /**

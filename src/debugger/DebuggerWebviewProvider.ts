@@ -10,6 +10,7 @@ import { DebuggerServerManager } from "./DebuggerServerManager";
 export class DebuggerWebviewProvider {
   private panel: vscode.WebviewPanel | null = null;
   private currentDebuggerUrl: string | null = null;
+  private currentFork = 0;
 
   constructor(
     private context: vscode.ExtensionContext,
@@ -33,9 +34,11 @@ export class DebuggerWebviewProvider {
 
       // Create or reveal webview panel
       if (this.panel) {
-        // If the server restarted on a different port, refresh the webview
-        if (this.currentDebuggerUrl !== debuggerUrl) {
+        // A new server (another port, or the same one after a settings restart): reload the page,
+        // which reads its state (e.g. the allowed folders) when it loads.
+        if (this.currentDebuggerUrl !== debuggerUrl || this.currentFork !== this.serverManager.getForkCount()) {
           this.currentDebuggerUrl = debuggerUrl;
+          this.currentFork = this.serverManager.getForkCount();
           this.panel.webview.html = this.getWebviewContent(debuggerUrl);
         }
         this.panel.reveal(vscode.ViewColumn.Two);
@@ -52,6 +55,7 @@ export class DebuggerWebviewProvider {
         );
 
         this.currentDebuggerUrl = debuggerUrl;
+        this.currentFork = this.serverManager.getForkCount();
 
         // Set webview content
         this.panel.webview.html = this.getWebviewContent(debuggerUrl);

@@ -4,7 +4,7 @@ import { readFile } from "fs/promises";
 import { DebuggerServerManager, DebuggerWebviewProvider } from "../debugger";
 import { compileActiveEditorsBinary } from "../compiler";
 import { resolveBuildRoot } from "../utils/resolveAppRoot";
-import { debuggerRootFor } from "../utils/debuggerRoot";
+import { debuggerRootFor, inWorkspaceSpelling } from "../utils/debuggerRoot";
 import { DebugContext } from "../types";
 
 type AppDebuggerFactory = (appRoot: string) => {
@@ -169,7 +169,8 @@ async function loadWasmInDebugger(uri?: vscode.Uri): Promise<void> {
     uri = picked[0];
   }
 
-  const wasmPath = uri.fsPath;
+  // As the workspace folder spells it: the server checks paths against that spelling.
+  const wasmPath = inWorkspaceSpelling(uri.fsPath).file;
   const wasmDir = path.dirname(wasmPath);
   const appRoot = debuggerRootFor(wasmPath) ?? wasmDir;
 
@@ -206,7 +207,7 @@ async function loadConfigInDebugger(uri?: vscode.Uri): Promise<void> {
     uri = picked[0];
   }
 
-  const configPath = uri.fsPath;
+  const configPath = inWorkspaceSpelling(uri.fsPath).file;
   const configDir = path.dirname(configPath);
   const appRoot = debuggerRootFor(configPath) ?? configDir;
 
