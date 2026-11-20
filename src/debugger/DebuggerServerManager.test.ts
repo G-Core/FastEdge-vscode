@@ -289,4 +289,47 @@ describe("DebuggerServerManager — allowed folders", () => {
     expect(forkMock).toHaveBeenCalledTimes(1);
     expect(lastServer().kill).not.toHaveBeenCalled();
   });
+
+  it("a start while a restart waits for the old server to exit shares that restart: one new server", async () => {
+    settings.inspect = { globalValue: ["/lib/wasm"] };
+    const manager = new DebuggerServerManager("/ext", "/ws");
+    readFileSyncMock.mockImplementationOnce(() => { throw new Error("ENOENT"); });
+    readFileSyncMock.mockReturnValue(portFileFor(manager));
+    await manager.start();
+    let exit = () => {};
+    lastServer().once = (event: string, cb: () => void) => { if (event === "exit") {exit = cb;} }; // stop() pending
+
+    settings.inspect = { globalValue: ["/lib/wasm", "/other"] };
+    // stop() removed the port file; the new server writes it only after the old one has exited.
+    let written = false;
+    readFileSyncMock.mockImplementation(() => {
+      if (!written) {throw new Error("ENOENT");}
+      return portFileFor(manager);
+    });
+    try {
+      const restarting = manager.start();
+      const second = manager.start();
+      await new Promise((r) => setTimeout(r, 10));
+      exit();
+      await new Promise((r) => setTimeout(r, 10));
+      written = true;
+      await Promise.all([restarting, second]);
+      expect(forkMock).toHaveBeenCalledTimes(2);
+    } finally {
+      readFileSyncMock.mockImplementation(() => "5179");
+    }
+  });
+
+  it("a stop while a start is in flight stops the server that start forks", async () => {
+    const manager = new DebuggerServerManager("/ext", "/ws");
+    readFileSyncMock.mockReturnValue(portFileFor(manager));
+    // A stale port file: the start awaits its health check before it forks.
+    vi.mocked(fetch).mockResolvedValueOnce({ ok: false } as Response);
+    const starting = manager.start();
+    const stopping = manager.stop();
+    await Promise.all([starting, stopping]);
+    expect(forkMock).toHaveBeenCalledTimes(1);
+    expect(lastServer().kill).toHaveBeenCalled();
+    expect(manager.isRunning()).toBe(false);
+  });
 });

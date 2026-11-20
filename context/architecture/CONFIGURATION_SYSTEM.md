@@ -42,7 +42,7 @@ Two roots, from `src/utils/resolveAppRoot.ts`:
 
 The server gets both: `WORKSPACE_PATH` = the VS Code workspace folder holding the debugger root (the limit on every path it reads, and where resource files live, so a resource can use apps from sibling folders), and `FASTEDGE_APP_ROOT` = the debugger root (`DebuggerServerManager`, set from `extension.ts`). A debugger root outside every workspace folder is both.
 
-The debugger never reaches above the folder the user opened: opening `app/proto/` with no marker inside it gives `app/proto/` as the root, even when `app/` has `.fastedge-debug/`. A file outside every workspace folder (picked through a file dialog) is searched without a limit. The build root has no limit because a build may need a manifest above the opened folder.
+The debugger never reaches above the folder the user opened: opening `app/proto/` with no marker inside it gives `app/proto/` as the root, even when `app/` has `.fastedge-debug/`. A file reached through its real path while the folder was opened through a symlink belongs to that folder (matched by real path, searched in the folder's spelling). A root that leaves the folder through a symlink is replaced by the folder, as the server does (it ignores such an app root and writes its port file in the workspace root). A file outside every workspace folder (picked through a file dialog) is searched without a limit. The build root has no limit because a build may need a manifest above the opened folder.
 
 These are deliberately separate — in a monorepo the `package.json` may be several levels above the app's own `fastedge-config.test.json`.
 

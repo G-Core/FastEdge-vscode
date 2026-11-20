@@ -57,7 +57,8 @@ async function approveFolder(folder: string): Promise<boolean> {
 export class DebuggerServerManager {
   private serverProcess: ChildProcess | null = null;
   private port: number = 5179;
-  private isStarting: boolean = false;
+  /** The start in flight: concurrent callers share it (and its restart for a changed setting). */
+  private starting: Promise<void> | null = null;
   // Per-instance token: generated once, injected into the server via env and
   // passed to the webview iframe via URL fragment so the frontend can auth.
   private readonly token: string = randomBytes(16).toString("hex");
@@ -134,24 +135,19 @@ export class DebuggerServerManager {
    * Checks the port file first — reuses an existing healthy server if found.
    * Port selection is delegated to fastedge-test's auto-increment logic.
    */
-  async start(): Promise<void> {
-    // Concurrent call guard (same manager instance only). First, so a changed setting below
-    // never stops a server that another call is still starting.
-    if (this.isStarting) {
-      console.log("Debugger server is already starting");
-      await this.waitForPortFile(30000);
-      const resolvedPort = this.readPortFile();
-      if (resolvedPort !== null) {
-        this.port = resolvedPort;
-      }
-      return;
-    }
+  start(): Promise<void> {
+    this.starting ??= this.startNow().finally(() => {
+      this.starting = null;
+    });
+    return this.starting;
+  }
 
+  private async startNow(): Promise<void> {
     // The server reads its allowed folders once, at start: a changed setting needs a new server.
     const allowed = JSON.stringify(allowedFolders());
     if (this.serverProcess && allowed !== this.allowedAtStart) {
       console.log(`Allowed folders changed: restarting the debugger server for ${this.appRoot}`);
-      await this.stop();
+      await this.stopServer();
     }
 
     // Step 1: Check if a server is already running for this app via port file.
@@ -180,98 +176,92 @@ export class DebuggerServerManager {
       }
     }
 
-    this.isStarting = true;
+    // Step 3: Spawn the server — it picks its own port via auto-increment
+    const bundledServerPath = path.join(
+      this.extensionPath,
+      "dist",
+      "debugger",
+      "server.js"
+    );
 
-    try {
-      // Step 3: Spawn the server — it picks its own port via auto-increment
-      const bundledServerPath = path.join(
-        this.extensionPath,
-        "dist",
-        "debugger",
-        "server.js"
+    if (!fs.existsSync(bundledServerPath)) {
+      throw new Error(
+        `Bundled debugger not found at: ${bundledServerPath}. ` +
+        `The extension may not have been packaged correctly.`
       );
-
-      if (!fs.existsSync(bundledServerPath)) {
-        throw new Error(
-          `Bundled debugger not found at: ${bundledServerPath}. ` +
-          `The extension may not have been packaged correctly.`
-        );
-      }
-
-      console.log(`Starting debugger server for ${this.appRoot}...`);
-
-      // No PORT env var — let fastedge-test's startServer() resolve it via auto-increment.
-      // WORKSPACE_PATH is the limit on what it reads (resources may use sibling apps);
-      // FASTEDGE_APP_ROOT is where it writes .fastedge-debug/.debug-port.
-      // In GitHub Codespaces the browser connects through a port-forwarded URL
-      // of the form <name>-<port>.<domain>. The server needs FASTEDGE_EXPECTED_HOST
-      // set to the forwarding domain so its suffix-match check allows the request
-      // (the full hostname cannot be known here because the server picks its own port).
-      const codespacesDomain = process.env.GITHUB_CODESPACES_PORT_FORWARDING_DOMAIN;
-      this.allowedAtStart = allowed;
-      this.serverProcess = fork(bundledServerPath, [], {
-        cwd: path.dirname(bundledServerPath),
-        execPath: process.execPath,
-        stdio: ["ignore", "pipe", "pipe", "ipc"],
-        env: {
-          ...process.env,
-          VSCODE_INTEGRATION: "true",
-          WORKSPACE_PATH: this.workspaceRoot,
-          FASTEDGE_APP_ROOT: this.appRoot,
-          FASTEDGE_DEBUG_TOKEN: this.token,
-          FASTEDGE_BIND_HOST: "127.0.0.1",
-          // Always set, so a value inherited from the environment never counts.
-          FASTEDGE_ALLOWED_FOLDERS: allowed,
-          ...(codespacesDomain ? { FASTEDGE_EXPECTED_HOST: codespacesDomain } : {}),
-        },
-      });
-
-      this.serverProcess.stdout?.on("data", (data: any) => {
-        console.log(`[Debugger Server] ${data.toString()}`);
-      });
-
-      this.serverProcess.stderr?.on("data", (data: any) => {
-        console.error(`[Debugger Server Error] ${data.toString()}`);
-      });
-
-      // The server asks before reading an allowed folder; answer with the user's choice.
-      const server = this.serverProcess;
-      server.on("message", (message: unknown) => {
-        const m = message as { type?: unknown; id?: unknown; folder?: unknown };
-        if (m?.type !== APPROVAL_REQUEST || typeof m.id !== "string" || !m.id || typeof m.folder !== "string" || !m.folder.trim()) {return;}
-        const { id, folder } = m;
-        void approveFolder(folder).then((approved) => {
-          if (server.connected) {server.send({ type: APPROVAL_REPLY, id, approved });}
-        });
-      });
-
-      this.serverProcess.on("error", (error: Error) => {
-        console.error("Failed to start debugger server:", error);
-        vscode.window.showErrorMessage(
-          `Failed to start debugger server: ${error.message}`
-        );
-      });
-
-      this.serverProcess.on("exit", (code: number | null, signal: string | null) => {
-        console.log(`Debugger server exited with code ${code}, signal ${signal}`);
-        // A server replaced after a slow (force-killed) stop exits late: leave its successor alone.
-        if (this.serverProcess && this.serverProcess !== server) {return;}
-        this.serverProcess = null;
-        this.deletePortFile();
-      });
-
-      // Step 4: Wait for the port file to appear and the server to become healthy
-      await this.waitForPortFile(30000);
-      const resolvedPort = this.readPortFile();
-      if (resolvedPort === null) {
-        throw new Error("Server started but port file was not written");
-      }
-      this.port = resolvedPort;
-
-      console.log(`Debugger server started on port ${this.port} for ${this.appRoot}`);
-    } finally {
-      this.isStarting = false;
     }
+
+    console.log(`Starting debugger server for ${this.appRoot}...`);
+
+    // No PORT env var — let fastedge-test's startServer() resolve it via auto-increment.
+    // WORKSPACE_PATH is the limit on what it reads (resources may use sibling apps);
+    // FASTEDGE_APP_ROOT is where it writes .fastedge-debug/.debug-port.
+    // In GitHub Codespaces the browser connects through a port-forwarded URL
+    // of the form <name>-<port>.<domain>. The server needs FASTEDGE_EXPECTED_HOST
+    // set to the forwarding domain so its suffix-match check allows the request
+    // (the full hostname cannot be known here because the server picks its own port).
+    const codespacesDomain = process.env.GITHUB_CODESPACES_PORT_FORWARDING_DOMAIN;
+    this.allowedAtStart = allowed;
+    this.serverProcess = fork(bundledServerPath, [], {
+      cwd: path.dirname(bundledServerPath),
+      execPath: process.execPath,
+      stdio: ["ignore", "pipe", "pipe", "ipc"],
+      env: {
+        ...process.env,
+        VSCODE_INTEGRATION: "true",
+        WORKSPACE_PATH: this.workspaceRoot,
+        FASTEDGE_APP_ROOT: this.appRoot,
+        FASTEDGE_DEBUG_TOKEN: this.token,
+        FASTEDGE_BIND_HOST: "127.0.0.1",
+        // Always set, so a value inherited from the environment never counts.
+        FASTEDGE_ALLOWED_FOLDERS: allowed,
+        ...(codespacesDomain ? { FASTEDGE_EXPECTED_HOST: codespacesDomain } : {}),
+      },
+    });
+
+    this.serverProcess.stdout?.on("data", (data: any) => {
+      console.log(`[Debugger Server] ${data.toString()}`);
+    });
+
+    this.serverProcess.stderr?.on("data", (data: any) => {
+      console.error(`[Debugger Server Error] ${data.toString()}`);
+    });
+
+    // The server asks before reading an allowed folder; answer with the user's choice.
+    const server = this.serverProcess;
+    server.on("message", (message: unknown) => {
+      const m = message as { type?: unknown; id?: unknown; folder?: unknown };
+      if (m?.type !== APPROVAL_REQUEST || typeof m.id !== "string" || !m.id || typeof m.folder !== "string" || !m.folder.trim()) {return;}
+      const { id, folder } = m;
+      void approveFolder(folder).then((approved) => {
+        if (server.connected) {server.send({ type: APPROVAL_REPLY, id, approved });}
+      });
+    });
+
+    this.serverProcess.on("error", (error: Error) => {
+      console.error("Failed to start debugger server:", error);
+      vscode.window.showErrorMessage(
+        `Failed to start debugger server: ${error.message}`
+      );
+    });
+
+    this.serverProcess.on("exit", (code: number | null, signal: string | null) => {
+      console.log(`Debugger server exited with code ${code}, signal ${signal}`);
+      // A server replaced after a slow (force-killed) stop exits late: leave its successor alone.
+      if (this.serverProcess && this.serverProcess !== server) {return;}
+      this.serverProcess = null;
+      this.deletePortFile();
+    });
+
+    // Step 4: Wait for the port file to appear and the server to become healthy
+    await this.waitForPortFile(30000);
+    const resolvedPort = this.readPortFile();
+    if (resolvedPort === null) {
+      throw new Error("Server started but port file was not written");
+    }
+    this.port = resolvedPort;
+
+    console.log(`Debugger server started on port ${this.port} for ${this.appRoot}`);
   }
 
   /**
@@ -298,6 +288,12 @@ export class DebuggerServerManager {
    * Stop the debugger server and clean up its port file
    */
   async stop(): Promise<void> {
+    // A start in flight would fork its server after this returns: let it finish, then stop that.
+    await this.starting?.catch(() => {});
+    await this.stopServer();
+  }
+
+  private async stopServer(): Promise<void> {
     if (this.serverProcess) {
       const proc = this.serverProcess;
       this.serverProcess = null;
