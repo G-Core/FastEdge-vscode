@@ -28,31 +28,6 @@ function outside(dir: string, stopAt?: string): boolean {
 }
 
 /**
- * Walk up from a file (or directory) path to find the per-app debug root.
- *
- * Returns the first directory containing a `.fastedge-debug/` folder, or null
- * if none is found. This is the anchor for per-app identity (.debug-port,
- * app.wasm, config — all inside `.fastedge-debug/`).
- */
-export function resolveConfigRoot(startPath: string, stopAt?: string): string | null {
-  let dir = startDir(startPath);
-  if (outside(dir, stopAt)) {return null;}
-
-  while (true) {
-    try {
-      if (fs.statSync(path.join(dir, ".fastedge-debug")).isDirectory()) {
-        return dir;
-      }
-    } catch {
-      // .fastedge-debug doesn't exist in this directory — continue walking up
-    }
-    const parent = path.dirname(dir);
-    if (parent === dir || atOrPast(dir, stopAt)) {return null;}
-    dir = parent;
-  }
-}
-
-/**
  * Walk up from a file (or directory) path to find the build root.
  *
  * Returns the first directory containing `package.json` or `Cargo.toml`.
@@ -78,16 +53,40 @@ export function resolveBuildRoot(startPath: string, stopAt?: string): string | n
   }
 }
 
+function isDir(p: string): boolean {
+  try {
+    return fs.statSync(p).isDirectory();
+  } catch {
+    return false;
+  }
+}
+
+/** A folder that is an app of its own: it has `.fastedge-debug/`, `package.json` or `Cargo.toml`. */
+function isAppFolder(dir: string): boolean {
+  return (
+    isDir(path.join(dir, ".fastedge-debug")) ||
+    fs.existsSync(path.join(dir, "package.json")) ||
+    fs.existsSync(path.join(dir, "Cargo.toml"))
+  );
+}
+
 /**
- * The debugger's root for a file: the server's workspace (`WORKSPACE_PATH`, which confines every
- * path it reads) and the home of `.fastedge-debug/`. The nearest `.fastedge-debug/` folder, else
- * the nearest `package.json` / `Cargo.toml` folder, searching no higher than `boundary` (the VS
- * Code workspace folder holding the file), else `boundary` itself: the debugger never reaches
- * above the folder the user opened. Without a boundary (a file outside every workspace folder)
- * the search is unbounded and may find nothing.
+ * The debugger's root for a file: one debugger server and panel per root, and the home of
+ * `.fastedge-debug/`. The nearest folder that is an app of its own (`.fastedge-debug/`,
+ * `package.json` or `Cargo.toml`, whichever is nearest), searching no higher than `boundary` (the
+ * VS Code workspace folder holding the file); with none, the file's own folder, so loose `.wasm`
+ * files in different folders get different debuggers. A start outside `boundary` gives `boundary`:
+ * the debugger never reaches above the folder the user opened. Without a boundary (a file outside
+ * every workspace folder) the search is unbounded. The fastedge-test CLI finds its app root the
+ * same way.
  */
 export function resolveDebuggerRoot(filePath: string, boundary?: string): string | null {
-  return resolveConfigRoot(filePath, boundary) ?? resolveBuildRoot(filePath, boundary) ?? boundary ?? null;
+  const start = startDir(filePath);
+  if (outside(start, boundary)) {return boundary ?? null;}
+  for (let dir = start; ; dir = path.dirname(dir)) {
+    if (isAppFolder(dir)) {return dir;}
+    if (path.dirname(dir) === dir || atOrPast(dir, boundary)) {return start;}
+  }
 }
 
 /**
