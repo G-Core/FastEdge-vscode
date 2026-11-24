@@ -13,7 +13,7 @@ The dotenv system allows developers to:
 - Support large configuration sets
 - Share configurations across team
 
-**See also**: `../DOTENV.md` (root) - User-facing documentation
+**See also**: the fastedge-test Debugger Guide (`docs/DEBUGGER_GUIDE.md#dotenv`) - user-facing documentation
 
 ---
 
@@ -577,7 +577,7 @@ This ensures a config with `"dotenv": { "path": "./fixtures" }` resolves consist
 ---
 
 **Related Documentation**:
-- `../DOTENV.md` (root) - User guide
+- fastedge-test `docs/DEBUGGER_GUIDE.md#dotenv` - User guide
 - `CONFIGURATION_SYSTEM.md` - Overall configuration architecture
 - `DEBUGGER_ARCHITECTURE.md` - How config is used
 - fastedge-test `context/features/DOTENV.md` → "Relative Path Resolution" for the cross-repo flow
