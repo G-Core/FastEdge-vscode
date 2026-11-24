@@ -141,7 +141,7 @@ The debugger panel is the [fastedge-test](https://github.com/G-Core/fastedge-tes
 
 ![The Help menu: links to common tasks in the docs](https://raw.githubusercontent.com/G-Core/fastedge-test/main/docs/images/debugger-help.png)
 
-- **Environment variables and secrets:** dotenv files in the app root (`.env`, `.env.variables`, `.env.secrets`). The extension loads apps with dotenv on. See [Dotenv](https://github.com/G-Core/fastedge-test/blob/main/docs/DEBUGGER_GUIDE.md#dotenv) for the file rules and secret slots.
+- **Environment variables and secrets:** dotenv files in the app root (`.env`, `.env.variables`, `.env.secrets`). The extension loads apps with dotenv on. See [Dotenv Configuration](https://github.com/G-Core/fastedge-test/blob/main/docs/TEST_CONFIG.md#dotenv-configuration) for the file rules and secret slots.
 - **Request headers:** the **Request** panel. HTTP apps can also take fixed headers from `.env.req_headers` and `.env.rsp_headers`.
 - **Scenarios:** **Save Config** writes the request, context and settings to a `*test.json`. Load it again with **FastEdge: Load Config in Debugger**, or run it in a test.
 
