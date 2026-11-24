@@ -249,7 +249,7 @@ See `SEARCH_GUIDE.md` for more patterns.
 - **fastedge-config.test.json**: Per-app config file for runtime settings (env vars, secrets, headers)
 - **configRoot**: Directory containing `.fastedge-debug/` — anchors per-app server + port file
 - **buildRoot**: Directory containing `package.json` or `Cargo.toml` — anchors build CWD
-- **dotenv hierarchy**: .env → .env.variables → .env.secrets (see DOTENV.md in root)
+- **dotenv hierarchy**: .env → .env.variables → .env.secrets (user docs: the fastedge-test Debugger Guide)
 - **WASM**: WebAssembly - compiled output of Rust/JS/AS code
 - **wasm32-wasip1**: WASI preview 1 target for Rust compilation
 - **AssemblyScript (AS)**: TypeScript-like language compiling to WASM; used for CDN/proxy-wasm apps via `proxy-wasm-sdk-as`

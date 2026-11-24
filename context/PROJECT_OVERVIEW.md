@@ -180,7 +180,6 @@ FastEdge-vscode/
 ├── tsconfig.json                           # TypeScript configuration
 ├── eslint.config.mjs                       # ESLint configuration
 ├── README.md                               # User documentation
-├── DOTENV.md                               # Dotenv usage guide
 ├── LICENSE                                 # Apache 2.0
 └── .vscodeignore                           # Files to exclude from package
 ```

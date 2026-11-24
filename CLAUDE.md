@@ -315,7 +315,6 @@ FastEdge-vscode/
 - `src/extension.ts` - Extension activation and registration
 - `src/FastEdgeDebugSession.ts` - Core debug adapter logic
 - `src/compiler/index.ts` - Compilation orchestration
-- `DOTENV.md` - Dotenv usage documentation (root level)
 
 ---
 

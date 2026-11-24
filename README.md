@@ -31,7 +31,7 @@ A webview panel opens inside VS Code where you can:
 
 The [Debugger Guide](https://github.com/G-Core/fastedge-test/blob/main/docs/DEBUGGER_GUIDE.md) walks through every panel.
 
-Each app gets its own debugger panel and server. An app is the nearest folder above your file that holds `.fastedge-debug/`, `package.json` or `Cargo.toml` (searching no higher than the folder you opened); a loose `.wasm` with none of these gets its own folder. That folder is the **app root**: the debugger writes `.fastedge-debug/` there and reads `fastedge-config.test.json` and dotenv files from it. Servers take the first free port from **5179** (up to 5228), so you can debug several apps at once.
+Each app gets its own debugger panel and server. An app is the nearest folder above your file that holds `.fastedge-debug/`, `package.json` or `Cargo.toml` (searching no higher than the folder you opened); a loose `.wasm` with none of these gets its own folder. That folder is the **app root**: the debugger keeps its own files in `.fastedge-debug/` there and reads your dotenv files from it. Servers take the first free port from **5179** (up to 5228), so you can debug several apps at once.
 
 ## Prerequisites
 
@@ -93,7 +93,7 @@ The `entrypoint` field controls how the build finds your source code:
 
 Static sites and apps that import Wasm components need steps that only a build from `.fastedge/build-config.js` runs, so debug them with `"package"`, or press F5 with `package.json` open. `"file"` still builds just the active file, for example a small app inside a larger project.
 
-These are the only configuration values read from launch.json. Runtime arguments (env vars, headers, etc.) are configured separately — see [Runtime Configuration](#runtime-configuration) below.
+These are the only configuration values read from launch.json. Environment variables, secrets and headers are set elsewhere: see [Variables, secrets and headers](#variables-secrets-and-headers).
 
 ## Language detection
 
@@ -135,19 +135,17 @@ Right-click actions in the file explorer:
 
 In Codespaces or other remote setups the browser sign-in may not reach the container; use an API key there.
 
-## Runtime Configuration
+## Variables, secrets and headers
 
-Environment variables, secrets, request headers, and response headers are configured through **test configuration files** — not launch.json.
+The debugger panel is the [fastedge-test](https://github.com/G-Core/fastedge-test) debugger, and its [Debugger Guide](https://github.com/G-Core/fastedge-test/blob/main/docs/DEBUGGER_GUIDE.md) is the reference. **Help** in the panel's header links to common tasks, in the docs for the version bundled with this extension.
 
-### Primary: `fastedge-config.test.json`
+![The Help menu: links to common tasks in the docs](https://raw.githubusercontent.com/G-Core/fastedge-test/main/docs/images/debugger-help.png)
 
-The debugger UI provides built-in controls to set environment variables, secrets, and headers. These are saved to and loaded from `fastedge-config.test.json` in your app root, using native file dialogs.
+- **Environment variables and secrets:** dotenv files in the app root (`.env`, `.env.variables`, `.env.secrets`). The extension loads apps with dotenv on. See [Dotenv Configuration](https://github.com/G-Core/fastedge-test/blob/main/docs/TEST_CONFIG.md#dotenv-configuration) for the file rules and secret slots.
+- **Request headers:** the **Request** panel. HTTP apps can also take fixed headers from `.env.req_headers` and `.env.rsp_headers`.
+- **Scenarios:** **Save Config** writes the request, context and settings to a `*test.json`. Load it again with **FastEdge: Load Config in Debugger**, or run it in a test.
 
-### Alternative: dotenv files
-
-You can also provide runtime arguments via `.env` files that the extension auto-discovers from your app root directory.
-
-Please be aware that if you are adding **sensitive** information to these files, they should be added to your `.gitignore`:
+Keep files with secrets out of version control:
 
 ```
 # VSCode workspace
@@ -160,8 +158,6 @@ Please be aware that if you are adding **sensitive** information to these files,
 # Build artifacts
 .fastedge-debug/
 ```
-
-For more information on how the extension locates and uses dotenv files, see [DOTENV.md](https://github.com/G-Core/FastEdge-vscode/blob/main/DOTENV.md).
 
 ## Settings
 
