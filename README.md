@@ -139,6 +139,8 @@ In Codespaces or other remote setups the browser sign-in may not reach the conta
 
 The debugger panel is the [fastedge-test](https://github.com/G-Core/fastedge-test) debugger, and its [Debugger Guide](https://github.com/G-Core/fastedge-test/blob/main/docs/DEBUGGER_GUIDE.md) is the reference. **Help** in the panel's header links to common tasks, in the docs for the version bundled with this extension.
 
+![The Help menu: links to common tasks in the docs](https://raw.githubusercontent.com/G-Core/fastedge-test/main/docs/images/debugger-help.png)
+
 - **Environment variables and secrets:** dotenv files in the app root (`.env`, `.env.variables`, `.env.secrets`). The extension loads apps with dotenv on. See [Dotenv](https://github.com/G-Core/fastedge-test/blob/main/docs/DEBUGGER_GUIDE.md#dotenv) for the file rules and secret slots.
 - **Request headers:** the **Request** panel. HTTP apps can also take fixed headers from `.env.req_headers` and `.env.rsp_headers`.
 - **Scenarios:** **Save Config** writes the request, context and settings to a `*test.json`. Load it again with **FastEdge: Load Config in Debugger**, or run it in a test.
